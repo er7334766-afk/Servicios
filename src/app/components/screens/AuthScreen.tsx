@@ -15,8 +15,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { MOCK_CLIENT, MOCK_WORKERS } from '../../data/mockData';
 import { registrarEmpleado } from '../../services/empleadosApi';
-//import { registrarCliente } from '../../services/clientesApi';
-
+import { registrarCliente } from '../../services/clientesApi';
 
 interface LoginForm {
   email: string;
@@ -69,40 +68,37 @@ export default function AuthScreen() {
       return;
     }
 
-    /*
-     * Por ahora, el endpoint creado registra únicamente clientes.
-     * El registro de trabajadores necesitará otro endpoint.
-     */
-    if (role === 'worker') {
-      alert('El registro de trabajadores todavía no está conectado.');
-      return;
-    }
-
     try {
       setRegistrando(true);
 
-      /*const respuesta = await registrarCliente({
-        nombre_C: data.name.trim(),
-        correo: data.email.trim().toLowerCase(),
-        celular: data.phone.trim(),
-        password_C: data.password,
-      });*/
-      const respuesta = await registrarEmpleado({
-        nombre_E: data.name.trim(),
-        correo: data.email.trim().toLowerCase(),
-        celular: data.phone.trim(),
-        password_E: data.password,
-      });
+      let respuesta;
+
+      if (role === 'worker') {
+        respuesta = await registrarEmpleado({
+          nombre_E: data.name.trim(),
+          correo: data.email.trim().toLowerCase(),
+          celular: data.phone.trim(),
+          password_E: data.password,
+        });
+      } else {
+        respuesta = await registrarCliente({
+          nombre_C: data.name.trim(),
+          correo: data.email.trim().toLowerCase(),
+          celular: data.phone.trim(),
+          password_C: data.password,
+        });
+      }
 
       setCurrentUser({
         id: String(respuesta.resultado.insertId),
         name: data.name.trim(),
         email: data.email.trim().toLowerCase(),
         phone: data.phone.trim(),
-        /*avatarUrl: MOCK_CLIENT.avatarUrl,
-        role: 'client',*/
-        avatarUrl: MOCK_WORKERS[0].avatarUrl,
-        role: 'worker',
+        avatarUrl:
+          role === 'worker'
+            ? MOCK_WORKERS[0].avatarUrl
+            : MOCK_CLIENT.avatarUrl,
+        role,
         location: 'Pendiente',
         joinedDate: new Date().toISOString().split('T')[0],
       });
@@ -115,7 +111,7 @@ export default function AuthScreen() {
       const mensaje =
         error instanceof Error
           ? error.message
-          : 'Error al registrar el cliente';
+          : 'Error al registrar la cuenta';
 
       alert(mensaje);
     } finally {
@@ -125,7 +121,6 @@ export default function AuthScreen() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <div className="flex items-center px-4 pt-12 pb-2">
         <button
           type="button"
@@ -159,7 +154,6 @@ export default function AuthScreen() {
         </motion.div>
       </div>
 
-      {/* Tabs */}
       <div className="mx-6 flex bg-muted rounded-xl p-1 mb-6">
         {(['login', 'register'] as const).map((currentTab) => (
           <button
@@ -251,26 +245,6 @@ export default function AuthScreen() {
             >
               Iniciar sesión
             </motion.button>
-
-            <div className="flex items-center gap-3 my-1">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">
-                o continuar con
-              </span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <div className="flex gap-3">
-              {['Google', 'Apple'].map((provider) => (
-                <button
-                  key={provider}
-                  type="button"
-                  className="flex-1 py-3 border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                >
-                  {provider}
-                </button>
-              ))}
-            </div>
           </motion.form>
         ) : (
           <motion.form
@@ -302,40 +276,32 @@ export default function AuthScreen() {
                 placeholder: '+52 55 1234 5678',
                 type: 'tel',
               },
-            ].map(
-              ({
-                name,
-                label,
-                icon: Icon,
-                placeholder,
-                type,
-              }) => (
-                <div key={name}>
-                  <label className="text-sm font-semibold text-foreground mb-1.5 block">
-                    {label}
-                  </label>
+            ].map(({ name, label, icon: Icon, placeholder, type }) => (
+              <div key={name}>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  {label}
+                </label>
 
-                  <div className="relative">
-                    <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <div className="relative">
+                  <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 
-                    <input
-                      {...registerForm.register(name, {
-                        required: `${label} es obligatorio`,
-                      })}
-                      type={type}
-                      placeholder={placeholder}
-                      className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
-                    />
-                  </div>
-
-                  {registerForm.formState.errors[name] && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {registerForm.formState.errors[name]?.message}
-                    </p>
-                  )}
+                  <input
+                    {...registerForm.register(name, {
+                      required: `${label} es obligatorio`,
+                    })}
+                    type={type}
+                    placeholder={placeholder}
+                    className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  />
                 </div>
-              ),
-            )}
+
+                {registerForm.formState.errors[name] && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {registerForm.formState.errors[name]?.message}
+                  </p>
+                )}
+              </div>
+            ))}
 
             <div>
               <label className="text-sm font-semibold text-foreground mb-1.5 block">
@@ -379,8 +345,7 @@ export default function AuthScreen() {
                   {...registerForm.register('confirm', {
                     required: 'Debes confirmar la contraseña',
                     validate: (valor) =>
-                      valor ===
-                        registerForm.getValues('password') ||
+                      valor === registerForm.getValues('password') ||
                       'Las contraseñas no coinciden',
                   })}
                   type="password"
