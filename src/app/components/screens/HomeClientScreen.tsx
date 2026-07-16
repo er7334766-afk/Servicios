@@ -8,6 +8,8 @@ import { useApp } from '../../context/AppContext';
 import { MOCK_WORKERS, MOCK_JOB_POSTS, SERVICE_CATEGORIES } from '../../data/mockData';
 import type { ServiceCategory } from '../../types';
 
+import { useState } from 'react'; //agredado
+
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
   accepted: 'bg-blue-100 text-[#1A56DB]',
@@ -23,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function HomeClientScreen() {
   const navigate = useNavigate();
+  const [selected, setSelected] = useState('card'); //agregado
   const { currentUser, unreadNotifications } = useApp();
 
   const featured = [...MOCK_WORKERS].sort((a, b) => b.rating - a.rating).slice(0, 5);
@@ -63,7 +66,9 @@ export default function HomeClientScreen() {
         {/* Search bar */}
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate('/home/search')}
+          //AGREGADO
+          onClick={() => { navigate('/home/payment'); }}
+          //agregado
           className="w-full bg-white rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
         >
           <Search className="w-4 h-4 text-muted-foreground" />

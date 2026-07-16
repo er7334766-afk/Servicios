@@ -15,6 +15,9 @@ const ReviewScreen = lazy(() => import('./components/screens/ReviewScreen'));
 const ReportScreen = lazy(() => import('./components/screens/ReportScreen'));
 const NotificationsScreen = lazy(() => import('./components/screens/NotificationsScreen'));
 
+const PaymentMethodScreen = lazy(() => import('./components/screens/PaymentMethodScreen')); //agregado 
+
+
 function Loader() {
   return (
     <div className="flex items-center justify-center h-full">
@@ -50,6 +53,8 @@ export const router = createBrowserRouter([
       { path: 'review/:bookingId', element: <S><ReviewScreen /></S> },
       { path: 'report', element: <S><ReportScreen /></S> },
       { path: 'notifications', element: <S><NotificationsScreen /></S> },
+
+      { path: 'payment', element: <S><PaymentMethodScreen /></S> }, //agregado 
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

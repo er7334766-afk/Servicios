@@ -21,6 +21,16 @@ export interface User {
   role: Role;
   location: string;
   joinedDate: string;
+
+  // Agregado
+  titulo?: string;
+  dni?: string;
+  antecedente?: string;
+  direccion?: string;
+  categoria?: string;
+  estado?: string;
+  numeroTrabajos?: number;
+  fechaCreacion?: string;
 }
 
 export interface Worker extends User {

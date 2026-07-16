@@ -1,3 +1,4 @@
+//AuthScreen
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -17,6 +18,18 @@ interface RegisterForm {
   phone: string;
   password: string;
   confirm: string;
+
+  // solo para
+  titulo: string;
+  dni: string;
+  antecedente: string;
+  direccion: string;
+  categoria: string;
+
+  // Se asignan automáticamente
+  estado: string;
+  numeroTrabajos: number;
+  fechaCreacion: string;
 }
 
 export default function AuthScreen() {
@@ -43,9 +56,21 @@ export default function AuthScreen() {
       name: data.name,
       email: data.email,
       phone: data.phone,
+
+      // agregado
+      titulo: data.titulo,
+      dni: data.dni,
+      antecedente: data.antecedente,
+      direccion: data.direccion,
+      categoria: data.categoria,
+      //agrado
+      estado: 'Activo',
+      numeroTrabajos: 0,
+      fechaCreacion: new Date().toISOString(),
+
       avatarUrl: MOCK_CLIENT.avatarUrl,
       role,
-      location: 'CDMX',
+      location: data.direccion,
       joinedDate: new Date().toISOString().split('T')[0],
     });
     navigate('/home');
@@ -167,7 +192,7 @@ export default function AuthScreen() {
             {[
               { name: 'name' as const, label: 'Nombre completo', icon: User, placeholder: 'Tu nombre', type: 'text' },
               { name: 'email' as const, label: 'Correo electrónico', icon: Mail, placeholder: 'tu@correo.com', type: 'email' },
-              { name: 'phone' as const, label: 'Teléfono', icon: Phone, placeholder: '+52 55 1234 5678', type: 'tel' },
+              { name: 'phone' as const, label: 'Teléfono', icon: Phone, placeholder: '+504 0000 0000', type: 'tel' },
             ].map(({ name, label, icon: Icon, placeholder, type }) => (
               <div key={name}>
                 <label className="text-sm font-semibold text-foreground mb-1.5 block">{label}</label>
@@ -182,6 +207,12 @@ export default function AuthScreen() {
                 </div>
               </div>
             ))}
+
+            {/* agregado aqui el lo demas del registro */}
+
+            
+
+            
             <div>
               <label className="text-sm font-semibold text-foreground mb-1.5 block">Contraseña</label>
               <div className="relative">
