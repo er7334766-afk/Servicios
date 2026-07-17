@@ -2,9 +2,9 @@ import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Bell, TrendingUp, Briefcase, Star, Calendar, MapPin, Clock, ChevronRight } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
 import { MOCK_BOOKINGS, MOCK_JOB_POSTS, MOCK_WORKERS, SERVICE_CATEGORIES } from '../../data/mockData';
+import { actualizarDisponibilidad } from '../../services/estadoApi';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -23,17 +23,26 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function HomeWorkerScreen() {
   const navigate = useNavigate();
-  const { currentUser, unreadNotifications, workerAvailability, setWorkerAvailability } = useApp();
+  const { currentUser, workerAvailability, setWorkerAvailability, unreadNotifications } = useApp();
+  
+  // Variables necesarias que faltaban
   const workerProfile = MOCK_WORKERS[0];
-
-  const myBookings = MOCK_BOOKINGS.filter(
-    (b) => b.workerId === 'w1' && ['accepted', 'in_progress', 'pending'].includes(b.status)
-  ).slice(0, 3);
+  const myBookings = MOCK_BOOKINGS.filter((b) => b.workerId === 'w1' && ['accepted', 'in_progress', 'pending'].includes(b.status)).slice(0, 3);
   const openJobs = MOCK_JOB_POSTS.filter((j) => j.clientId !== 'c1').slice(0, 2);
+  const weekEarnings = MOCK_BOOKINGS.filter((b) => b.workerId === 'w1' && b.status === 'completed').reduce((acc, b) => acc + b.price, 0);
 
-  const weekEarnings = MOCK_BOOKINGS
-    .filter((b) => b.workerId === 'w1' && b.status === 'completed')
-    .reduce((acc, b) => acc + b.price, 0);
+  const handleToggle = async () => {
+    const nuevoEstado = !workerAvailability;
+    setWorkerAvailability(nuevoEstado);
+
+    try {
+      await actualizarDisponibilidad(String(currentUser?.id), nuevoEstado);
+    } catch (error) {
+      console.error("Error al actualizar:", error);
+      setWorkerAvailability(!nuevoEstado);
+      alert("No se pudo actualizar el estado, intenta de nuevo.");
+    }
+  };
 
   return (
     <div className="pb-4">
@@ -51,18 +60,16 @@ export default function HomeWorkerScreen() {
               <p className="text-white font-bold">{currentUser?.name?.split(' ')[0] ?? 'Carlos'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => navigate('/home/notifications')}
-              className="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"
-            >
-              <Bell className="w-5 h-5 text-white" />
-              {unreadNotifications > 0 && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-[#1A56DB]" />
-              )}
-            </motion.button>
-          </div>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => navigate('/home/notifications')}
+            className="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"
+          >
+            <Bell className="w-5 h-5 text-white" />
+            {unreadNotifications > 0 && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-[#1A56DB]" />
+            )}
+          </motion.button>
         </div>
 
         {/* Availability toggle */}
@@ -74,7 +81,7 @@ export default function HomeWorkerScreen() {
             </span>
           </div>
           <button
-            onClick={() => setWorkerAvailability(!workerAvailability)}
+            onClick={handleToggle} // CAMBIO IMPORTANTE AQUÍ
             className={`w-12 h-6 rounded-full transition-colors relative ${
               workerAvailability ? 'bg-green-400' : 'bg-white/30'
             }`}
@@ -87,13 +94,14 @@ export default function HomeWorkerScreen() {
           </button>
         </div>
       </div>
-
+      
+      {/* ... resto de tu contenido ... */}
       {/* Stats */}
       <div className="px-5 mt-5">
         <div className="grid grid-cols-3 gap-3">
           {[
             { icon: TrendingUp, label: 'Esta semana', value: `$${weekEarnings.toLocaleString()}`, color: '#1A56DB' },
-            { icon: Briefcase, label: 'Este mes', value: `${workerProfile.jobCount}`, color: '#16A34A' },
+            { icon: Briefcase, label: 'Trabajos', value: `${workerProfile.jobCount}`, color: '#16A34A' },
             { icon: Star, label: 'Calificación', value: `${workerProfile.rating}★`, color: '#D97706' },
           ].map(({ icon: Icon, label, value, color }) => (
             <div key={label} className="bg-card rounded-2xl border border-border p-3 text-center">

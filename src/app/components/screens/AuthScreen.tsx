@@ -16,6 +16,7 @@ import { useApp } from '../../context/AppContext';
 import { MOCK_CLIENT, MOCK_WORKERS } from '../../data/mockData';
 import { registrarEmpleado } from '../../services/empleadosApi';
 import { registrarCliente } from '../../services/clientesApi';
+import { iniciarSesion } from '../../services/LoginApi';
 
 interface LoginForm {
   email: string;
@@ -35,26 +36,44 @@ export default function AuthScreen() {
   const [showPass, setShowPass] = useState(false);
   const [registrando, setRegistrando] = useState(false);
 
+  const [iniciandoSesion, setIniciandoSesion] = useState(false);//login
+
   const navigate = useNavigate();
   const { role, setCurrentUser } = useApp();
 
   const loginForm = useForm<LoginForm>();
   const registerForm = useForm<RegisterForm>();
 
-  const handleLogin = () => {
-    if (role === 'worker') {
-      setCurrentUser({
-        ...MOCK_WORKERS[0],
-        role: 'worker',
-      });
-    } else {
-      setCurrentUser({
-        ...MOCK_CLIENT,
-        role: 'client',
-      });
-    }
+const handleLogin = async (data: LoginForm) => {
+    try {
+      setIniciandoSesion(true);
 
-    navigate('/home');
+      const respuesta = await iniciarSesion({
+        correo: data.email.trim().toLowerCase(),
+        password: data.password,
+        rol: role, // Enviamos el rol actual (client o worker)
+      });
+
+      // Guardamos al usuario real que nos devolvió la base de datos
+      setCurrentUser({
+        id: String(respuesta.usuario.id),
+        name: respuesta.usuario.nombre,
+        email: respuesta.usuario.correo,
+        phone: respuesta.usuario.celular,
+        // Asignamos un avatar por defecto mientras no tengan subida de imágenes
+        avatarUrl: role === 'worker' ? MOCK_WORKERS[0].avatarUrl : MOCK_CLIENT.avatarUrl,
+        role: role,
+        location: 'No especificada',
+        joinedDate: new Date().toISOString().split('T')[0],
+      });
+
+      navigate('/home');
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : 'Error al iniciar sesión';
+      alert(mensaje);
+    } finally {
+      setIniciandoSesion(false);
+    }
   };
 
   const handleRegister = async (data: RegisterForm) => {
@@ -362,12 +381,12 @@ export default function AuthScreen() {
             </div>
 
             <motion.button
-              whileTap={{ scale: registrando ? 1 : 0.97 }}
+              whileTap={{ scale: iniciandoSesion ? 1 : 0.97 }}
               type="submit"
-              disabled={registrando}
+              disabled={iniciandoSesion}
               className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold mt-2 shadow-lg shadow-[#1A56DB]/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {registrando ? 'Creando cuenta...' : 'Crear cuenta'}
+              {iniciandoSesion ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </motion.button>
           </motion.form>
         )}

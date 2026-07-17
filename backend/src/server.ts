@@ -34,6 +34,9 @@ app.get("/api/test", async (_req, res) => {
   }
 });
 
+// ==========================================
+// RUTAS DE EMPLEADOS
+// ==========================================
 app.post('/api/empleados', async (req, res) => {
   try {
     const { nombre_E, password_E, correo, celular } = req.body;
@@ -117,7 +120,9 @@ app.get('/api/empleados', async (_req, res) => {
   }
 });
 
-
+// ==========================================
+// RUTAS DE CLIENTES
+// ==========================================
 app.post("/api/clientes", async (req, res) => {
   try {
     const {
@@ -176,8 +181,173 @@ app.get("/api/clientes", async (_req, res) => {
   }
 });
 
+// ==========================================
+// RUTA DE LOGIN (NUEVA)
+// ==========================================
+app.post("/api/login", async (req, res) => {
+  try {
+    const { correo, password, rol } = req.body;
 
+    if (!correo || !password || !rol) {
+      return res.status(400).json({
+        mensaje: "Correo, contraseña y rol son obligatorios",
+      });
+    }
 
+    let usuario = null;
+
+    // Usamos alias (AS id, AS nombre) para estandarizar la respuesta sin importar si es cliente o empleado
+    if (rol === 'client') {
+      const [rows]: any = await database.execute(
+        "SELECT id_cliente AS id, nombre_C AS nombre, correo, celular FROM clientes WHERE correo = ? AND password_C = ?",
+        [correo, password]
+      );
+      if (rows.length > 0) usuario = rows[0];
+    } else if (rol === 'worker') {
+      const [rows]: any = await database.execute(
+        "SELECT id_empleado AS id, nombre_E AS nombre, correo, celular FROM empleados WHERE correo = ? AND password_E = ?",
+        [correo, password]
+      );
+      if (rows.length > 0) usuario = rows[0];
+    } else {
+      return res.status(400).json({ mensaje: "Rol no válido" });
+    }
+
+    if (!usuario) {
+      return res.status(401).json({ mensaje: "Correo o contraseña incorrectos" });
+    }
+
+    res.json({
+      mensaje: "Inicio de sesión exitoso",
+      usuario
+    });
+  } catch (error) {
+    console.error("Error al iniciar sesión:", error);
+    res.status(500).json({
+      mensaje: "Error interno del servidor al iniciar sesión",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES (NUEVAS)
+// ==========================================
+app.post("/api/servicios", async (req, res) => {
+  try {
+    const {
+      fk_cliente,
+      fk_categoria,
+      fk_evidencia,
+      descripcion,
+      direccion,
+      presupuesto,
+      fecha
+    } = req.body;
+
+    if (!fk_cliente || !fk_categoria || !descripcion || !direccion || !presupuesto || !fecha) {
+      return res.status(400).json({
+        mensaje: "Faltan datos obligatorios para crear la solicitud"
+      });
+    }
+
+    const [resultado] = await database.execute(
+      `
+      INSERT INTO servicios 
+      (fk_cliente, fk_categoria, fk_evidencia, descripcion, direccion, presupuesto, fecha) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        fk_cliente,
+        fk_categoria,
+        fk_evidencia || null, // Si no viene, guardamos null
+        descripcion,
+        direccion,
+        presupuesto,
+        fecha
+      ]
+    );
+
+    res.status(201).json({
+      mensaje: "Solicitud publicada correctamente",
+      resultado
+    });
+  } catch (error) {
+    console.error("Error al registrar servicio:", error);
+    res.status(500).json({
+      mensaje: "Error al publicar la solicitud"
+    });
+  }
+});
+
+app.get("/api/servicios", async (_req, res) => {
+  try {
+    const [servicios] = await database.query(
+      "SELECT * FROM servicios ORDER BY fecha DESC"
+    );
+
+    res.json(servicios);
+  } catch (error) {
+    console.error("Error al consultar servicios:", error);
+    res.status(500).json({
+      mensaje: "Error al consultar los servicios",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE CATEGORÍAS
+// ==========================================
+app.get("/api/categorias", async (_req, res) => {
+  try {
+    const [categorias] = await database.query(
+      "SELECT id_categoria, nombre, subCatgeoria FROM categorias"
+    );
+    res.json(categorias);
+  } catch (error) {
+    console.error("Error al consultar categorías:", error);
+    res.status(500).json({
+      mensaje: "Error al consultar las categorías",
+    });
+  }
+});
+
+// ==========================================
+// RUTA PARA ACTUALIZAR DISPONIBILIDAD (WORKER)
+// ==========================================
+app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
+  const { id } = req.params;
+  const { disponible } = req.body; // Se espera un booleano: true (Disponible) o false (No disponible)
+
+  try {
+    // Definimos el valor del estado basado en el booleano
+    // Ajusta los strings 'Disponible' y 'No disponible' según los valores que uses en tu DB
+    const nuevoEstado = disponible ? 'Disponible' : 'No disponible';
+
+    const [resultado]: any = await database.execute(
+      "UPDATE empleados SET estado = ? WHERE id_empleado = ?",
+      [nuevoEstado, id]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ mensaje: "Trabajador no encontrado" });
+    }
+
+    res.json({
+      mensaje: "Disponibilidad actualizada correctamente",
+      nuevoEstado
+    });
+  } catch (error) {
+    console.error("Error al actualizar disponibilidad:", error);
+    res.status(500).json({
+      mensaje: "Error interno al actualizar disponibilidad"
+    });
+  }
+});
+
+// ==========================================
+// INICIO DEL SERVIDOR
+// ==========================================
 app.listen(port, () => {
   console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });
+
