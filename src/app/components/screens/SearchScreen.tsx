@@ -331,7 +331,7 @@ export default function SearchScreen() {
               disabled={publicando || cargandoCats}
               className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold shadow-lg shadow-[#1A56DB]/30 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
             >
-              {publicando ? 'Publicando...' : 'Publicar solicitud'}
+              Publicar trabajo
             </motion.button>
 
             {suggestedForPost.length > 0 && (

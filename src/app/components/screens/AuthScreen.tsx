@@ -31,7 +31,7 @@ interface RegisterForm {
   password: string;
   confirm: string;
 
-  // solo para
+  // solo para trabajadores
   titulo: string;
   dni: string;
   antecedente: string;

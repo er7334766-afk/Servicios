@@ -192,7 +192,7 @@ export default function WorkerProfileScreen() {
         </motion.button>
         <motion.button
           whileTap={{ scale: 0.97 }}
-          onClick={() => navigate('/home/review/b1')}
+          onClick={() => navigate('/home/payment')}
           className="flex-2 bg-[#1A56DB] text-white rounded-xl py-3 px-6 font-semibold shadow-lg shadow-[#1A56DB]/30 flex-1"
         >
           Contratar ahora
