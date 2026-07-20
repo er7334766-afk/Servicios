@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Home, Search, MessageCircle, User, CalendarDays, ClipboardList, Briefcase } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
+
 interface TabItem {
   label: string;
   icon: ComponentType<{ className?: string }>;

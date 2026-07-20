@@ -12,13 +12,15 @@ import {
   ChevronRight,
   Wallet,
 } from 'lucide-react';
-
+import CreditCardScreen from './CreditCardScreen'; //agregado
 
 
 export default function PaymentMethodScreen() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('card');
+  const [isEnteringCard, setIsEnteringCard] = useState(false); //agregado
 
+  // Métodos de pago 
   const methods = [
     {
       id: 'card',
@@ -26,12 +28,12 @@ export default function PaymentMethodScreen() {
       description: 'Visa • Mastercard',
       icon: CreditCard,
     },
-    {
-      id: 'cash',
-      title: 'Efectivo',
-      description: 'Paga cuando finalice el servicio',
-      icon: Banknote,
-    },
+    // {
+    //   id: 'cash',
+    //   title: 'Efectivo',
+    //   description: 'Paga cuando finalice el servicio',
+    //   icon: Banknote,
+    // },
     {
         id: 'paypal',
         title: 'PayPal',
@@ -39,7 +41,25 @@ export default function PaymentMethodScreen() {
         icon: Wallet,
     },
     
-    ];
+  ];
+
+  const handleContinuar = () => {
+    if (selected === 'card') {
+      setIsEnteringCard(true);
+    } else {
+      navigate('/home/review/b1');
+    }
+  };
+
+  if (isEnteringCard) {
+    return (
+      <CreditCardScreen
+        montoTotal={450} 
+        onBack={() => setIsEnteringCard(false)} 
+        onPaymentSuccess={() => navigate('/home/review/b1')} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-full bg-background pb-6">
@@ -67,7 +87,7 @@ export default function PaymentMethodScreen() {
 
           return (
             <motion.button
-                whileHover={{ scale: 1.01 }} //AGREGADO
+              whileHover={{ scale: 1.01 }} //AGREGADO
               whileTap={{ scale: 0.98 }}
               key={method.id}
               onClick={() => setSelected(method.id)}
@@ -124,7 +144,7 @@ export default function PaymentMethodScreen() {
 
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate('/home/payment/card')}
+          onClick={handleContinuar} //AGREGADO
             //AGREGADO
             className="w-full bg-[#1A56DB] rounded-2xl py-4 mt-6 shadow-lg flex items-center justify-center gap-2"> 
           <span className="text-white font-semibold">

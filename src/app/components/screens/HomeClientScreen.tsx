@@ -67,7 +67,7 @@ export default function HomeClientScreen() {
         <motion.button
           whileTap={{ scale: 0.98 }}
           //AGREGADO
-          onClick={() => { navigate('/home/payment'); }}
+          onClick={() => { navigate('/home/search'); }}
           //agregado
           className="w-full bg-white rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
         >
