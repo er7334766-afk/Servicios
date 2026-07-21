@@ -439,6 +439,192 @@ app.get("/api/categorias", async (_req, res) => {
 });
 
 // ==========================================
+// CATEGORÍAS Y ASOCIACION CON EMPLEADO
+// ==========================================
+app.get("/api/empleados/:id/categorias", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT id_empleado
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+      const [categorias]: any = await database.execute(
+  `
+  SELECT
+    c.id_categoria,
+    c.nombre,
+    c.subCatgeoria
+  FROM categorias c
+  INNER JOIN empleado_categorias ec
+    ON ec.id_categoria = c.id_categoria
+  WHERE ec.id_empleado = ?
+  ORDER BY c.nombre ASC
+  `,
+  [idEmpleado]
+);
+    
+
+    return res.status(200).json({
+      idEmpleado,
+      categorias,
+    });
+  } catch (error) {
+    console.error("Error al consultar categorías del empleado:", error);
+
+    return res.status(500).json({
+      mensaje: "Error interno del servidor",
+    });
+  }
+});
+
+app.post("/api/empleados/:id/categorias", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+    const idCategoria = Number(req.body.idCategoria);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de categoría inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT id_empleado
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    const [categorias]: any = await database.execute(
+      `
+      SELECT id_categoria
+      FROM categorias
+      WHERE id_categoria = ?
+      LIMIT 1
+      `,
+      [idCategoria]
+    );
+
+    if (categorias.length === 0) {
+      return res.status(404).json({
+        mensaje: "Categoría no encontrada",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      INSERT INTO empleado_categorias (
+        id_empleado,
+        id_categoria
+      )
+      VALUES (?, ?)
+      `,
+      [idEmpleado, idCategoria]
+    );
+
+    return res.status(201).json({
+      mensaje: "Categoría agregada correctamente",
+      relacion: {
+        id_empleado_categoria: resultado.insertId,
+        idEmpleado,
+        idCategoria,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error al agregar categoría:", error);
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        mensaje: "El empleado ya tiene esa categoría",
+      });
+    }
+
+    return res.status(500).json({
+      mensaje: "Error interno del servidor",
+    });
+  }
+});
+
+app.delete(
+  "/api/empleados/:idEmpleado/categorias/:idCategoria",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+      const idCategoria = Number(req.params.idCategoria);
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0 ||
+        !Number.isInteger(idCategoria) ||
+        idCategoria <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "Identificadores inválidos",
+        });
+      }
+
+      const [resultado]: any = await database.execute(
+        `
+        DELETE FROM empleado_categorias
+        WHERE id_empleado = ?
+          AND id_categoria = ?
+        `,
+        [idEmpleado, idCategoria]
+      );
+
+      if (resultado.affectedRows === 0) {
+        return res.status(404).json({
+          mensaje: "La categoría no está asignada al empleado",
+        });
+      }
+
+      return res.status(200).json({
+        mensaje: "Categoría eliminada correctamente",
+      });
+    } catch (error) {
+      console.error("Error al eliminar categoría:", error);
+
+      return res.status(500).json({
+        mensaje: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+// ==========================================
 // RUTA PARA ACTUALIZAR DISPONIBILIDAD (WORKER)
 // ==========================================
 app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
