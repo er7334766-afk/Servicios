@@ -293,6 +293,133 @@ app.get("/api/servicios", async (_req, res) => {
     });
   }
 });
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES lectura id 
+// ==========================================
+app.get("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const [resultado]: any = await database.execute(
+      `
+      SELECT *
+      FROM servicios
+      WHERE id_servicio = ?
+      `,
+      [idServicio]
+    );
+
+    if (resultado.length === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json(resultado[0]);
+  } catch (error) {
+    console.error("Error al consultar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al consultar el servicio",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES (UPDATE)
+// ==========================================
+app.put("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const {
+      fk_cliente,
+      fk_categoria,
+      fk_evidencia,
+      descripcion,
+      direccion,
+      presupuesto,
+      fecha,
+    } = req.body;
+
+    const [resultado]: any = await database.execute(
+      `
+      UPDATE servicios
+      SET
+        fk_cliente = ?,
+        fk_categoria = ?,
+        fk_evidencia = ?,
+        descripcion = ?,
+        direccion = ?,
+        presupuesto = ?,
+        fecha = ?
+      WHERE id_servicio = ?
+      `,
+      [
+        fk_cliente,
+        fk_categoria,
+        fk_evidencia || null,
+        descripcion,
+        direccion,
+        presupuesto,
+        fecha,
+        idServicio,
+      ]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json({
+      mensaje: "Servicio actualizado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al actualizar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al actualizar el servicio",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES (DELETE)
+// ==========================================
+
+app.delete("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const [resultado]: any = await database.execute(
+      `
+      DELETE FROM servicios
+      WHERE id_servicio = ?
+      `,
+      [idServicio]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json({
+      mensaje: "Servicio eliminado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al eliminar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al eliminar el servicio",
+    });
+  }
+});
+
+
 
 // ==========================================
 // RUTAS DE CATEGORÍAS
