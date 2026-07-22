@@ -7,15 +7,10 @@ import { StarRating } from '../shared/StarRating';
 import { ReviewCard } from '../shared/ReviewCard';
 import { useApp } from '../../context/AppContext';
 import { MOCK_WORKERS, MOCK_REVIEWS, SERVICE_CATEGORIES } from '../../data/mockData';
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
+
 import EditProfileScreen from './EditProfileScreen'; // agregado
 import EditServiceScreen from './EditServiceScreen'; //agregado
->>>>>>> Stashed changes
-=======
-import EditProfileScreen from './EditProfileScreen'; // agregado
->>>>>>> origin/main
+
 
 export default function WorkerOwnProfileScreen() {
   const navigate = useNavigate();
@@ -31,11 +26,7 @@ export default function WorkerOwnProfileScreen() {
     navigate('/');
   };
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> origin/main
+
   //agregado
   if (isEditing) {
     return (
@@ -47,7 +38,7 @@ export default function WorkerOwnProfileScreen() {
     );
   }
 
-<<<<<<< HEAD
+
   //agregado
   if (isEditingServices) {
     return (
@@ -57,9 +48,7 @@ export default function WorkerOwnProfileScreen() {
     );
   }
 
->>>>>>> Stashed changes
-=======
->>>>>>> origin/main
+
   return (
     <div className="pb-6">
       {/* Header banner */}

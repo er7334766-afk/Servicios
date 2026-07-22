@@ -1,3 +1,4 @@
+//ClientProfileScreen.tsx
 import { useNavigate } from 'react-router';
 import { useState } from 'react'; //agregado
 import { motion } from 'motion/react';
