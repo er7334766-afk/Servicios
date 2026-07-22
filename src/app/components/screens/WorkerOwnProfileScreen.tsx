@@ -7,7 +7,10 @@ import { StarRating } from '../shared/StarRating';
 import { ReviewCard } from '../shared/ReviewCard';
 import { useApp } from '../../context/AppContext';
 import { MOCK_WORKERS, MOCK_REVIEWS, SERVICE_CATEGORIES } from '../../data/mockData';
+
 import EditProfileScreen from './EditProfileScreen'; // agregado
+import EditServiceScreen from './EditServiceScreen'; //agregado
+
 
 export default function WorkerOwnProfileScreen() {
   const navigate = useNavigate();
@@ -16,11 +19,13 @@ export default function WorkerOwnProfileScreen() {
   const worker = MOCK_WORKERS[0];
   const reviews = MOCK_REVIEWS.filter((r) => r.targetId === worker.id);
   const categories = worker.categories.map((c) => SERVICE_CATEGORIES.find((s) => s.id === c)).filter(Boolean);
+  const [isEditingServices, setIsEditingServices] = useState(false); //agregado
 
   const handleLogout = () => {
     setCurrentUser(null);
     navigate('/');
   };
+
 
   //agregado
   if (isEditing) {
@@ -32,6 +37,17 @@ export default function WorkerOwnProfileScreen() {
       />
     );
   }
+
+
+  //agregado
+  if (isEditingServices) {
+    return (
+      <EditServiceScreen
+        onBack={() => setIsEditingServices(false)}
+      />
+    );
+  }
+
 
   return (
     <div className="pb-6">
@@ -94,7 +110,15 @@ export default function WorkerOwnProfileScreen() {
 
       {/* Services */}
       <div className="px-5 mt-5">
-        <h2 className="text-base font-bold text-foreground mb-2">Mis servicios</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-base font-bold text-foreground">Mis servicios</h2>
+          <button
+            onClick={() => setIsEditingServices(true)}
+            className="text-xs text-[#1A56DB] font-semibold"
+          >
+            Editar
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {categories.map((cat) => (
             <span
