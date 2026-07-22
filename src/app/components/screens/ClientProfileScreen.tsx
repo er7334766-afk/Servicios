@@ -28,6 +28,34 @@ export default function ClientProfileScreen() {
   const myBookings = MOCK_BOOKINGS.filter((b) => b.clientId === 'c1');
   const myReviews = MOCK_REVIEWS.filter((r) => r.reviewerId === 'c1');
 
+  
+  //agregado
+  const handleCancelarServicio = (booking: any) => {
+
+    const fechaServicio = new Date(booking.date);
+    const fechaActual = new Date();
+
+    const diferenciaTiempo = fechaServicio.getTime() - fechaActual.getTime();
+    const horasRestantes = diferenciaTiempo / (1000 * 60 * 60);
+
+    if (horasRestantes < 24) {
+      const confirmaUrgente = window.confirm(
+        `🚨 Faltan menos de 24 horas para el servicio.\n\nAl cancelar con poca antelación se podría aplicar un cargo por penalización.\n\n¿Deseas continuar con la cancelación de todas formas?`
+      );
+      if (!confirmaUrgente) return;
+    } else {
+      const confirmaNormal = window.confirm(
+        `¿Estás seguro de que deseas cancelar el servicio con ${booking.workerName}?`
+      );
+      if (!confirmaNormal) return;
+    }
+
+    booking.status = 'cancelled';
+    alert('El servicio ha sido cancelado exitosamente.');
+    
+    navigate('/home/profile');
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     navigate('/');
@@ -95,7 +123,7 @@ export default function ClientProfileScreen() {
       {/* Bookings history */}
       <div className="px-5 mt-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Historial de servicios</h2>
+          <h2 className="text-base font-bold text-foreground">Historial de contrataciones</h2>
         </div>
         <div className="flex flex-col gap-3">
           {myBookings.map((booking) => {
@@ -144,6 +172,17 @@ export default function ClientProfileScreen() {
                     <Star className="w-3.5 h-3.5" /> Calificar servicio
                   </motion.button>
                 )}
+                {/* Botón para Cancelar Servicio (Solo visible si está Pendiente o Confirmado) */}
+                {(booking.status === 'pending' || booking.status === 'accepted') && (
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => handleCancelarServicio(booking)}
+                    className="w-full mt-3 bg-red-50 border border-red-200 text-red-600 rounded-xl py-2 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors"
+                  >
+                    Cancelar servicio
+                  </motion.button>
+                )}
+
               </motion.div>
             );
           })}
