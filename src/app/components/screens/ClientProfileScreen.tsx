@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router';
+import { useState } from 'react'; //agregado
 import { motion } from 'motion/react';
 import { Settings, Star, Briefcase, MapPin, Calendar, ChevronRight, LogOut } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
 import { MOCK_BOOKINGS, MOCK_REVIEWS, SERVICE_CATEGORIES } from '../../data/mockData';
+import EditProfileScreen from './EditProfileScreen'; //agregado
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -24,6 +26,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function ClientProfileScreen() {
   const navigate = useNavigate();
   const { currentUser, setCurrentUser } = useApp();
+  const [isEditing, setIsEditing] = useState(false); //agregado
 
   const myBookings = MOCK_BOOKINGS.filter((b) => b.clientId === 'c1');
   const myReviews = MOCK_REVIEWS.filter((r) => r.reviewerId === 'c1');
@@ -60,6 +63,17 @@ export default function ClientProfileScreen() {
     setCurrentUser(null);
     navigate('/');
   };
+
+  //agregado
+  if (isEditing) {
+    return (
+      <EditProfileScreen
+        usuarioActual={currentUser} // Pasa los datos del contexto (nombre, correo, etc.)
+        rol="client"                // Le avisa al formulario que oculte los campos de empleado
+        onBack={() => setIsEditing(false)}
+      />
+    );
+  }
 
   return (
     <div className="pb-6">
@@ -213,7 +227,7 @@ export default function ClientProfileScreen() {
         <h2 className="text-base font-bold text-foreground mb-3">Cuenta</h2>
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           {[
-            { label: 'Editar perfil', icon: Settings },
+            { label: 'Editar perfil', icon: Settings, action: () => setIsEditing(true) }, //agregue
             { label: 'Mis favoritos', icon: Star },
             { label: 'Reportar un problema', icon: Briefcase, action: () => navigate('/home/report') },
           ].map(({ label, icon: Icon, action }) => (

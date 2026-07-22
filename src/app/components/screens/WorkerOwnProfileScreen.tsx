@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router';
+import { useState } from 'react'; //agregado 
 import { motion } from 'motion/react';
 import { Settings, Star, MapPin, ChevronRight, LogOut, Edit2 } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -6,15 +7,20 @@ import { StarRating } from '../shared/StarRating';
 import { ReviewCard } from '../shared/ReviewCard';
 import { useApp } from '../../context/AppContext';
 import { MOCK_WORKERS, MOCK_REVIEWS, SERVICE_CATEGORIES } from '../../data/mockData';
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
 import EditProfileScreen from './EditProfileScreen'; // agregado
 import EditServiceScreen from './EditServiceScreen'; //agregado
 >>>>>>> Stashed changes
+=======
+import EditProfileScreen from './EditProfileScreen'; // agregado
+>>>>>>> origin/main
 
 export default function WorkerOwnProfileScreen() {
   const navigate = useNavigate();
   const { setCurrentUser } = useApp();
+  const [isEditing, setIsEditing] = useState(false); // agregado
   const worker = MOCK_WORKERS[0];
   const reviews = MOCK_REVIEWS.filter((r) => r.targetId === worker.id);
   const categories = worker.categories.map((c) => SERVICE_CATEGORIES.find((s) => s.id === c)).filter(Boolean);
@@ -25,8 +31,11 @@ export default function WorkerOwnProfileScreen() {
     navigate('/');
   };
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
+=======
+>>>>>>> origin/main
   //agregado
   if (isEditing) {
     return (
@@ -38,6 +47,7 @@ export default function WorkerOwnProfileScreen() {
     );
   }
 
+<<<<<<< HEAD
   //agregado
   if (isEditingServices) {
     return (
@@ -48,6 +58,8 @@ export default function WorkerOwnProfileScreen() {
   }
 
 >>>>>>> Stashed changes
+=======
+>>>>>>> origin/main
   return (
     <div className="pb-6">
       {/* Header banner */}
@@ -171,7 +183,7 @@ export default function WorkerOwnProfileScreen() {
       <div className="px-5 mt-6">
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           {[
-            { label: 'Editar perfil', icon: Edit2 },
+            { label: 'Editar perfil', icon: Edit2, action: () => setIsEditing(true) }, //agregue el action
             { label: 'Gestionar disponibilidad', icon: Settings, action: () => navigate('/home/agenda') },
             { label: 'Reportar un problema', icon: Settings, action: () => navigate('/home/report') },
           ].map(({ label, icon: Icon, action }) => (

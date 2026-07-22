@@ -28,7 +28,7 @@ export default function ReviewScreen() {
     toast.success('Reseña enviada', {
       description: `Gracias por calificar a ${worker.name}`,
     });
-    setTimeout(() => navigate(-1), 800);
+    setTimeout(() => navigate('/home'), 800);
   };
 
   const criteria = [

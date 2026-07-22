@@ -1,6 +1,19 @@
+# Dependencias
 node_modules/
-dist/
-android/
-ios/
+backend/node_modules/
+
+# Variables de entorno
+.env
+backend/.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos del sistema
 .DS_Store
+Thumbs.db
+
+node_modules/
 .env

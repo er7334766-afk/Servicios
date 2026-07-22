@@ -12,12 +12,13 @@ import {
   ChevronRight,
   Wallet,
 } from 'lucide-react';
-
+import CreditCardScreen from './CreditCardScreen'; //agregado
 
 
 export default function PaymentMethodScreen() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('card');
+  const [isEnteringCard, setIsEnteringCard] = useState(false); //agregado
 
   // Métodos de pago 
   const methods = [
@@ -40,7 +41,25 @@ export default function PaymentMethodScreen() {
         icon: Wallet,
     },
     
-    ];
+  ];
+
+  const handleContinuar = () => {
+    if (selected === 'card') {
+      setIsEnteringCard(true);
+    } else {
+      navigate('/home/review/b1');
+    }
+  };
+
+  if (isEnteringCard) {
+    return (
+      <CreditCardScreen
+        montoTotal={450} 
+        onBack={() => setIsEnteringCard(false)} 
+        onPaymentSuccess={() => navigate('/home/review/b1')} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-full bg-background pb-6">
@@ -125,7 +144,7 @@ export default function PaymentMethodScreen() {
 
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate('/home/review/b1')} //AGREGADO
+          onClick={handleContinuar} //AGREGADO
             //AGREGADO
             className="w-full bg-[#1A56DB] rounded-2xl py-4 mt-6 shadow-lg flex items-center justify-center gap-2"> 
           <span className="text-white font-semibold">
