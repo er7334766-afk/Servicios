@@ -58,36 +58,55 @@ export default function AuthScreen() {
   const registerForm = useForm<RegisterForm>();
 
 const handleLogin = async (data: LoginForm) => {
-    try {
-      setIniciandoSesion(true);
+  try {
+    setIniciandoSesion(true);
 
-      const respuesta = await iniciarSesion({
-        correo: data.email.trim().toLowerCase(),
-        password: data.password,
-        rol: role, // Enviamos el rol actual (client o worker)
-      });
+    const respuesta = await iniciarSesion({
+      correo: data.email.trim().toLowerCase(),
+      password: data.password,
+      rol: role,
+    });
 
-      // Guardamos al usuario real que nos devolvió la base de datos
-      setCurrentUser({
-        id: String(respuesta.usuario.id),
-        name: respuesta.usuario.nombre,
-        email: respuesta.usuario.correo,
-        phone: respuesta.usuario.celular,
-        // Asignamos un avatar por defecto mientras no tengan subida de imágenes
-        avatarUrl: role === 'worker' ? MOCK_WORKERS[0].avatarUrl : MOCK_CLIENT.avatarUrl,
-        role: role,
-        location: 'No especificada',
-        joinedDate: new Date().toISOString().split('T')[0],
-      });
+    const idUsuario = Number(respuesta.usuario.id);
 
-      navigate('/home');
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : 'Error al iniciar sesión';
-      alert(mensaje);
-    } finally {
-      setIniciandoSesion(false);
+    if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+      throw new Error('El servidor no devolvió un ID de usuario válido');
     }
-  };
+
+    setCurrentUser({
+      id: String(idUsuario),
+
+      idEmpleado:
+        role === 'worker'
+          ? idUsuario
+          : undefined,
+
+      name: respuesta.usuario.nombre,
+      email: respuesta.usuario.correo,
+      phone: respuesta.usuario.celular,
+
+      avatarUrl:
+        role === 'worker'
+          ? MOCK_WORKERS[0].avatarUrl
+          : MOCK_CLIENT.avatarUrl,
+
+      role,
+      location: 'No especificada',
+      joinedDate: new Date().toISOString().split('T')[0],
+    });
+
+    navigate('/home');
+  } catch (error) {
+    const mensaje =
+      error instanceof Error
+        ? error.message
+        : 'Error al iniciar sesión';
+
+    alert(mensaje);
+  } finally {
+    setIniciandoSesion(false);
+  }
+};
 
   const handleRegister = async (data: RegisterForm) => {
     if (data.password !== data.confirm) {

@@ -1,11 +1,21 @@
 import React, { createContext, useContext, useState } from 'react';
-import type { Role, User, Conversation, ChatMessage, Notification, AgendaSlot } from '../types';
+import type {
+  Role,
+  User,
+  Conversation,
+  ChatMessage,
+  Notification,
+  AgendaSlot,
+} from '../types';
+
 import {
-  MOCK_CLIENT,
+  
   MOCK_CONVERSATIONS,
   MOCK_NOTIFICATIONS,
   MOCK_AGENDA_SLOTS,
 } from '../data/mockData';
+
+
 
 interface AppContextType {
   role: Role;
@@ -31,71 +41,115 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role>('client');
+export function AppProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [role, setRole] = useState<Role>('worker');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  
+
+  const [conversations, setConversations] =
+    useState<Conversation[]>(MOCK_CONVERSATIONS);
+
+  const [notifications, setNotifications] =
+    useState<Notification[]>(MOCK_NOTIFICATIONS);
+
   const [workerAvailability, setWorkerAvailability] = useState(true);
-  const [agendaSlots, setAgendaSlots] = useState<AgendaSlot[]>(MOCK_AGENDA_SLOTS);
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+
+  const [agendaSlots, setAgendaSlots] =
+    useState<AgendaSlot[]>(MOCK_AGENDA_SLOTS);
+
+  const [selectedWorkerId, setSelectedWorkerId] =
+    useState<string | null>(null);
 
   const isAuthenticated = currentUser !== null;
 
-  const totalUnread = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
-  const unreadNotifications = notifications.filter((n) => !n.read).length;
+  const totalUnread = conversations.reduce(
+    (acc, conversation) => acc + conversation.unreadCount,
+    0
+  );
 
-  const addMessage = (conversationId: string, message: ChatMessage) => {
+  const unreadNotifications = notifications.filter(
+    (notification) => !notification.read
+  ).length;
+
+  const addMessage = (
+    conversationId: string,
+    message: ChatMessage
+  ) => {
     setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === conversationId
+      prev.map((conversation) =>
+        conversation.id === conversationId
           ? {
-              ...conv,
-              messages: [...conv.messages, message],
+              ...conversation,
+              messages: [...conversation.messages, message],
               lastMessage: message.content,
               lastMessageTime: 'Ahora',
-              unreadCount: message.senderId !== currentUser?.id ? conv.unreadCount + 1 : conv.unreadCount,
+              unreadCount:
+                message.senderId !== currentUser?.id
+                  ? conversation.unreadCount + 1
+                  : conversation.unreadCount,
             }
-          : conv
+          : conversation
       )
     );
   };
 
   const markConversationRead = (conversationId: string) => {
     setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === conversationId
-          ? { ...conv, unreadCount: 0, messages: conv.messages.map((m) => ({ ...m, read: true })) }
-          : conv
+      prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              unreadCount: 0,
+              messages: conversation.messages.map((message) => ({
+                ...message,
+                read: true,
+              })),
+            }
+          : conversation
       )
     );
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((notification) =>
+        notification.id === id
+          ? { ...notification, read: true }
+          : notification
+      )
     );
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) =>
+      prev.map((notification) => ({
+        ...notification,
+        read: true,
+      }))
+    );
   };
 
   const toggleSlotAvailability = (slotId: string) => {
     setAgendaSlots((prev) =>
-      prev.map((s) => (s.id === slotId && !s.bookingId ? { ...s, available: !s.available } : s))
+      prev.map((slot) =>
+        slot.id === slotId && !slot.bookingId
+          ? {
+              ...slot,
+              available: !slot.available,
+            }
+          : slot
+      )
     );
   };
 
-  const handleSetRole = (r: Role) => {
-    setRole(r);
-    if (r === 'client') {
-      setCurrentUser(MOCK_CLIENT);
-    } else {
-      setCurrentUser({ ...MOCK_CLIENT, id: 'w1', name: 'Carlos Mendoza', role: 'worker' });
-    }
-  };
-
+  const handleSetRole = (newRole: Role) => {
+  setRole(newRole);
+};  
+  
   return (
     <AppContext.Provider
       value={{
@@ -126,7 +180,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
-  return ctx;
+  const context = useContext(AppContext);
+
+  if (!context) {
+    throw new Error('useApp must be used within AppProvider');
+  }
+
+  return context;
 }
