@@ -20,6 +20,9 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
   const [titulo, setTitulo] = useState(usuarioActual?.titulo || '');
   const [direccion, setDireccion] = useState(usuarioActual?.direccion || '');
   const [antecedente, setAntecedente] = useState(usuarioActual?.antecedente || '');
+  const [sobreMi, setSobreMi] = useState(
+    usuarioActual?.sobre_mi || usuarioActual?.sobreMi || ''
+  );
 
   // --- Estados exclusivos de CLIENTE ---
   const [password, setPassword] = useState(usuarioActual?.password_C || '');
@@ -30,19 +33,36 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
     setCargando(true);
-    
+
     try {
       if (esEmpleado) {
-        // Estructura de guardado para Empleado
-        console.log('Guardando Empleado:', { nombre, correo, dni, titulo, direccion, antecedente });
+        const datosEmpleado = {
+          nombre,
+          correo,
+          dni,
+          titulo,
+          direccion,
+          antecedente,
+          sobre_mi: sobreMi,
+        };
+
+        console.log('Guardando Empleado:', datosEmpleado);
       } else {
-        // Estructura de guardado para Cliente
-        console.log('Guardando Cliente:', { nombre, correo, dni, password, foto });
+        const datosCliente = {
+          nombre,
+          correo,
+          dni,
+          password,
+          foto,
+        };
+
+        console.log('Guardando Cliente:', datosCliente);
       }
-      
+
       alert('Cambios guardados correctamente');
       onBack();
     } catch (error) {
+      console.error('Error al guardar:', error);
       alert('Error al guardar los cambios');
     } finally {
       setCargando(false);
@@ -101,7 +121,7 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
             onChange={(e) => setCorreo(e.target.value)}
             placeholder="correo@ejemplo.com"
             className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-            required
+            
           />
         </div>
 
@@ -142,6 +162,28 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
               placeholder="Dirección de residencia"
               className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
             />
+          </div>
+        )}
+
+        {/* CAMPO EXCLUSIVO EMPLEADO: Sobre mí */}
+        {esEmpleado && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              Sobre mí
+            </label>
+
+            <textarea
+              value={sobreMi}
+              onChange={(e) => setSobreMi(e.target.value)}
+              placeholder="Describe tu experiencia, habilidades y los servicios que realizas"
+              rows={5}
+              maxLength={500}
+              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:border-blue-500 transition-colors"
+            />
+
+            <span className="text-xs text-slate-400 text-right px-1">
+              {sobreMi.length}/500
+            </span>
           </div>
         )}
 
