@@ -50,6 +50,10 @@ export default function AgendaScreen() {
     const ds = date.toISOString().split('T')[0];
     return displayBookings.some((b) => b.date === ds);
   };
+  const getBookingsCount = (date: Date) => {
+  const ds = date.toISOString().split("T")[0];
+  return displayBookings.filter((b) => b.date === ds).length;
+};
 
   const getSlotForDate = (date: Date) => {
     const ds = date.toISOString().split('T')[0];
@@ -128,7 +132,8 @@ export default function AgendaScreen() {
               {weekDays.map((d) => {
                 const isToday = d.toDateString() === today.toDateString();
                 const isSelected = d.toDateString() === currentDate.toDateString();
-                const hasBooking = hasBookingOnDate(d);
+                const bookingCount = getBookingsCount(d);
+                const hasBooking = bookingCount > 0;
                 return (
                   <motion.button
                     key={d.toISOString()}
@@ -212,7 +217,8 @@ export default function AgendaScreen() {
                 const day = i + 1;
                 const date = new Date(year, month, day);
                 const isToday = date.toDateString() === today.toDateString();
-                const hasBooking = hasBookingOnDate(date);
+                const bookingCount = getBookingsCount(date);
+                const hasBooking = bookingCount > 0;
                 const isSelected = date.toDateString() === currentDate.toDateString();
                 return (
                   <motion.button
@@ -225,7 +231,15 @@ export default function AgendaScreen() {
                   >
                     {day}
                     {hasBooking && (
-                      <div className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-[#1A56DB]'}`} />
+                    <span
+                    className={`mt-1 text-[9px] px-1 rounded-full font-bold ${
+                    isSelected
+                    ? "bg-white text-[#1A56DB]"
+                    : "bg-[#1A56DB] text-white"
+                    }`}
+                  >
+                    {bookingCount}
+                   </span>
                     )}
                   </motion.button>
                 );
