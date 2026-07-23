@@ -1,49 +1,135 @@
-//EditProfileScreen.tsx
 import React, { useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 
 interface EditProfileProps {
   onBack: () => void;
   usuarioActual?: any;
-  rol: 'worker' | 'client'; // <-- Nueva propiedad para saber quién edita
+  rol: 'worker' | 'client';
 }
 
-export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditProfileProps) {
+export default function EditProfileScreen({
+  onBack,
+  usuarioActual,
+  rol,
+}: EditProfileProps) {
   const esEmpleado = rol === 'worker';
 
-  // --- Estados comunes (Ambos roles) ---
-  const [nombre, setNombre] = useState(usuarioActual?.name || usuarioActual?.nombre_C || usuarioActual?.nombre || '');
-  const [correo, setCorreo] = useState(usuarioActual?.correo || '');
-  const [dni, setDni] = useState(usuarioActual?.dni || '');
+  const idUsuario = Number(
+    usuarioActual?.idEmpleado ??
+      usuarioActual?.id_empleado ??
+      usuarioActual?.id
+  );
 
-  // --- Estados exclusivos de EMPLEADO ---
-  const [titulo, setTitulo] = useState(usuarioActual?.titulo || '');
-  const [direccion, setDireccion] = useState(usuarioActual?.direccion || '');
-  const [antecedente, setAntecedente] = useState(usuarioActual?.antecedente || '');
+  const [nombre, setNombre] = useState(
+    usuarioActual?.name ??
+      usuarioActual?.nombre_E ??
+      usuarioActual?.nombre_C ??
+      usuarioActual?.nombre ??
+      ''
+  );
 
-  // --- Estados exclusivos de CLIENTE ---
-  const [password, setPassword] = useState(usuarioActual?.password_C || '');
-  const [foto, setFoto] = useState(usuarioActual?.foto || '');
+  const [correo, setCorreo] = useState(
+    usuarioActual?.email ??
+      usuarioActual?.correo ??
+      ''
+  );
+
+  const [celular, setCelular] = useState(
+    usuarioActual?.phone ??
+      usuarioActual?.celular ??
+      ''
+  );
+
+  const [dni, setDni] = useState(
+    usuarioActual?.dni ?? ''
+  );
+
+  const [titulo, setTitulo] = useState(
+    usuarioActual?.titulo ?? ''
+  );
+
+  const [direccion, setDireccion] = useState(
+    usuarioActual?.direccion ??
+      usuarioActual?.location ??
+      ''
+  );
+
+  const [antecedente, setAntecedente] = useState(
+    usuarioActual?.antecedente ?? ''
+  );
+
+  const [password, setPassword] = useState(
+    usuarioActual?.password_C ?? ''
+  );
+
+  const [foto, setFoto] = useState(
+    usuarioActual?.foto ?? ''
+  );
 
   const [cargando, setCargando] = useState(false);
 
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCargando(true);
-    
+
+    if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+      alert('No se encontró el ID del usuario');
+      return;
+    }
+
     try {
-      if (esEmpleado) {
-        // Estructura de guardado para Empleado
-        console.log('Guardando Empleado:', { nombre, correo, dni, titulo, direccion, antecedente });
-      } else {
-        // Estructura de guardado para Cliente
-        console.log('Guardando Cliente:', { nombre, correo, dni, password, foto });
+      setCargando(true);
+
+      const url = esEmpleado
+        ? `http://localhost:3000/api/empleados/${idUsuario}`
+        : `http://localhost:3000/api/clientes/${idUsuario}`;
+
+      const body = esEmpleado
+        ? {
+            nombre_E: nombre.trim(),
+            correo: correo.trim().toLowerCase(),
+            celular: celular.trim(),
+            titulo: titulo.trim(),
+            dni: dni.trim(),
+            direccion: direccion.trim(),
+            antecedente: antecedente.trim(),
+          }
+        : {
+            nombre_C: nombre.trim(),
+            correo: correo.trim().toLowerCase(),
+            celular: celular.trim(),
+            dni: dni.trim(),
+            password_C: password,
+            foto: foto.trim(),
+          };
+
+      const respuesta = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje || 'No se pudieron guardar los cambios'
+        );
       }
-      
-      alert('Cambios guardados correctamente');
+
+      alert(
+        datos.mensaje || 'Cambios guardados correctamente'
+      );
+
       onBack();
     } catch (error) {
-      alert('Error al guardar los cambios');
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : 'Error al guardar los cambios';
+
+      alert(mensaje);
     } finally {
       setCargando(false);
     }
@@ -51,22 +137,31 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
 
   return (
     <div className="flex flex-col h-full bg-[#f8fafc] text-[#0f172a] p-4">
-      {/* Encabezado dinámico */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+        <button
+          type="button"
+          onClick={onBack}
+          className="p-2 hover:bg-slate-200 rounded-full transition-colors"
+        >
           <ArrowLeft className="w-5 h-5 text-slate-600" />
         </button>
+
         <h1 className="text-xl font-bold text-[#1e293b]">
-          {esEmpleado ? 'Editar Perfil Empleado' : 'Editar Perfil Cliente'}
+          {esEmpleado
+            ? 'Editar Perfil Empleado'
+            : 'Editar Perfil Cliente'}
         </h1>
       </div>
 
-      {/* Formulario */}
-      <form onSubmit={handleGuardar} className="flex flex-col gap-4 max-w-md w-full mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-        
-        {/* CAMPO COMÚN: Nombre */}
+      <form
+        onSubmit={handleGuardar}
+        className="flex flex-col gap-4 max-w-md w-full mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-100"
+      >
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">Nombre Completo</label>
+          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            Nombre Completo
+          </label>
+
           <input
             type="text"
             value={nombre}
@@ -77,10 +172,12 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           />
         </div>
 
-        {/* CAMPO EXCLUSIVO CLIENTE: Contraseña */}
         {!esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">Contraseña</label>
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              Contraseña
+            </label>
+
             <input
               type="password"
               value={password}
@@ -92,9 +189,11 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           </div>
         )}
 
-        {/* CAMPO COMÚN: Correo */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">Correo Electrónico</label>
+          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            Correo Electrónico
+          </label>
+
           <input
             type="email"
             value={correo}
@@ -105,10 +204,26 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           />
         </div>
 
-        {/* CAMPO EXCLUSIVO EMPLEADO: Título */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            Celular
+          </label>
+
+          <input
+            type="text"
+            value={celular}
+            onChange={(e) => setCelular(e.target.value)}
+            placeholder="Número de teléfono"
+            className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+          />
+        </div>
+
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">Título</label>
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              Título
+            </label>
+
             <input
               type="text"
               value={titulo}
@@ -119,9 +234,11 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           </div>
         )}
 
-        {/* CAMPO COMÚN: DNI */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">DNI / Identificación</label>
+          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            DNI / Identificación
+          </label>
+
           <input
             type="text"
             value={dni}
@@ -131,10 +248,12 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           />
         </div>
 
-        {/* CAMPO EXCLUSIVO EMPLEADO: Dirección */}
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">Dirección</label>
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              Dirección
+            </label>
+
             <input
               type="text"
               value={direccion}
@@ -145,10 +264,12 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           </div>
         )}
 
-        {/* CAMPO EXCLUSIVO EMPLEADO: Antecedente */}
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">Antecedente</label>
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              Antecedente
+            </label>
+
             <input
               type="text"
               value={antecedente}
@@ -159,10 +280,12 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           </div>
         )}
 
-        {/* CAMPO EXCLUSIVO CLIENTE: Foto Texto */}
         {!esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">URL de la Foto (Texto)</label>
+            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+              URL de la Foto
+            </label>
+
             <input
               type="text"
               value={foto}
@@ -173,14 +296,16 @@ export default function EditProfileScreen({ onBack, usuarioActual, rol }: EditPr
           </div>
         )}
 
-        {/* Botón de acción */}
         <button
           type="submit"
           disabled={cargando}
           className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
         >
           <Save className="w-4 h-4" />
-          {cargando ? 'Guardando...' : 'Guardar cambios'}
+
+          {cargando
+            ? 'Guardando...'
+            : 'Guardar cambios'}
         </button>
       </form>
     </div>
