@@ -16,7 +16,7 @@ export async function registrarEmpleado(
   empleado: NuevoEmpleado,
 ): Promise<RespuestaRegistroEmpleado> {
   const respuesta = await fetch(
-    'http://localhost:3000/api/empleados',
+    '/api/empleados',
     {
       method: 'POST',
       headers: {

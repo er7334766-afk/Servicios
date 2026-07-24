@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CreditCard, Calendar, Lock, User, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { hash256 } from '../../utils/security';
 
 interface CreditCardScreenProps {
   onBack: () => void;
@@ -36,16 +37,29 @@ export default function CreditCardScreen({ onBack, onPaymentSuccess, montoTotal 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCargando(true);
 
-    // Simulación del procesamiento del pago seguro
+    // Hashear número y cvv en frontend antes de cualquier envío
+    const rawNumero = numero.replace(/\s/g, '');
+    const hashedNumero = await hash256(rawNumero);
+    const hashedCvv = await hash256(cvv);
+
+    // Aquí puedes enviar hashedNumero y hashedCvv al backend si lo deseas.
+    // Por ahora simulamos el procesamiento sin enviar el número en claro.
     setTimeout(() => {
       setCargando(false);
+      console.log('Tarjeta (hashed):', hashedNumero);
+      console.log('CVV (hashed):', hashedCvv);
       alert('¡Pago procesado con éxito!');
       onPaymentSuccess();
-    }, 2000);
+      // Limpiar campos sensibles
+      setNumero('');
+      setCvv('');
+      setVencimiento('');
+      setNombre('');
+    }, 1200);
   };
 
   return (

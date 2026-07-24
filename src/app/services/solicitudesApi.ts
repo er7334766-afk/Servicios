@@ -17,7 +17,7 @@ interface RespuestaRegistroSolicitud {
 
 // 1. FUNCIÓN PARA OBTENER CATEGORÍAS (Va afuera, es independiente)
 export const obtenerCategoriasDB = async () => {
-  const response = await fetch('http://localhost:3000/api/categorias');
+  const response = await fetch('/api/categorias');
   if (!response.ok) {
     throw new Error('Error al obtener las categorías');
   }
@@ -46,7 +46,7 @@ export async function crearSolicitud(
   };
 
   const respuesta = await fetch(
-    'http://localhost:3000/api/servicios', 
+    '/api/servicios',
     {
       method: 'POST',
       headers: {

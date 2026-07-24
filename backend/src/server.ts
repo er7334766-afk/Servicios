@@ -3,6 +3,7 @@ import cors from "cors";
 import "dotenv/config";
 
 import { database } from "./config/database.js";
+import { hash256, hash512, constantTimeCompare } from "./utils/security.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -47,6 +48,8 @@ app.post('/api/empleados', async (req, res) => {
       });
     }
 
+    const hashedPassword = hash512(password_E);
+
     const [resultado] = await database.execute(
       `
       INSERT INTO empleados
@@ -69,7 +72,7 @@ app.post('/api/empleados', async (req, res) => {
       `,
       [
         nombre_E,
-        password_E,
+        hashedPassword,
         correo,
         celular,
         'Pendiente',
@@ -138,6 +141,8 @@ app.post("/api/clientes", async (req, res) => {
       });
     }
 
+    const hashedPassword = hash512(password_C);
+
     const [resultado] = await database.execute(
       `
       INSERT INTO clientes
@@ -146,7 +151,7 @@ app.post("/api/clientes", async (req, res) => {
       `,
       [
         nombre_C,
-        password_C,
+        hashedPassword,
         correo,
         celular
       ]
@@ -194,19 +199,20 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
+    const hashedPassword = hash512(password);
     let usuario = null;
 
     // Usamos alias (AS id, AS nombre) para estandarizar la respuesta sin importar si es cliente o empleado
     if (rol === 'client') {
       const [rows]: any = await database.execute(
         "SELECT id_cliente AS id, nombre_C AS nombre, correo, celular FROM clientes WHERE correo = ? AND password_C = ?",
-        [correo, password]
+        [correo, hashedPassword]
       );
       if (rows.length > 0) usuario = rows[0];
     } else if (rol === 'worker') {
       const [rows]: any = await database.execute(
         "SELECT id_empleado AS id, nombre_E AS nombre, correo, celular FROM empleados WHERE correo = ? AND password_E = ?",
-        [correo, password]
+        [correo, hashedPassword]
       );
       if (rows.length > 0) usuario = rows[0];
     } else {

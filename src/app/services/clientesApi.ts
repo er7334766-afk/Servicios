@@ -7,7 +7,7 @@ export interface NuevoCliente {
 
 export async function registrarCliente(cliente: NuevoCliente) {
   const respuesta = await fetch(
-    'http://localhost:3000/api/clientes',
+    '/api/clientes',
     {
       method: 'POST',
       headers: {
