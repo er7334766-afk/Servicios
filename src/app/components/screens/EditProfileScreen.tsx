@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 
 interface EditProfileProps {
@@ -17,56 +17,116 @@ export default function EditProfileScreen({
   const idUsuario = Number(
     usuarioActual?.idEmpleado ??
       usuarioActual?.id_empleado ??
+      usuarioActual?.idCliente ??
+      usuarioActual?.id_cliente ??
       usuarioActual?.id
   );
 
   const [nombre, setNombre] = useState(
-    usuarioActual?.name ??
-      usuarioActual?.nombre_E ??
-      usuarioActual?.nombre_C ??
-      usuarioActual?.nombre ??
-      ''
+    String(
+      usuarioActual?.name ??
+        usuarioActual?.nombre_E ??
+        usuarioActual?.nombre_C ??
+        usuarioActual?.nombre ??
+        ''
+    )
   );
 
   const [correo, setCorreo] = useState(
-    usuarioActual?.email ??
-      usuarioActual?.correo ??
-      ''
+    String(
+      usuarioActual?.email ??
+        usuarioActual?.correo ??
+        ''
+    )
   );
 
   const [celular, setCelular] = useState(
-    usuarioActual?.phone ??
-      usuarioActual?.celular ??
-      ''
+    String(
+      usuarioActual?.phone ??
+        usuarioActual?.celular ??
+        ''
+    )
   );
 
   const [dni, setDni] = useState(
-    usuarioActual?.dni ?? ''
+    String(usuarioActual?.dni ?? '')
   );
 
   const [titulo, setTitulo] = useState(
-    usuarioActual?.titulo ?? ''
+    String(usuarioActual?.titulo ?? '')
   );
 
   const [direccion, setDireccion] = useState(
-    usuarioActual?.direccion ??
-      usuarioActual?.location ??
-      ''
+    String(
+      usuarioActual?.direccion ??
+        usuarioActual?.location ??
+        ''
+    )
   );
 
   const [antecedente, setAntecedente] = useState(
-    usuarioActual?.antecedente ?? ''
+    String(usuarioActual?.antecedente ?? '')
   );
 
   const [password, setPassword] = useState(
-    usuarioActual?.password_C ?? ''
+    String(usuarioActual?.password_C ?? '')
   );
 
   const [foto, setFoto] = useState(
-    usuarioActual?.foto ?? ''
+    String(usuarioActual?.foto ?? '')
   );
 
   const [cargando, setCargando] = useState(false);
+  const [cargandoPerfil, setCargandoPerfil] = useState(false);
+
+  // Cargar los datos reales del empleado desde MySQL
+  useEffect(() => {
+    const cargarPerfilEmpleado = async () => {
+      if (
+        !esEmpleado ||
+        !Number.isInteger(idUsuario) ||
+        idUsuario <= 0
+      ) {
+        return;
+      }
+
+      try {
+        setCargandoPerfil(true);
+
+        const respuesta = await fetch(
+          `http://localhost:3000/api/empleados/${idUsuario}`
+        );
+
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos.mensaje || 'No se pudo cargar el perfil'
+          );
+        }
+
+        setNombre(String(datos.nombre_E ?? ''));
+        setCorreo(String(datos.correo ?? ''));
+        setCelular(String(datos.celular ?? ''));
+        setDni(String(datos.dni ?? ''));
+        setTitulo(String(datos.titulo ?? ''));
+        setDireccion(String(datos.direccion ?? ''));
+        setAntecedente(String(datos.antecedente ?? ''));
+      } catch (error) {
+        const mensaje =
+          error instanceof Error
+            ? error.message
+            : 'Error al cargar el perfil';
+
+        console.error('Error al cargar perfil:', mensaje);
+        alert(mensaje);
+      } finally {
+        setCargandoPerfil(false);
+      }
+    };
+
+    cargarPerfilEmpleado();
+  }, [esEmpleado, idUsuario]);
 
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,21 +145,21 @@ export default function EditProfileScreen({
 
       const body = esEmpleado
         ? {
-            nombre_E: nombre.trim(),
-            correo: correo.trim().toLowerCase(),
-            celular: celular.trim(),
-            titulo: titulo.trim(),
-            dni: dni.trim(),
-            direccion: direccion.trim(),
-            antecedente: antecedente.trim(),
+            nombre_E: String(nombre).trim(),
+            correo: String(correo).trim().toLowerCase(),
+            celular: String(celular).trim(),
+            titulo: String(titulo).trim(),
+            dni: String(dni).trim(),
+            direccion: String(direccion).trim(),
+            antecedente: String(antecedente).trim(),
           }
         : {
-            nombre_C: nombre.trim(),
-            correo: correo.trim().toLowerCase(),
-            celular: celular.trim(),
-            dni: dni.trim(),
-            password_C: password,
-            foto: foto.trim(),
+            nombre_C: String(nombre).trim(),
+            correo: String(correo).trim().toLowerCase(),
+            celular: String(celular).trim(),
+            dni: String(dni).trim(),
+            password_C: String(password),
+            foto: String(foto).trim(),
           };
 
       const respuesta = await fetch(url, {
@@ -135,8 +195,18 @@ export default function EditProfileScreen({
     }
   };
 
+  if (cargandoPerfil) {
+    return (
+      <div className="flex items-center justify-center h-full bg-[#f8fafc]">
+        <p className="text-sm font-semibold text-slate-600">
+          Cargando perfil...
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc] text-[#0f172a] p-4">
+    <div className="flex flex-col h-full bg-[#f8fafc] text-[#0f172a] p-4 overflow-y-auto">
       <div className="flex items-center gap-3 mb-6">
         <button
           type="button"
@@ -159,7 +229,7 @@ export default function EditProfileScreen({
       >
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-bold text-slate-500 uppercase px-1">
-            Nombre Completo
+            Nombre completo
           </label>
 
           <input
@@ -191,7 +261,7 @@ export default function EditProfileScreen({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-bold text-slate-500 uppercase px-1">
-            Correo Electrónico
+            Correo electrónico
           </label>
 
           <input
@@ -283,7 +353,7 @@ export default function EditProfileScreen({
         {!esEmpleado && (
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase px-1">
-              URL de la Foto
+              URL de la foto
             </label>
 
             <input
@@ -298,7 +368,7 @@ export default function EditProfileScreen({
 
         <button
           type="submit"
-          disabled={cargando}
+          disabled={cargando || cargandoPerfil}
           className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
         >
           <Save className="w-4 h-4" />
