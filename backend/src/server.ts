@@ -519,49 +519,116 @@ app.post("/api/servicios", async (req, res) => {
       descripcion,
       direccion,
       presupuesto,
-      fecha
+      fecha,
+      hora_inicio,
+      hora_fin,
     } = req.body;
 
-    if (!fk_cliente || !fk_categoria || !descripcion || !direccion || !presupuesto || !fecha) {
+    if (
+      !fk_cliente ||
+      !fk_categoria ||
+      !descripcion ||
+      !direccion ||
+      !presupuesto ||
+      !fecha ||
+      !hora_inicio ||
+      !hora_fin
+    ) {
       return res.status(400).json({
-        mensaje: "Faltan datos obligatorios para crear la solicitud"
+        mensaje:
+          "Faltan datos obligatorios para crear la solicitud",
+      });
+    }
+
+    if (String(hora_fin) <= String(hora_inicio)) {
+      return res.status(400).json({
+        mensaje:
+          "La hora final debe ser posterior a la hora inicial",
       });
     }
 
     const [resultado] = await database.execute(
       `
-      INSERT INTO servicios 
-      (fk_cliente, fk_categoria, fk_evidencia, descripcion, direccion, presupuesto, fecha) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO servicios
+      (
+        fk_cliente,
+        fk_categoria,
+        fk_evidencia,
+        descripcion,
+        direccion,
+        presupuesto,
+        fecha,
+        hora_inicio,
+        hora_fin
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         fk_cliente,
         fk_categoria,
-        fk_evidencia || null, // Si no viene, guardamos null
+        fk_evidencia || null,
         descripcion,
         direccion,
         presupuesto,
-        fecha
+        fecha,
+        hora_inicio,
+        hora_fin,
       ]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       mensaje: "Solicitud publicada correctamente",
-      resultado
+      resultado,
     });
   } catch (error) {
-    console.error("Error al registrar servicio:", error);
-    res.status(500).json({
-      mensaje: "Error al publicar la solicitud"
+    console.error(
+      "Error al registrar servicio:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: "Error al publicar la solicitud",
     });
   }
 });
 
+
+
 app.get("/api/servicios", async (_req, res) => {
   try {
     const [servicios] = await database.query(
-      "SELECT * FROM servicios ORDER BY fecha DESC"
-    );
+  `
+  SELECT
+    s.id_servicio,
+    s.fk_cliente,
+    s.fk_categoria,
+    s.fk_empleado,
+    s.fk_evidencia,
+    s.titulo,
+    s.descripcion,
+    s.direccion,
+    s.presupuesto,
+    s.fecha,
+    s.hora_inicio,
+    s.hora_fin,
+    s.estado,
+
+    c.nombre_C AS nombre_cliente,
+    c.foto AS foto_cliente,
+
+    cat.nombre AS nombre_categoria
+
+  FROM servicios s
+
+  LEFT JOIN clientes c
+    ON c.id_cliente = s.fk_cliente
+
+  LEFT JOIN categorias cat
+    ON cat.id_categoria = s.fk_categoria
+
+  ORDER BY s.fecha DESC
+  `
+);
 
     res.json(servicios);
   } catch (error) {
@@ -574,31 +641,77 @@ app.get("/api/servicios", async (_req, res) => {
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES lectura id 
 // ==========================================
-app.get("/api/servicios/:id", async (req, res) => {
+app.get('/api/servicios/:id', async (req, res) => {
   try {
     const idServicio = Number(req.params.id);
 
-    const [resultado]: any = await database.execute(
-      `
-      SELECT *
-      FROM servicios
-      WHERE id_servicio = ?
-      `,
-      [idServicio]
-    );
-
-    if (resultado.length === 0) {
-      return res.status(404).json({
-        mensaje: "Servicio no encontrado",
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: 'ID de servicio inválido',
       });
     }
 
-    res.json(resultado[0]);
-  } catch (error) {
-    console.error("Error al consultar servicio:", error);
+    const [resultado]: any =
+      await database.execute(
+        `
+        SELECT
+          s.id_servicio,
+          s.fk_cliente,
+          s.fk_categoria,
+          s.fk_empleado,
+          s.fk_evidencia,
+          s.titulo,
+          s.descripcion,
+          s.direccion,
+          s.presupuesto,
+          s.fecha,
+          s.hora_inicio,
+          s.hora_fin,
+          s.estado,
 
-    res.status(500).json({
-      mensaje: "Error al consultar el servicio",
+          c.nombre_C AS nombre_cliente,
+          c.foto AS foto_cliente,
+
+          e.nombre_E AS nombre_empleado,
+
+          cat.nombre AS nombre_categoria
+
+        FROM servicios s
+
+        LEFT JOIN clientes c
+          ON c.id_cliente = s.fk_cliente
+
+        LEFT JOIN empleados e
+          ON e.id_empleado = s.fk_empleado
+
+        LEFT JOIN categorias cat
+          ON cat.id_categoria = s.fk_categoria
+
+        WHERE s.id_servicio = ?
+        LIMIT 1
+        `,
+        [idServicio]
+      );
+
+    if (resultado.length === 0) {
+      return res.status(404).json({
+        mensaje: 'Servicio no encontrado',
+      });
+    }
+
+    return res.json(resultado[0]);
+  } catch (error) {
+    console.error(
+      'Error al consultar servicio:',
+      error
+    );
+
+    return res.status(500).json({
+      mensaje:
+        'Error al consultar el servicio',
     });
   }
 });
@@ -610,6 +723,15 @@ app.put("/api/servicios/:id", async (req, res) => {
   try {
     const idServicio = Number(req.params.id);
 
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "ID de servicio inválido",
+      });
+    }
+
     const {
       fk_cliente,
       fk_categoria,
@@ -618,32 +740,62 @@ app.put("/api/servicios/:id", async (req, res) => {
       direccion,
       presupuesto,
       fecha,
+      hora_inicio,
+      hora_fin,
     } = req.body;
 
-    const [resultado]: any = await database.execute(
-      `
-      UPDATE servicios
-      SET
-        fk_cliente = ?,
-        fk_categoria = ?,
-        fk_evidencia = ?,
-        descripcion = ?,
-        direccion = ?,
-        presupuesto = ?,
-        fecha = ?
-      WHERE id_servicio = ?
-      `,
-      [
-        fk_cliente,
-        fk_categoria,
-        fk_evidencia || null,
-        descripcion,
-        direccion,
-        presupuesto,
-        fecha,
-        idServicio,
-      ]
-    );
+    if (
+      !fk_cliente ||
+      !fk_categoria ||
+      !descripcion ||
+      !direccion ||
+      !presupuesto ||
+      !fecha ||
+      !hora_inicio ||
+      !hora_fin
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "Faltan datos obligatorios para actualizar la solicitud",
+      });
+    }
+
+    if (String(hora_fin) <= String(hora_inicio)) {
+      return res.status(400).json({
+        mensaje:
+          "La hora final debe ser posterior a la hora inicial",
+      });
+    }
+
+    const [resultado]: any =
+      await database.execute(
+        `
+        UPDATE servicios
+        SET
+          fk_cliente = ?,
+          fk_categoria = ?,
+          fk_evidencia = ?,
+          descripcion = ?,
+          direccion = ?,
+          presupuesto = ?,
+          fecha = ?,
+          hora_inicio = ?,
+          hora_fin = ?
+        WHERE id_servicio = ?
+        `,
+        [
+          fk_cliente,
+          fk_categoria,
+          fk_evidencia || null,
+          descripcion,
+          direccion,
+          presupuesto,
+          fecha,
+          hora_inicio,
+          hora_fin,
+          idServicio,
+        ]
+      );
 
     if (resultado.affectedRows === 0) {
       return res.status(404).json({
@@ -651,18 +803,22 @@ app.put("/api/servicios/:id", async (req, res) => {
       });
     }
 
-    res.json({
-      mensaje: "Servicio actualizado correctamente",
+    return res.json({
+      mensaje:
+        "Servicio actualizado correctamente",
     });
   } catch (error) {
-    console.error("Error al actualizar servicio:", error);
+    console.error(
+      "Error al actualizar servicio:",
+      error
+    );
 
-    res.status(500).json({
-      mensaje: "Error al actualizar el servicio",
+    return res.status(500).json({
+      mensaje:
+        "Error al actualizar el servicio",
     });
   }
 });
-
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES (DELETE)
 // ==========================================
@@ -1384,6 +1540,80 @@ app.post(
   }
 );
 
+// ==========================================
+// POSTULACIONES DE UN EMPLEADO
+// ==========================================
+app.get(
+  '/api/empleados/:idEmpleado/postulaciones',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const [empleados]: any =
+        await database.execute(
+          `
+          SELECT id_empleado
+          FROM empleados
+          WHERE id_empleado = ?
+          LIMIT 1
+          `,
+          [idEmpleado]
+        );
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El empleado no existe',
+        });
+      }
+
+      const [postulaciones]: any =
+        await database.execute(
+          `
+          SELECT
+            id_postulacion,
+            fk_servicio,
+            fk_empleado,
+            estado,
+            fecha
+          FROM postulaciones
+          WHERE fk_empleado = ?
+          ORDER BY fecha DESC
+          `,
+          [idEmpleado]
+        );
+
+      return res.status(200).json(
+        postulaciones
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al obtener postulaciones del empleado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las postulaciones del empleado',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// SERVICIOS POSTULACIONES DE EMPLEADOS RECIBIDAS
+// ==========================================
 app.get(
   '/api/servicios/:idServicio/postulaciones',
   async (req, res) => {
@@ -1405,17 +1635,28 @@ app.get(
         await database.execute(
           `
           SELECT
-            id_servicio,
-            fk_cliente,
-            fk_empleado,
-            titulo,
-            descripcion,
-            direccion,
-            presupuesto,
-            fecha,
-            estado
-          FROM servicios
-          WHERE id_servicio = ?
+            s.id_servicio,
+            s.fk_cliente,
+            s.fk_categoria,
+            s.fk_empleado,
+            s.fk_evidencia,
+            s.titulo,
+            s.descripcion,
+            s.direccion,
+            s.presupuesto,
+            s.fecha,
+            s.hora_inicio,
+            s.hora_fin,
+            s.estado,
+            c.nombre_C AS nombre_cliente,
+            c.foto AS foto_cliente,
+            cat.nombre AS nombre_categoria
+          FROM servicios s
+          LEFT JOIN clientes c
+            ON c.id_cliente = s.fk_cliente
+          LEFT JOIN categorias cat
+            ON cat.id_categoria = s.fk_categoria
+          WHERE s.id_servicio = ?
           LIMIT 1
           `,
           [idServicio]
@@ -1477,7 +1718,10 @@ app.get(
   }
 );
 
-console.log('RUTA ACEPTAR CARGADA');
+// ==========================================
+//  SERVICIOS ACEPTADOS 
+// ==========================================
+
 app.put(
   '/api/servicios/:idServicio/aceptar',
   async (req, res) => {
@@ -1639,9 +1883,375 @@ app.put(
 );
 
 // ==========================================
+// AGENDA / SERVICIOS ESTADOS
+// ==========================================
+app.put(
+  '/api/servicios/:idServicio/estado',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      const estadoNuevo = String(
+        req.body.estado ?? ''
+      ).trim();
+
+      const motivoCancelacion = String(
+        req.body.motivo_cancelacion ?? ''
+      ).trim();
+
+      const canceladoPor = String(
+        req.body.cancelado_por ?? ''
+      ).trim();
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      const estadosPermitidos = [
+        'Asignado',
+        'En proceso',
+        'Completado',
+        'Cancelado',
+      ];
+
+      if (
+        !estadosPermitidos.includes(
+          estadoNuevo
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El estado indicado no es válido',
+        });
+      }
+
+      if (
+        estadoNuevo === 'Cancelado' &&
+        motivoCancelacion.length < 5
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Debes indicar el motivo de la cancelación',
+        });
+      }
+
+      if (
+        estadoNuevo === 'Cancelado' &&
+        canceladoPor !== 'cliente' &&
+        canceladoPor !== 'empleado'
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'No se pudo identificar quién canceló el servicio',
+        });
+      }
+
+      const [servicios]: any =
+        await database.execute(
+          `
+          SELECT
+            id_servicio,
+            estado,
+            fk_empleado
+          FROM servicios
+          WHERE id_servicio = ?
+          LIMIT 1
+          `,
+          [idServicio]
+        );
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'Servicio no encontrado',
+        });
+      }
+
+      const estadoActual = String(
+        servicios[0].estado ?? ''
+      )
+        .trim()
+        .toLowerCase()
+        .replace('_', ' ');
+
+      const nuevoNormalizado =
+        estadoNuevo
+          .trim()
+          .toLowerCase()
+          .replace('_', ' ');
+
+      const transicionesPermitidas: Record<
+        string,
+        string[]
+      > = {
+        asignado: [
+          'en proceso',
+          'cancelado',
+        ],
+        'en proceso': [
+          'completado',
+          'cancelado',
+        ],
+        completado: [],
+        cancelado: [],
+      };
+
+      const siguientes =
+        transicionesPermitidas[
+          estadoActual
+        ];
+
+      if (
+        !siguientes ||
+        !siguientes.includes(
+          nuevoNormalizado
+        )
+      ) {
+        return res.status(409).json({
+          mensaje: `No se puede cambiar el servicio de "${servicios[0].estado}" a "${estadoNuevo}"`,
+        });
+      }
+
+      if (
+        estadoNuevo !== 'Cancelado'
+      ) {
+        const [resultado]: any =
+          await database.execute(
+            `
+            UPDATE servicios
+            SET
+              estado = ?,
+              motivo_cancelacion = NULL,
+              cancelado_por = NULL
+            WHERE id_servicio = ?
+            `,
+            [
+              estadoNuevo,
+              idServicio,
+            ]
+          );
+
+        return res.status(200).json({
+          mensaje:
+            'Estado actualizado correctamente',
+          estado: estadoNuevo,
+          actualizados:
+            resultado.affectedRows,
+        });
+      }
+
+      const [resultado]: any =
+        await database.execute(
+          `
+          UPDATE servicios
+          SET
+            estado = 'Cancelado',
+            motivo_cancelacion = ?,
+            cancelado_por = ?
+          WHERE id_servicio = ?
+          `,
+          [
+            motivoCancelacion,
+            canceladoPor,
+            idServicio,
+          ]
+        );
+
+      return res.status(200).json({
+        mensaje:
+          'Servicio cancelado correctamente',
+        estado: 'Cancelado',
+        motivo_cancelacion:
+          motivoCancelacion,
+        cancelado_por: canceladoPor,
+        actualizados:
+          resultado.affectedRows,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al actualizar estado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al actualizar el estado del servicio',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// AGENDA / SERVICIOS ASIGNADOS AL EMPLEADO
+// ==========================================
+app.get(
+  "/api/empleados/:idEmpleado/servicios",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+
+      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [empleados]: any = await database.execute(
+        `
+        SELECT id_empleado
+        FROM empleados
+        WHERE id_empleado = ?
+        LIMIT 1
+        `,
+        [idEmpleado]
+      );
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: "El empleado no existe",
+        });
+      }
+
+      const [servicios] = await database.execute(
+        `
+        SELECT
+          s.id_servicio,
+          s.fk_cliente,
+          s.fk_categoria,
+          s.fk_empleado,
+          s.fk_evidencia,
+          s.titulo,
+          s.descripcion,
+          s.direccion,
+          s.presupuesto,
+          s.fecha,
+          s.hora_inicio,
+          s.hora_fin,
+          s.estado,
+
+          c.nombre_C AS nombre_cliente,
+          c.foto AS foto_cliente,
+
+          cat.nombre AS nombre_categoria
+
+        FROM servicios s
+
+        LEFT JOIN clientes c
+          ON c.id_cliente = s.fk_cliente
+
+        LEFT JOIN categorias cat
+          ON cat.id_categoria = s.fk_categoria
+
+        WHERE s.fk_empleado = ?
+          AND LOWER(TRIM(s.estado)) IN (
+            'asignado',
+            'en proceso',
+            'en_proceso',
+            'completado'
+          )
+
+        ORDER BY
+          s.fecha ASC,
+          s.hora_inicio ASC,
+          s.id_servicio ASC
+        `,
+        [idEmpleado]
+      );
+
+      return res.status(200).json(servicios);
+    } catch (error) {
+      console.error(
+        "Error al consultar agenda del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje: "Error al consultar la agenda",
+      });
+    }
+  }
+);
+
+/*app.get(
+  "/api/empleados/:idEmpleado/servicios",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [servicios] =
+        await database.execute(
+          `
+          SELECT
+            s.id_servicio,
+            s.fk_cliente,
+            s.fk_categoria,
+            s.fk_empleado,
+            s.titulo,
+            s.descripcion,
+            s.direccion,
+            s.presupuesto,
+            s.fecha,
+            s.hora_inicio,
+            s.hora_fin,
+            s.estado,
+            c.nombre_C AS nombre_cliente,
+            c.foto AS foto_cliente,
+            cat.nombre AS nombre_categoria
+          FROM servicios s
+          LEFT JOIN clientes c
+            ON c.id_cliente = s.fk_cliente
+          LEFT JOIN categorias cat
+            ON cat.id_categoria = s.fk_categoria
+          WHERE s.fk_empleado = ?
+            AND LOWER(s.estado) IN (
+              'asignado',
+              'en proceso',
+              'en_proceso',
+              'completado'
+            )
+          ORDER BY
+            s.fecha ASC,
+            s.hora_inicio ASC
+          `,
+          [idEmpleado]
+        );
+
+      return res.status(200).json(servicios);
+    } catch (error) {
+      console.error(
+        "Error al consultar agenda:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar la agenda",
+      });
+    }
+  }
+);*/
+
+// ==========================================
 // INICIO DEL SERVIDOR
 // ==========================================
 app.listen(port, () => {
   console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });
-

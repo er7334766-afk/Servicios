@@ -6,6 +6,7 @@ import {
   SlidersHorizontal,
   MapPin,
   Calendar,
+  Clock,
   X,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -28,6 +29,8 @@ interface PostJobForm {
   budget: number;
   address: string;
   fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
 }
 
 interface CategoriaDB {
@@ -91,6 +94,7 @@ export default function SearchScreen() {
     handleSubmit,
     reset,
     watch,
+    getValues,
     formState: { errors },
   } = useForm<PostJobForm>({
     defaultValues: {
@@ -99,6 +103,8 @@ export default function SearchScreen() {
       description: '',
       address: '',
       fecha: '',
+      hora_inicio: '',
+      hora_fin: '',
     },
   });
 
@@ -337,6 +343,8 @@ export default function SearchScreen() {
         ),
         direccion: data.address.trim(),
         fecha: data.fecha.trim(),
+        hora_inicio: data.hora_inicio.trim(),
+        hora_fin: data.hora_fin.trim(),
       });
 
       toast.success(
@@ -349,6 +357,8 @@ export default function SearchScreen() {
         description: '',
         address: '',
         fecha: '',
+        hora_inicio: '',
+        hora_fin: '',
       });
 
       setPostCat(null);
@@ -794,6 +804,89 @@ export default function SearchScreen() {
                   {errors.fecha.message}
                 </p>
               )}
+            </div>
+
+            {/* Horario estimado */}
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-1">
+                Horario estimado
+              </p>
+
+              <p className="text-xs text-muted-foreground mb-3">
+                Indica un horario aproximado para realizar el trabajo.
+              </p>
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                    Hora estimada de inicio *
+                  </label>
+
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+                    <input
+                      type="time"
+                      {...register('hora_inicio', {
+                        required:
+                          'La hora estimada de inicio es obligatoria',
+                      })}
+                      className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                    />
+                  </div>
+
+                  {errors.hora_inicio && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {errors.hora_inicio.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                    Hora estimada de finalización *
+                  </label>
+
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+                    <input
+                      type="time"
+                      {...register('hora_fin', {
+                        required:
+                          'La hora estimada de finalización es obligatoria',
+                        validate: (horaFin) => {
+                          const horaInicio =
+                            getValues('hora_inicio');
+
+                          if (!horaInicio || !horaFin) {
+                            return true;
+                          }
+
+                          return (
+                            horaFin > horaInicio ||
+                            'La hora final debe ser posterior a la hora inicial'
+                          );
+                        },
+                      })}
+                      className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                    />
+                  </div>
+
+                  {errors.hora_fin && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {errors.hora_fin.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl bg-[#EFF4FF] px-3 py-2.5">
+                <p className="text-xs text-[#1A56DB] leading-relaxed">
+                  El horario es una estimación y podrá ajustarse de común acuerdo
+                  con el trabajador seleccionado.
+                </p>
+              </div>
             </div>
 
             <motion.button

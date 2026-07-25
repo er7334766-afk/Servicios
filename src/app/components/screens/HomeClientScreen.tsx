@@ -1,181 +1,560 @@
+import {
+  useEffect,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Bell, Search, MapPin, ChevronRight, Plus } from 'lucide-react';
+import {
+  Bell,
+  Search,
+  MapPin,
+  ChevronRight,
+  Plus,
+  RefreshCw,
+} from 'lucide-react';
+
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { WorkerCard } from '../shared/WorkerCard';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
 import { useApp } from '../../context/AppContext';
-import { MOCK_WORKERS, MOCK_JOB_POSTS, SERVICE_CATEGORIES } from '../../data/mockData';
-import type { ServiceCategory } from '../../types';
 
-import { useState } from 'react'; //agredado
+import {
+  MOCK_WORKERS,
+  SERVICE_CATEGORIES,
+} from '../../data/mockData';
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  accepted: 'bg-blue-100 text-[#1A56DB]',
-  in_progress: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700',
-};
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
-  accepted: 'Confirmado',
-  in_progress: 'En progreso',
-  completed: 'Completado',
-};
+import type {
+  ServiceCategory,
+} from '../../types';
+
+import {
+  obtenerSolicitudesCliente,
+  type SolicitudCliente,
+} from '../../services/SolicitudesClienteApi';
+
+function formatearPresupuesto(
+  presupuesto: number | string
+): string {
+  const valor = Number(presupuesto);
+
+  if (Number.isNaN(valor)) {
+    return String(presupuesto);
+  }
+
+  return new Intl.NumberFormat('es-HN', {
+    style: 'currency',
+    currency: 'HNL',
+    minimumFractionDigits: 2,
+  }).format(valor);
+}
+
+function obtenerTitulo(
+  solicitud: SolicitudCliente
+): string {
+  const titulo = String(
+    solicitud.titulo ?? ''
+  ).trim();
+
+  if (titulo) {
+    return titulo;
+  }
+
+  const categoria = String(
+    solicitud.nombre_categoria ?? ''
+  ).trim();
+
+  if (categoria) {
+    return categoria;
+  }
+
+  return 'Solicitud de servicio';
+}
+
+function convertirEstado(
+  estado?: string | null
+): string {
+  const valor = String(estado ?? '')
+    .trim()
+    .toLowerCase();
+
+  switch (valor) {
+    case 'pendiente':
+      return 'Pendiente';
+
+    case 'asignado':
+      return 'Asignado';
+
+    case 'en_proceso':
+    case 'en proceso':
+      return 'En proceso';
+
+    case 'completado':
+      return 'Completado';
+
+    case 'cancelado':
+      return 'Cancelado';
+
+    default:
+      return estado || 'Sin estado';
+  }
+}
+
+function colorEstado(
+  estado?: string | null
+): string {
+  const valor = String(estado ?? '')
+    .trim()
+    .toLowerCase();
+
+  switch (valor) {
+    case 'asignado':
+      return 'bg-blue-100 text-blue-700';
+
+    case 'en_proceso':
+    case 'en proceso':
+      return 'bg-purple-100 text-purple-700';
+
+    case 'completado':
+      return 'bg-green-100 text-green-700';
+
+    case 'cancelado':
+      return 'bg-red-100 text-red-700';
+
+    default:
+      return 'bg-amber-100 text-amber-700';
+  }
+}
 
 export default function HomeClientScreen() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState('card'); //agregado
-  const { currentUser, unreadNotifications } = useApp();
 
-  const featured = [...MOCK_WORKERS].sort((a, b) => b.rating - a.rating).slice(0, 5);
-  const myPosts = MOCK_JOB_POSTS.filter((p) => p.clientId === 'c1').slice(0, 2);
+  const {
+    currentUser,
+    unreadNotifications,
+  } = useApp();
 
-  const handleCategorySelect = (cat: ServiceCategory) => {
-    navigate(`/home/search?cat=${cat}`);
+  const [
+    misSolicitudes,
+    setMisSolicitudes,
+  ] = useState<SolicitudCliente[]>([]);
+
+  const [
+    cargandoSolicitudes,
+    setCargandoSolicitudes,
+  ] = useState(true);
+
+  const [
+    actualizando,
+    setActualizando,
+  ] = useState(false);
+
+  const [
+    errorSolicitudes,
+    setErrorSolicitudes,
+  ] = useState('');
+
+  const idCliente = Number(
+    currentUser?.id
+  );
+
+  const featured = [
+    ...MOCK_WORKERS,
+  ]
+    .sort(
+      (a, b) => b.rating - a.rating
+    )
+    .slice(0, 5);
+
+  const cargarSolicitudes = async (
+    cargaInicial = false
+  ) => {
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0
+    ) {
+      setMisSolicitudes([]);
+      setCargandoSolicitudes(false);
+      return;
+    }
+
+    try {
+      if (cargaInicial) {
+        setCargandoSolicitudes(true);
+      } else {
+        setActualizando(true);
+      }
+
+      setErrorSolicitudes('');
+
+      const lista =
+        await obtenerSolicitudesCliente(
+          idCliente
+        );
+
+      setMisSolicitudes(lista);
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar tus solicitudes';
+
+      setErrorSolicitudes(mensaje);
+    } finally {
+      setCargandoSolicitudes(false);
+      setActualizando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarSolicitudes(true);
+  }, [idCliente]);
+
+  const handleCategorySelect = (
+    categoria: ServiceCategory
+  ) => {
+    navigate(
+      `/home/search?cat=${categoria}`
+    );
   };
 
   return (
     <div className="pb-4">
-      {/* Top bar */}
+      {/* Encabezado */}
       <div className="bg-[#1A56DB] px-5 pt-10 pb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-white/70 text-sm">Buenos días,</p>
-            <p className="text-white font-bold text-lg">{currentUser?.name?.split(' ')[0] ?? 'Usuario'} 👋</p>
+            <p className="text-white/70 text-sm">
+              Buenos días,
+            </p>
+
+            <p className="text-white font-bold text-lg">
+              {currentUser?.name?.split(
+                ' '
+              )[0] ?? 'Usuario'}{' '}
+              👋
+            </p>
           </div>
+
           <div className="flex items-center gap-2">
             <motion.button
+              type="button"
               whileTap={{ scale: 0.9 }}
-              onClick={() => navigate('/home/notifications')}
+              onClick={() =>
+                navigate(
+                  '/home/notifications'
+                )
+              }
               className="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"
             >
               <Bell className="w-5 h-5 text-white" />
-              {unreadNotifications > 0 && (
+
+              {unreadNotifications >
+                0 && (
                 <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-[#1A56DB]" />
               )}
             </motion.button>
+
             <ImageWithFallback
-              src={currentUser?.avatarUrl ?? ''}
-              alt={currentUser?.name ?? ''}
+              src={
+                currentUser?.avatarUrl ??
+                ''
+              }
+              alt={
+                currentUser?.name ??
+                'Cliente'
+              }
               className="w-10 h-10 rounded-full object-cover border-2 border-white/50"
             />
           </div>
         </div>
 
-        {/* Search bar */}
         <motion.button
+          type="button"
           whileTap={{ scale: 0.98 }}
-          //AGREGADO
-          onClick={() => { navigate('/home/search'); }}
-          //agregado
+          onClick={() =>
+            navigate('/home/search')
+          }
           className="w-full bg-white rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
         >
           <Search className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground text-sm">¿Qué servicio necesitas?</span>
+
+          <span className="text-muted-foreground text-sm">
+            ¿Qué servicio necesitas?
+          </span>
+
           <div className="ml-auto flex items-center gap-1 bg-[#EFF4FF] px-2 py-1 rounded-lg">
             <MapPin className="w-3 h-3 text-[#1A56DB]" />
-            <span className="text-[11px] text-[#1A56DB] font-medium">Condesa</span>
+
+            <span className="text-[11px] text-[#1A56DB] font-medium">
+              Condesa
+            </span>
           </div>
         </motion.button>
       </div>
 
+      {/* Categorías */}
       <div className="px-5 mt-5">
-        {/* Categories */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Categorías</h2>
-          <button className="text-xs text-[#1A56DB] flex items-center gap-0.5" onClick={() => navigate('/home/search')}>
-            Ver todas <ChevronRight className="w-3.5 h-3.5" />
+          <h2 className="text-base font-bold text-foreground">
+            Categorías
+          </h2>
+
+          <button
+            type="button"
+            className="text-xs text-[#1A56DB] flex items-center gap-0.5"
+            onClick={() =>
+              navigate('/home/search')
+            }
+          >
+            Ver todas
+
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
-        <ServiceCategoryGrid onSelect={handleCategorySelect} categories={SERVICE_CATEGORIES} />
+
+        <ServiceCategoryGrid
+          onSelect={
+            handleCategorySelect
+          }
+          categories={
+            SERVICE_CATEGORIES
+          }
+        />
       </div>
 
-      {/* Featured workers */}
+      {/* Trabajadores destacados */}
       <div className="mt-6">
         <div className="flex items-center justify-between mb-3 px-5">
-          <h2 className="text-base font-bold text-foreground">Trabajadores destacados</h2>
-          <button className="text-xs text-[#1A56DB] flex items-center gap-0.5" onClick={() => navigate('/home/search')}>
-            Ver todos <ChevronRight className="w-3.5 h-3.5" />
+          <h2 className="text-base font-bold text-foreground">
+            Trabajadores destacados
+          </h2>
+
+          <button
+            type="button"
+            className="text-xs text-[#1A56DB] flex items-center gap-0.5"
+            onClick={() =>
+              navigate('/home/search')
+            }
+          >
+            Ver todos
+
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
+
         <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-none">
-          {featured.map((w) => (
-            <WorkerCard key={w.id} worker={w} variant="compact" />
+          {featured.map((trabajador) => (
+            <WorkerCard
+              key={trabajador.id}
+              worker={trabajador}
+              variant="compact"
+            />
           ))}
         </div>
       </div>
 
-      {/* My job posts */}
+      {/* Mis solicitudes reales */}
       <div className="mt-6 px-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Mis solicitudes</h2>
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => navigate('/home/search')}
-            className="w-7 h-7 bg-[#1A56DB] rounded-full flex items-center justify-center"
-          >
-            <Plus className="w-4 h-4 text-white" />
-          </motion.button>
+          <h2 className="text-base font-bold text-foreground">
+            Mis solicitudes
+          </h2>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                cargarSolicitudes(false)
+              }
+              disabled={actualizando}
+              className="text-[#1A56DB] disabled:opacity-50"
+              title="Actualizar solicitudes"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${
+                  actualizando
+                    ? 'animate-spin'
+                    : ''
+                }`}
+              />
+            </button>
+
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.9 }}
+              onClick={() =>
+                navigate('/home/search')
+              }
+              className="w-7 h-7 bg-[#1A56DB] rounded-full flex items-center justify-center"
+            >
+              <Plus className="w-4 h-4 text-white" />
+            </motion.button>
+          </div>
         </div>
 
-        {myPosts.length === 0 ? (
+        {cargandoSolicitudes ? (
+          <div className="bg-card rounded-2xl border border-border p-6 flex flex-col items-center">
+            <RefreshCw className="w-6 h-6 text-[#1A56DB] animate-spin mb-2" />
+
+            <p className="text-xs text-muted-foreground">
+              Cargando tus solicitudes...
+            </p>
+          </div>
+        ) : errorSolicitudes ? (
+          <div className="bg-card rounded-2xl border border-border p-5 text-center">
+            <p className="text-xs text-red-600">
+              {errorSolicitudes}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                cargarSolicitudes(true)
+              }
+              className="mt-3 bg-[#1A56DB] text-white text-xs font-semibold px-4 py-2 rounded-full"
+            >
+              Intentar nuevamente
+            </button>
+          </div>
+        ) : misSolicitudes.length ===
+          0 ? (
           <div className="bg-muted rounded-2xl p-6 text-center">
-            <p className="text-muted-foreground text-sm">No tienes solicitudes activas</p>
-            <button onClick={() => navigate('/home/search')} className="text-[#1A56DB] text-sm font-semibold mt-1">
+            <p className="text-muted-foreground text-sm">
+              No tienes solicitudes publicadas
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                navigate('/home/search')
+              }
+              className="text-[#1A56DB] text-sm font-semibold mt-1"
+            >
               Publicar una solicitud →
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {myPosts.map((post) => {
-              const cat = SERVICE_CATEGORIES.find((c) => c.id === post.category);
-              return (
-                <motion.div
-                  key={post.id}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-card rounded-2xl border border-border p-4"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ backgroundColor: cat?.bgColor, color: cat?.color }}
-                        >
-                          {cat?.label}
+            {misSolicitudes
+              .slice(0, 3)
+              .map((solicitud) => {
+                const idServicio =
+                  Number(
+                    solicitud.id_servicio
+                  );
+
+                return (
+                  <motion.div
+                    key={idServicio}
+                    role="button"
+                    tabIndex={0}
+                    whileTap={{
+                      scale: 0.98,
+                    }}
+                    onClick={() =>
+                      navigate(
+                        `/home/mis-solicitudes/${idServicio}`
+                      )
+                    }
+                    onKeyDown={(
+                      evento
+                    ) => {
+                      if (
+                        evento.key ===
+                          'Enter' ||
+                        evento.key === ' '
+                      ) {
+                        evento.preventDefault();
+
+                        navigate(
+                          `/home/mis-solicitudes/${idServicio}`
+                        );
+                      }
+                    }}
+                    className="bg-card rounded-2xl border border-border p-4 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-[#1A56DB]">
+                            {solicitud.nombre_categoria ||
+                              'Servicio'}
+                          </span>
+
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${colorEstado(
+                              solicitud.estado
+                            )}`}
+                          >
+                            {convertirEstado(
+                              solicitud.estado
+                            )}
+                          </span>
+                        </div>
+
+                        <p className="text-sm font-semibold text-foreground">
+                          {obtenerTitulo(
+                            solicitud
+                          )}
+                        </p>
+
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {
+                            solicitud.descripcion
+                          }
+                        </p>
+                      </div>
+
+                      <span className="text-sm font-bold text-[#1A56DB] flex-shrink-0">
+                        {formatearPresupuesto(
+                          solicitud.presupuesto
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 mt-3">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+
+                        <span className="text-xs text-muted-foreground truncate">
+                          {
+                            solicitud.direccion
+                          }
                         </span>
                       </div>
-                      <p className="text-sm font-semibold text-foreground">{post.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{post.description}</p>
+
+                      <span className="text-xs font-semibold text-[#1A56DB] flex-shrink-0">
+                        {solicitud.cantidad_postulaciones ??
+                          0}{' '}
+                        interesados
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-[#1A56DB] flex-shrink-0 ml-2">
-                      ${post.budget.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{post.location}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {post.applicantCount} interesados
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })}
+                  </motion.div>
+                );
+              })}
           </div>
         )}
       </div>
 
-      {/* Recent availability */}
+      {/* Disponibles ahora */}
       <div className="mt-6 px-5 pb-4">
-        <h2 className="text-base font-bold text-foreground mb-3">Disponibles ahora</h2>
+        <h2 className="text-base font-bold text-foreground mb-3">
+          Disponibles ahora
+        </h2>
+
         <div className="flex flex-col gap-3">
-          {MOCK_WORKERS.filter((w) => w.isAvailable).slice(0, 3).map((w) => (
-            <WorkerCard key={w.id} worker={w} variant="full" />
-          ))}
+          {MOCK_WORKERS.filter(
+            (trabajador) =>
+              trabajador.isAvailable
+          )
+            .slice(0, 3)
+            .map((trabajador) => (
+              <WorkerCard
+                key={trabajador.id}
+                worker={trabajador}
+                variant="full"
+              />
+            ))}
         </div>
       </div>
     </div>

@@ -57,7 +57,8 @@ export default function AuthScreen() {
   const loginForm = useForm<LoginForm>();
   const registerForm = useForm<RegisterForm>();
 
-const handleLogin = async (data: LoginForm) => {
+
+  const handleLogin = async (data: LoginForm) => {
   try {
     setIniciandoSesion(true);
 
@@ -70,7 +71,9 @@ const handleLogin = async (data: LoginForm) => {
     const idUsuario = Number(respuesta.usuario.id);
 
     if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
-      throw new Error('El servidor no devolvió un ID de usuario válido');
+      throw new Error(
+        'El servidor no devolvió un ID de usuario válido'
+      );
     }
 
     setCurrentUser({
@@ -81,9 +84,17 @@ const handleLogin = async (data: LoginForm) => {
           ? idUsuario
           : undefined,
 
-      name: respuesta.usuario.nombre,
-      email: respuesta.usuario.correo,
-      phone: respuesta.usuario.celular,
+      name:
+        respuesta.usuario.nombre ??
+        'Usuario',
+
+      email:
+        respuesta.usuario.correo ??
+        data.email.trim().toLowerCase(),
+
+      phone:
+        respuesta.usuario.celular ??
+        '',
 
       avatarUrl:
         role === 'worker'
@@ -91,8 +102,12 @@ const handleLogin = async (data: LoginForm) => {
           : MOCK_CLIENT.avatarUrl,
 
       role,
+
       location: 'No especificada',
-      joinedDate: new Date().toISOString().split('T')[0],
+
+      joinedDate: new Date()
+        .toISOString()
+        .split('T')[0],
     });
 
     navigate('/home');
@@ -101,6 +116,11 @@ const handleLogin = async (data: LoginForm) => {
       error instanceof Error
         ? error.message
         : 'Error al iniciar sesión';
+
+    console.error(
+      'Error al iniciar sesión:',
+      error
+    );
 
     alert(mensaje);
   } finally {

@@ -33,9 +33,11 @@ export default function WorkerOwnProfileScreen() {
   const [isEditingServices, setIsEditingServices] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
-  const idEmpleado = Number(
-    currentUser?.idEmpleado ?? currentUser?.id
-  );
+ const idEmpleado = Number(currentUser?.id);
+ 
+  console.log("currentUser:", currentUser);
+  console.log("idEmpleado:", currentUser?.idEmpleado);
+  console.log("id:", currentUser?.id);
 
   const worker = {
     ...MOCK_WORKERS[0],
