@@ -252,11 +252,16 @@ export default function AgendaScreen() {
   const weekDays = getWeekDays(currentDate);
   const today = new Date();
 
-  const hasBookingOnDate = (date: Date) => {
+  const getBookingsCount = (date: Date): number => {
     const fecha = fechaLocalAISO(date);
-    return servicios.some(
+
+    return servicios.filter(
       (servicio) => normalizarFecha(servicio.fecha) === fecha
-    );
+    ).length;
+  };
+
+  const hasBookingOnDate = (date: Date): boolean => {
+    return getBookingsCount(date) > 0;
   };
 
   const selectedDayBookings = useMemo(() => {
@@ -356,8 +361,8 @@ export default function AgendaScreen() {
                   date.toDateString() === today.toDateString();
                 const isSelected =
                   date.toDateString() === currentDate.toDateString();
-                const hasBooking = hasBookingOnDate(date);
-
+                const bookingCount = getBookingsCount(date);
+                const hasBooking = bookingCount > 0;
                 return (
                   <motion.button
                     type="button"
@@ -385,11 +390,15 @@ export default function AgendaScreen() {
                       {date.getDate()}
                     </span>
                     {hasBooking && (
-                      <div
-                        className={`mt-1 h-1.5 w-1.5 rounded-full ${
-                          isSelected ? 'bg-white' : 'bg-[#1A56DB]'
+                      <span
+                        className={`mt-1 rounded-full px-1 text-[9px] font-bold ${
+                          isSelected
+                            ? 'bg-white text-[#1A56DB]'
+                            : 'bg-[#1A56DB] text-white'
                         }`}
-                      />
+                      >
+                        {bookingCount}
+                      </span>
                     )}
                   </motion.button>
                 );
@@ -457,8 +466,8 @@ export default function AgendaScreen() {
                   date.toDateString() === today.toDateString();
                 const isSelected =
                   date.toDateString() === currentDate.toDateString();
-                const hasBooking = hasBookingOnDate(date);
-
+                const bookingCount = getBookingsCount(date);
+                const hasBooking = bookingCount > 0;
                 return (
                   <motion.button
                     type="button"
@@ -475,11 +484,15 @@ export default function AgendaScreen() {
                   >
                     {day}
                     {hasBooking && (
-                      <div
-                        className={`mt-0.5 h-1 w-1 rounded-full ${
-                          isSelected ? 'bg-white' : 'bg-[#1A56DB]'
+                      <span
+                        className={`mt-1 rounded-full px-1 text-[9px] font-bold ${
+                          isSelected
+                            ? 'bg-white text-[#1A56DB]'
+                            : 'bg-[#1A56DB] text-white'
                         }`}
-                      />
+                      >
+                        {bookingCount}
+                      </span>
                     )}
                   </motion.button>
                 );

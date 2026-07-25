@@ -1,3 +1,4 @@
+//server.ts
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
@@ -116,6 +117,51 @@ app.get('/api/empleados', async (_req, res) => {
 
     res.status(500).json({
       mensaje: 'Error al consultar los empleados',
+    });
+  }
+});
+
+//agregado
+app.get("/api/empleados/:id", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    //cambiar eñ select si tienen más campos
+    const [empleados]: any = await database.execute(
+      `
+      SELECT
+        id_empleado,
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        dni,
+        antecedente,
+        direccion,
+        fk_categoria,
+        estado,
+        N_trabajos,
+        sobre_mi,
+        fechaCreacion
+      FROM empleados
+      WHERE id_empleado = ?
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    res.json(empleados[0]);
+
+  } catch (error) {
+    console.error("Error al consultar empleado:", error);
+
+    res.status(500).json({
+      mensaje: "Error al consultar el empleado",
     });
   }
 });
@@ -928,6 +974,8 @@ app.get("/api/empleados/:id/categorias", async (req, res) => {
     });
   }
 });
+
+
 
 app.post("/api/empleados/:id/categorias", async (req, res) => {
   try {

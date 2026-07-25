@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { motion } from 'motion/react';
+import { useNavigate } from 'react-router';
 import {
   Search,
   SlidersHorizontal,
@@ -57,7 +58,8 @@ type WorkerCardData =
   ComponentProps<typeof WorkerCard>['worker'];
 
 export default function SearchScreen() {
-  const { currentUser } = useApp();
+  const navigate = useNavigate();
+  const { currentUser, role } = useApp();
 
   const [tab, setTab] =
     useState<'explore' | 'post'>('explore');
@@ -387,7 +389,12 @@ export default function SearchScreen() {
           {(
             [
               ['explore', 'Explorar servicios'],
-              ['post', 'Publicar trabajo'],
+              [
+                'post',
+                role === 'client'
+                  ? 'Publicar servicio'
+                  : 'Publicar trabajo',
+              ],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -574,11 +581,28 @@ export default function SearchScreen() {
                 <>
                   {filteredWorkers.map(
                     (worker) => (
-                      <WorkerCard
+                      <div
                         key={worker.id}
-                        worker={worker}
-                        variant="full"
-                      />
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          navigate(`/home/worker/${worker.id}`)
+                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === 'Enter' ||
+                            event.key === ' '
+                          ) {
+                            navigate(`/home/worker/${worker.id}`);
+                          }
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <WorkerCard
+                          worker={worker}
+                          variant="full"
+                        />
+                      </div>
                     )
                   )}
 
@@ -806,86 +830,69 @@ export default function SearchScreen() {
               )}
             </div>
 
-            {/* Horario estimado */}
-            <div>
-              <p className="text-sm font-semibold text-foreground mb-1">
-                Horario estimado
-              </p>
+            {/* Horario */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Hora de inicio *
+                </label>
 
-              <p className="text-xs text-muted-foreground mb-3">
-                Indica un horario aproximado para realizar el trabajo.
-              </p>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
 
-              <div className="flex flex-col gap-4">
-                <div>
-                  <label className="text-sm font-semibold text-foreground mb-1.5 block">
-                    Hora estimada de inicio *
-                  </label>
-
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-
-                    <input
-                      type="time"
-                      {...register('hora_inicio', {
-                        required:
-                          'La hora estimada de inicio es obligatoria',
-                      })}
-                      className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
-                    />
-                  </div>
-
-                  {errors.hora_inicio && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {errors.hora_inicio.message}
-                    </p>
-                  )}
+                  <input
+                    type="time"
+                    {...register('hora_inicio', {
+                      required:
+                        'La hora de inicio es obligatoria',
+                    })}
+                    className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  />
                 </div>
 
-                <div>
-                  <label className="text-sm font-semibold text-foreground mb-1.5 block">
-                    Hora estimada de finalización *
-                  </label>
-
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-
-                    <input
-                      type="time"
-                      {...register('hora_fin', {
-                        required:
-                          'La hora estimada de finalización es obligatoria',
-                        validate: (horaFin) => {
-                          const horaInicio =
-                            getValues('hora_inicio');
-
-                          if (!horaInicio || !horaFin) {
-                            return true;
-                          }
-
-                          return (
-                            horaFin > horaInicio ||
-                            'La hora final debe ser posterior a la hora inicial'
-                          );
-                        },
-                      })}
-                      className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
-                    />
-                  </div>
-
-                  {errors.hora_fin && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {errors.hora_fin.message}
-                    </p>
-                  )}
-                </div>
+                {errors.hora_inicio && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {errors.hora_inicio.message}
+                  </p>
+                )}
               </div>
 
-              <div className="mt-3 rounded-xl bg-[#EFF4FF] px-3 py-2.5">
-                <p className="text-xs text-[#1A56DB] leading-relaxed">
-                  El horario es una estimación y podrá ajustarse de común acuerdo
-                  con el trabajador seleccionado.
-                </p>
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Hora de finalización *
+                </label>
+
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+                  <input
+                    type="time"
+                    {...register('hora_fin', {
+                      required:
+                        'La hora de finalización es obligatoria',
+                      validate: (horaFin) => {
+                        const horaInicio =
+                          getValues('hora_inicio');
+
+                        if (!horaInicio || !horaFin) {
+                          return true;
+                        }
+
+                        return (
+                          horaFin > horaInicio ||
+                          'La hora final debe ser posterior a la hora inicial'
+                        );
+                      },
+                    })}
+                    className="w-full bg-input-background rounded-xl pl-9 pr-3 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  />
+                </div>
+
+                {errors.hora_fin && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {errors.hora_fin.message}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -904,7 +911,9 @@ export default function SearchScreen() {
             >
               {publicando
                 ? 'Publicando...'
-                : 'Publicar trabajo'}
+                : role === 'client'
+                  ? 'Publicar servicio'
+                  : 'Publicar trabajo'}
             </motion.button>
           </form>
         </div>

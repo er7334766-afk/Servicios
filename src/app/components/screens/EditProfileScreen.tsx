@@ -33,53 +33,40 @@ export default function EditProfileScreen({
   );
 
   const [correo, setCorreo] = useState(
-    String(
-      usuarioActual?.email ??
-        usuarioActual?.correo ??
-        ''
-    )
+    String(usuarioActual?.email ?? usuarioActual?.correo ?? '')
   );
 
   const [celular, setCelular] = useState(
-    String(
-      usuarioActual?.phone ??
-        usuarioActual?.celular ??
-        ''
-    )
+    String(usuarioActual?.phone ?? usuarioActual?.celular ?? '')
   );
 
-  const [dni, setDni] = useState(
-    String(usuarioActual?.dni ?? '')
-  );
+  const [dni, setDni] = useState(String(usuarioActual?.dni ?? ''));
 
   const [titulo, setTitulo] = useState(
     String(usuarioActual?.titulo ?? '')
   );
 
   const [direccion, setDireccion] = useState(
-    String(
-      usuarioActual?.direccion ??
-        usuarioActual?.location ??
-        ''
-    )
+    String(usuarioActual?.direccion ?? usuarioActual?.location ?? '')
   );
 
   const [antecedente, setAntecedente] = useState(
     String(usuarioActual?.antecedente ?? '')
   );
 
+  const [sobreMi, setSobreMi] = useState(
+    String(usuarioActual?.sobre_mi ?? usuarioActual?.sobreMi ?? '')
+  );
+
   const [password, setPassword] = useState(
     String(usuarioActual?.password_C ?? '')
   );
 
-  const [foto, setFoto] = useState(
-    String(usuarioActual?.foto ?? '')
-  );
+  const [foto, setFoto] = useState(String(usuarioActual?.foto ?? ''));
 
   const [cargando, setCargando] = useState(false);
   const [cargandoPerfil, setCargandoPerfil] = useState(false);
 
-  // Cargar los datos reales del empleado desde MySQL
   useEffect(() => {
     const cargarPerfilEmpleado = async () => {
       if (
@@ -112,6 +99,7 @@ export default function EditProfileScreen({
         setTitulo(String(datos.titulo ?? ''));
         setDireccion(String(datos.direccion ?? ''));
         setAntecedente(String(datos.antecedente ?? ''));
+        setSobreMi(String(datos.sobre_mi ?? datos.sobreMi ?? ''));
       } catch (error) {
         const mensaje =
           error instanceof Error
@@ -152,6 +140,7 @@ export default function EditProfileScreen({
             dni: String(dni).trim(),
             direccion: String(direccion).trim(),
             antecedente: String(antecedente).trim(),
+            sobre_mi: String(sobreMi).trim(),
           }
         : {
             nombre_C: String(nombre).trim(),
@@ -178,10 +167,7 @@ export default function EditProfileScreen({
         );
       }
 
-      alert(
-        datos.mensaje || 'Cambios guardados correctamente'
-      );
-
+      alert(datos.mensaje || 'Cambios guardados correctamente');
       onBack();
     } catch (error) {
       const mensaje =
@@ -197,7 +183,7 @@ export default function EditProfileScreen({
 
   if (cargandoPerfil) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#f8fafc]">
+      <div className="flex h-full items-center justify-center bg-[#f8fafc]">
         <p className="text-sm font-semibold text-slate-600">
           Cargando perfil...
         </p>
@@ -206,14 +192,14 @@ export default function EditProfileScreen({
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc] text-[#0f172a] p-4 overflow-y-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="flex h-full flex-col overflow-y-auto bg-[#f8fafc] p-4 text-[#0f172a]">
+      <div className="mb-6 flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="p-2 hover:bg-slate-200 rounded-full transition-colors"
+          className="rounded-full p-2 transition-colors hover:bg-slate-200"
         >
-          <ArrowLeft className="w-5 h-5 text-slate-600" />
+          <ArrowLeft className="h-5 w-5 text-slate-600" />
         </button>
 
         <h1 className="text-xl font-bold text-[#1e293b]">
@@ -225,10 +211,10 @@ export default function EditProfileScreen({
 
       <form
         onSubmit={handleGuardar}
-        className="flex flex-col gap-4 max-w-md w-full mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-100"
+        className="mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
       >
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
             Nombre completo
           </label>
 
@@ -237,14 +223,14 @@ export default function EditProfileScreen({
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Tu nombre"
-            className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             required
           />
         </div>
 
         {!esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
               Contraseña
             </label>
 
@@ -253,14 +239,14 @@ export default function EditProfileScreen({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Nueva contraseña"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
               required
             />
           </div>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
             Correo electrónico
           </label>
 
@@ -269,13 +255,13 @@ export default function EditProfileScreen({
             value={correo}
             onChange={(e) => setCorreo(e.target.value)}
             placeholder="correo@ejemplo.com"
-            className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             required
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
             Celular
           </label>
 
@@ -284,13 +270,13 @@ export default function EditProfileScreen({
             value={celular}
             onChange={(e) => setCelular(e.target.value)}
             placeholder="Número de teléfono"
-            className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
           />
         </div>
 
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
               Título
             </label>
 
@@ -299,13 +285,13 @@ export default function EditProfileScreen({
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               placeholder="Ej. Técnico Electricista"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase px-1">
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
             DNI / Identificación
           </label>
 
@@ -314,13 +300,13 @@ export default function EditProfileScreen({
             value={dni}
             onChange={(e) => setDni(e.target.value)}
             placeholder="Número de documento"
-            className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
           />
         </div>
 
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
               Dirección
             </label>
 
@@ -329,14 +315,35 @@ export default function EditProfileScreen({
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
               placeholder="Dirección de residencia"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
         )}
 
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
+              Sobre mí
+            </label>
+
+            <textarea
+              value={sobreMi}
+              onChange={(e) => setSobreMi(e.target.value)}
+              placeholder="Describe tu experiencia, habilidades y los servicios que realizas"
+              rows={5}
+              maxLength={500}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
+            />
+
+            <span className="px-1 text-right text-xs text-slate-400">
+              {sobreMi.length}/500
+            </span>
+          </div>
+        )}
+
+        {esEmpleado && (
+          <div className="flex flex-col gap-1.5">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
               Antecedente
             </label>
 
@@ -345,14 +352,14 @@ export default function EditProfileScreen({
               value={antecedente}
               onChange={(e) => setAntecedente(e.target.value)}
               placeholder="Detalles o estado de antecedentes"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
         )}
 
         {!esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase px-1">
+            <label className="px-1 text-xs font-bold uppercase text-slate-500">
               URL de la foto
             </label>
 
@@ -361,7 +368,7 @@ export default function EditProfileScreen({
               value={foto}
               onChange={(e) => setFoto(e.target.value)}
               placeholder="https://enlace-de-tu-foto.com"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
         )}
@@ -369,13 +376,10 @@ export default function EditProfileScreen({
         <button
           type="submit"
           disabled={cargando || cargandoPerfil}
-          className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 disabled:opacity-50"
         >
-          <Save className="w-4 h-4" />
-
-          {cargando
-            ? 'Guardando...'
-            : 'Guardar cambios'}
+          <Save className="h-4 w-4" />
+          {cargando ? 'Guardando...' : 'Guardar cambios'}
         </button>
       </form>
     </div>
