@@ -68,14 +68,24 @@ export default function WorkerProfileScreen() {
         );
 
         if (!respuesta.ok) {
-          throw new Error('No se pudo obtener el empleado');
-        }
+          const mensaje = await respuesta.text();
+
+          console.error(
+            'Error API empleado:',
+            respuesta.status,
+            mensaje
+          );
+
+  throw new Error(
+    `No se pudo obtener el empleado. Código: ${respuesta.status}`
+  );
+}
 
         const datos = await respuesta.json();
 
         console.log('Empleado recibido:', datos);
 
-        setWorker(datos);
+        setWorker(datos.empleado ?? datos);
 
         const respuestaCategorias = await fetch(
           `http://localhost:3000/api/empleados/${id}/categorias`
@@ -93,7 +103,11 @@ export default function WorkerProfileScreen() {
 
       } catch (error) {
         console.error('Error al cargar el empleado:', error);
-        setError('No se pudo cargar la información del empleado');
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo cargar la información del empleado'
+        );
       } finally {
         setCargando(false);
       }

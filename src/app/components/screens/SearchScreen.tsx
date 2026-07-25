@@ -1,3 +1,4 @@
+//SearchScreen.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -7,7 +8,7 @@ import { toast } from 'sonner';
 import { useApp } from '../../context/AppContext';
 import { WorkerCard } from '../shared/WorkerCard';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
-import { MOCK_WORKERS, SERVICE_CATEGORIES } from '../../data/mockData';
+import type { ServiceCategory, Worker } from '../../types';
 
 // APIs
 import { crearSolicitud, obtenerCategoriasDB } from '../../services/solicitudesApi';
@@ -28,11 +29,76 @@ interface CategoriaDB {
   subCatgeoria: string;
 }
 
+interface EmpleadoDB {
+  id_empleado: number;
+  nombre_E: string;
+  correo?: string;
+  celular?: string;
+  titulo?: string;
+  direccion?: string;
+  estado?: string;
+  N_trabajos?: number;
+  sobre_mi?: string;
+  foto?: string;
+  precio_hora?: number;
+  calificacion?: number;
+  cantidad_resenas?: number;
+
+  categorias?: Array<{
+    id_categoria: number;
+    nombre?: string;
+  }>;
+
+  servicios?: Array<{
+    id_servicio: number;
+    nombre_servicio?: string;
+    nombre?: string;
+  }>;
+}
+
+const CATEGORY_ID_MAP: Record<number, ServiceCategory> = {
+  1: 'plomeria',
+  2: 'electricidad',
+  3: 'limpieza',
+  4: 'construccion',
+  5: 'pintura',
+  6: 'carpinteria',
+  7: 'jardineria',
+  8: 'electrodomesticos',
+};
+
+const normalizeCategory = (value?: string | number | null): ServiceCategory | null => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'number') {
+    return CATEGORY_ID_MAP[value] ?? null;
+  }
+
+  const normalized = value
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const categoryMap: Record<string, ServiceCategory> = {
+    plomeria: 'plomeria',
+    electricidad: 'electricidad',
+    limpieza: 'limpieza',
+    construccion: 'construccion',
+    pintura: 'pintura',
+    carpinteria: 'carpinteria',
+    jardineria: 'jardineria',
+    electrodomesticos: 'electrodomesticos',
+  };
+
+  return categoryMap[normalized] ?? null;
+};
+
 export default function SearchScreen() {
   const navigate = useNavigate();
-  const { currentUser } = useApp();
+  const { currentUser, role } = useApp();
   const [tab, setTab] = useState<'explore' | 'post'>('explore');
-  const [selectedCat, setSelectedCat] = useState<number | string | null>(null);
+  const [selectedCat, setSelectedCat] = useState<ServiceCategory | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>('rating');
   const [searchText, setSearchText] = useState('');
 
@@ -41,9 +107,13 @@ export default function SearchScreen() {
   const [publicando, setPublicando] = useState(false);
   const [categoriasDb, setCategoriasDb] = useState<CategoriaDB[]>([]);
   const [cargandoCats, setCargandoCats] = useState(true);
-  const [postDate, setPostDate] = useState('');
+  // const [postDate, setPostDate] = useState('');
+  const [empleados, setEmpleados] = useState<Worker[]>([]);
+  const [cargandoEmpleados, setCargandoEmpleados] = useState(true);
+  const [errorEmpleados, setErrorEmpleados] = useState('');
 
 
+  
 
   // Cargar categorías de la Base de Datos al abrir la pantalla
   useEffect(() => {
@@ -60,6 +130,89 @@ export default function SearchScreen() {
     fetchCategorias();
   }, []);
 
+  // Cargar empleado
+ useEffect(() => {
+  const obtenerEmpleados = async () => {
+    try {
+      setCargandoEmpleados(true);
+      setErrorEmpleados('');
+
+      const respuesta = await fetch(
+        'http://localhost:3000/api/empleados'
+      );
+
+      if (!respuesta.ok) {
+        throw new Error('No se pudieron obtener los trabajadores');
+      }
+
+      const datos = await respuesta.json();
+
+      const listaEmpleados: EmpleadoDB[] = Array.isArray(datos)
+        ? datos
+        : datos.empleados || [];
+
+      console.log('Empleados recibidos:', listaEmpleados);
+
+      const trabajadoresAdaptados: Worker[] = listaEmpleados.map(
+        (empleado) => ({
+          id: String(empleado.id_empleado),
+          name: empleado.nombre_E,
+          email: empleado.correo || '',
+          phone: empleado.celular || '',
+          role: 'worker',
+          avatarUrl: empleado.foto || '',
+          location: empleado.direccion || 'Dirección no disponible',
+          joinedDate: '',
+          categories:
+            (empleado.categorias ?? [])
+              .map((categoria) =>
+                normalizeCategory(categoria.id_categoria ?? categoria.nombre)
+              )
+              .filter(
+                (categoria): categoria is ServiceCategory => categoria !== null
+              ),
+          rating: Number(empleado.calificacion || 0),
+          reviewCount: Number(empleado.cantidad_resenas || 0),
+          jobCount: Number(empleado.N_trabajos || 0),
+          bio:
+            empleado.sobre_mi ||
+            empleado.titulo ||
+            'Sin descripción disponible',
+          distanceKm: 0,
+          pricePerHour: Number(empleado.precio_hora || 0),
+          isAvailable:
+            empleado.estado?.toLowerCase() === 'disponible' ||
+            empleado.estado?.toLowerCase() === 'activo',
+          galleryUrls: [],
+          services:
+            empleado.servicios?.map(
+              (servicio) =>
+                servicio.nombre_servicio ||
+                servicio.nombre ||
+                'Servicio'
+            ) || [],
+        })
+      );
+
+      setEmpleados(trabajadoresAdaptados);
+    } catch (error) {
+      console.error('Error al cargar trabajadores:', error);
+
+      setErrorEmpleados(
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar los trabajadores'
+      );
+
+      setEmpleados([]);
+    } finally {
+      setCargandoEmpleados(false);
+    }
+  };
+
+  obtenerEmpleados();
+}, []);
+
   
   // Configuración de react-hook-form
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<PostJobForm>({
@@ -70,20 +223,45 @@ export default function SearchScreen() {
 
   const currentBudget = watch('budget');
 
-  // Filtro de trabajadores (Usa MOCK por ahora para explorar)
-  const filteredWorkers = MOCK_WORKERS
-    .filter((w) => {
-      if (selectedCat && !w.categories.includes(String(selectedCat) as any)) return false;
-      if (searchText && !w.name.toLowerCase().includes(searchText.toLowerCase()) &&
-          !w.services.some((s) => s.toLowerCase().includes(searchText.toLowerCase()))) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'distance') return a.distanceKm - b.distanceKm;
-      if (sortBy === 'rating') return b.rating - a.rating;
-      if (sortBy === 'price') return a.pricePerHour - b.pricePerHour;
-      return 0;
-    });
+  const filteredWorkers = empleados
+  .filter((trabajador) => {
+    if (selectedCat !== null && !trabajador.categories.includes(selectedCat)) {
+      return false;
+    }
+
+    if (searchText.trim()) {
+      const texto = searchText.toLowerCase().trim();
+
+      const coincideNombre = trabajador.name
+        .toLowerCase()
+        .includes(texto);
+
+      const coincideServicio = trabajador.services.some((servicio) =>
+        servicio.toLowerCase().includes(texto)
+      );
+
+      if (!coincideNombre && !coincideServicio) {
+        return false;
+      }
+    }
+
+    return true;
+  })
+  .sort((a, b) => {
+    if (sortBy === 'distance') {
+      return a.distanceKm - b.distanceKm;
+    }
+
+    if (sortBy === 'rating') {
+      return b.rating - a.rating;
+    }
+
+    if (sortBy === 'price') {
+      return a.pricePerHour - b.pricePerHour;
+    }
+
+    return 0;
+  });
 
   // Envío del formulario a la API
   const onSubmit = async (data: PostJobForm) => {
@@ -117,8 +295,21 @@ export default function SearchScreen() {
   };
 
   const suggestedForPost = postCat
-  ? MOCK_WORKERS.filter((w) => w.categories.includes(String(postCat) as any)).slice(0, 3)
-  : [];
+    ? empleados
+        .filter((trabajador) => {
+          const categoriaSeleccionada = categoriasDb.find(
+            (cat) => cat.id_categoria === postCat
+          );
+          const categoriaWorker = normalizeCategory(
+            categoriaSeleccionada?.id_categoria ?? categoriaSeleccionada?.nombre
+          );
+
+          return categoriaWorker
+            ? trabajador.categories.includes(categoriaWorker)
+            : false;
+        })
+        .slice(0, 3)
+    : [];
 
   return (
     <div className="flex flex-col h-full">
@@ -136,7 +327,13 @@ export default function SearchScreen() {
                 tab === key ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'
               }`}
             >
-              {key === 'explore' ? 'Explorar servicios' : 'Publicar trabajo'}
+              {
+                key === 'explore'
+                  ? 'Explorar servicios'
+                  : role === 'client'
+                    ? 'Publicar servicio'
+                    : 'Publicar trabajo'
+              }
             </button>
           ))}
         </div>
@@ -191,32 +388,75 @@ export default function SearchScreen() {
             </div>
             {/* Seguimos usando el Grid para la pantalla de explorar por ahora */}
             <ServiceCategoryGrid
-              onSelect={(cat: any) => setSelectedCat(selectedCat === cat ? null : cat)}
-              selected={selectedCat as any}
+              onSelect={(cat) => setSelectedCat((current) => (current === cat ? null : cat))}
+              selected={selectedCat}
             />
           </div>
 
-          {/* Results */}
-          <div className="px-5 pb-6">
-            <p className="text-sm font-semibold text-foreground mb-3">
-              {filteredWorkers.length} trabajadores encontrados
-            </p>
-            <div className="flex flex-col gap-3">
-              {filteredWorkers.map((w) => (
-                <WorkerCard key={w.id} worker={w} variant="full" />
-              ))}
-              {filteredWorkers.length === 0 && (
-                <div className="text-center py-10">
-                  <p className="text-muted-foreground text-sm">No se encontraron trabajadores</p>
-                  <button onClick={() => { setSelectedCat(null); setSearchText(''); }} className="text-[#1A56DB] text-sm mt-1">
-                    Limpiar filtros
-                  </button>
-                </div>
-              )}
+        {/* Results */}
+        <div className="px-5 pb-6">
+
+          {cargandoEmpleados && (
+            <div className="text-center py-10">
+              <p className="text-sm text-muted-foreground">
+                Cargando trabajadores...
+              </p>
             </div>
-          </div>
+          )}
+
+          {errorEmpleados && !cargandoEmpleados && (
+            <div className="text-center py-10">
+              <p className="text-sm text-red-500">
+                {errorEmpleados}
+              </p>
+            </div>
+          )}
+
+          {!cargandoEmpleados && !errorEmpleados && (
+            <>
+              <p className="text-sm font-semibold text-foreground mb-3">
+                {filteredWorkers.length} trabajadores encontrados
+              </p>
+
+              <div className="flex flex-col gap-3">
+                {filteredWorkers.map((w) => (
+                  <div
+                    key={w.id}
+                    onClick={() => navigate(`/home/worker/${w.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <WorkerCard
+                      worker={w}
+                      variant="full"
+                    />
+                  </div>
+                ))}
+
+                {filteredWorkers.length === 0 && (
+                  <div className="text-center py-10">
+                    <p className="text-muted-foreground text-sm">
+                      No se encontraron trabajadores
+                    </p>
+
+                    <button
+                      onClick={() => {
+                        setSelectedCat(null);
+                        setSearchText('');
+                      }}
+                      className="text-[#1A56DB] text-sm mt-1"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
         </div>
-      ) : (
+        </div>
+        ) : (
+          
         <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6">
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             
@@ -227,25 +467,60 @@ export default function SearchScreen() {
               {cargandoCats ? (
                 <p className="text-xs text-muted-foreground">Cargando categorías...</p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   {categoriasDb.map((cat) => {
                     const isSelected = postCat === cat.id_categoria;
+
+                    const iconosCategorias: Record<string, string> = {
+                      plomeria: '🔧',
+                      electricidad: '⚡',
+                      limpieza: '🧹',
+                      construccion: '🏗️',
+                      pintura: '🎨',
+                      carpinteria: '🪚',
+                      jardineria: '🌿',
+                      electrodomesticos: '🔌',
+                    };
+
+                    const icono =
+                      iconosCategorias[cat.nombre.toLowerCase()] || '🛠️';
+
                     return (
-                      <button
+                      <motion.button
                         type="button"
                         key={cat.id_categoria}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => setPostCat(isSelected ? null : cat.id_categoria)}
-                        className={`flex flex-col items-start p-3 rounded-xl border transition-all ${
-                          isSelected ? 'border-[#1A56DB] bg-[#EFF4FF]' : 'border-border bg-card'
+                        className={`relative rounded-2xl border p-4 text-left transition-all ${
+                          isSelected
+                            ? 'border-[#1A56DB] bg-[#EFF4FF] shadow-md shadow-[#1A56DB]/10'
+                            : 'border-border bg-card hover:border-[#1A56DB]/40'
                         }`}
                       >
-                        <span className={`text-sm font-semibold ${isSelected ? 'text-[#1A56DB]' : 'text-foreground'}`}>
-                          {cat.nombre}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground mt-0.5">
+                        {isSelected && (
+                          <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#1A56DB] text-white text-[10px] flex items-center justify-center">
+                            ✓
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className={`text-sm font-semibold capitalize ${
+                              isSelected ? 'text-[#1A56DB]' : 'text-foreground'
+                            }`}
+                          >
+                            {cat.nombre}
+                          </span>
+
+                          <span className="text-base">
+                            {icono}
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] leading-4 text-muted-foreground">
                           {cat.subCatgeoria}
-                        </span>
-                      </button>
+                        </p>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -331,7 +606,7 @@ export default function SearchScreen() {
               disabled={publicando || cargandoCats}
               className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold shadow-lg shadow-[#1A56DB]/30 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
             >
-              Publicar trabajo
+              {role === 'client' ? 'Publicar servicio' : 'Publicar trabajo'}
             </motion.button>
 
             {suggestedForPost.length > 0 && (
@@ -347,6 +622,7 @@ export default function SearchScreen() {
           </form>
         </div>
       )}
+
     </div>
   );
 }
