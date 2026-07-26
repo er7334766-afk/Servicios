@@ -653,36 +653,56 @@ export default function SearchScreen() {
                   Cargando categorías...
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {categoriasDb.map(
-                    (categoria) => {
-                      const seleccionada =
-                        postCat ===
-                        Number(
-                          categoria.id_categoria
-                        );
+                <div className="grid grid-cols-2 gap-3">
+                  {categoriasDb.map((categoria) => {
+                    const seleccionada =
+                      postCat === Number(categoria.id_categoria);
 
-                      return (
-                        <button
-                          type="button"
-                          key={
-                            categoria.id_categoria
-                          }
-                          onClick={() =>
-                            setPostCat(
-                              seleccionada
-                                ? null
-                                : Number(
-                                    categoria.id_categoria
-                                  )
-                            )
-                          }
-                          className={`flex flex-col items-start p-3 rounded-xl border transition-all ${
+                    const iconosCategorias: Record<string, string> = {
+                      plomeria: '🔧',
+                      electricidad: '⚡',
+                      limpieza: '🧹',
+                      construccion: '🏗️',
+                      pintura: '🎨',
+                      carpinteria: '🪚',
+                      jardineria: '🌿',
+                      electrodomesticos: '🔌',
+                    };
+
+                    const nombreNormalizado = categoria.nombre
+                      .toLowerCase()
+                      .trim()
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '');
+
+                    const icono =
+                      iconosCategorias[nombreNormalizado] || '🛠️';
+
+                    return (
+                      <motion.button
+                        type="button"
+                        key={categoria.id_categoria}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() =>
+                          setPostCat(
                             seleccionada
-                              ? 'border-[#1A56DB] bg-[#EFF4FF]'
-                              : 'border-border bg-card'
-                          }`}
-                        >
+                              ? null
+                              : Number(categoria.id_categoria)
+                          )
+                        }
+                        className={`relative rounded-2xl border p-4 text-left transition-all ${
+                          seleccionada
+                            ? 'border-[#1A56DB] bg-[#EFF4FF] shadow-md shadow-[#1A56DB]/10'
+                            : 'border-border bg-card hover:border-[#1A56DB]/40'
+                        }`}
+                      >
+                        {seleccionada && (
+                          <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#1A56DB] text-white text-[10px] flex items-center justify-center">
+                            ✓
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-2">
                           <span
                             className={`text-sm font-semibold ${
                               seleccionada
@@ -693,17 +713,17 @@ export default function SearchScreen() {
                             {categoria.nombre}
                           </span>
 
-                          {categoria.subCatgeoria && (
-                            <span className="text-[10px] text-muted-foreground mt-0.5">
-                              {
-                                categoria.subCatgeoria
-                              }
-                            </span>
-                          )}
-                        </button>
-                      );
-                    }
-                  )}
+                          <span className="text-base">{icono}</span>
+                        </div>
+
+                        {categoria.subCatgeoria && (
+                          <p className="text-[11px] leading-4 text-muted-foreground">
+                            {categoria.subCatgeoria}
+                          </p>
+                        )}
+                      </motion.button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -893,7 +913,13 @@ export default function SearchScreen() {
                     {errors.hora_fin.message}
                   </p>
                 )}
+                
               </div>
+              
+            </div>
+             <div className="w-full bg-blue-50 text-blue-700 text-sm rounded-xl px-4 py-3 leading-relaxed">
+              El horario es una estimación y podrá ajustarse de común acuerdo
+              con el trabajador seleccionado.
             </div>
 
             <motion.button

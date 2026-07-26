@@ -231,11 +231,18 @@ app.put("/api/empleados/:id", async (req, res) => {
       dni,
       antecedente,
       direccion,
+      sobre_mi,
     } = req.body;
 
     if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
       return res.status(400).json({
         mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (!nombre_E?.trim() || !correo?.trim()) {
+      return res.status(400).json({
+        mensaje: "Nombre y correo son obligatorios",
       });
     }
 
@@ -249,17 +256,19 @@ app.put("/api/empleados/:id", async (req, res) => {
         titulo = ?,
         dni = ?,
         antecedente = ?,
-        direccion = ?
+        direccion = ?,
+        sobre_mi = ?
       WHERE id_empleado = ?
       `,
       [
-        nombre_E,
-        correo,
-        celular,
-        titulo,
-        dni,
-        antecedente,
-        direccion,
+        nombre_E.trim(),
+        correo.trim().toLowerCase(),
+        celular?.trim() || null,
+        titulo?.trim() || null,
+        dni?.trim() || null,
+        antecedente?.trim() || null,
+        direccion?.trim() || null,
+        sobre_mi?.trim() || null,
         idEmpleado,
       ]
     );
@@ -270,14 +279,13 @@ app.put("/api/empleados/:id", async (req, res) => {
       });
     }
 
-    res.json({
+    return res.status(200).json({
       mensaje: "Perfil actualizado correctamente",
     });
-
   } catch (error) {
-    console.error(error);
+    console.error("Error al actualizar empleado:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       mensaje: "Error al actualizar empleado",
     });
   }
