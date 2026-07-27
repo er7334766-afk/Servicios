@@ -14,6 +14,7 @@ export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed'
 
 export interface User {
   id: string;
+  idEmpleado?: number;
   name: string;
   email: string;
   phone: string;

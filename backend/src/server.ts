@@ -124,6 +124,123 @@ app.get('/api/empleados', async (_req, res) => {
 });
 
 // ==========================================
+// OBTENER EMPLEADO POR ID
+// ==========================================
+app.get("/api/empleados/:id", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT
+        id_empleado,
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        dni,
+        antecedente,
+        direccion,
+        estado,
+        N_trabajos,
+        fechaCreacion
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    res.json(empleados[0]);
+  } catch (error) {
+    console.error("Error al consultar empleado:", error);
+
+    res.status(500).json({
+      mensaje: "Error al consultar empleado",
+    });
+  }
+});
+
+// ==========================================
+// ACTUALIZAR EMPLEADO
+// ==========================================
+app.put("/api/empleados/:id", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    const {
+      nombre_E,
+      correo,
+      celular,
+      titulo,
+      dni,
+      antecedente,
+      direccion,
+    } = req.body;
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      UPDATE empleados
+      SET
+        nombre_E = ?,
+        correo = ?,
+        celular = ?,
+        titulo = ?,
+        dni = ?,
+        antecedente = ?,
+        direccion = ?
+      WHERE id_empleado = ?
+      `,
+      [
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        dni,
+        antecedente,
+        direccion,
+        idEmpleado,
+      ]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    res.json({
+      mensaje: "Perfil actualizado correctamente",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      mensaje: "Error al actualizar empleado",
+    });
+  }
+});
+
+// ==========================================
 // RUTAS DE CLIENTES
 // ==========================================
 app.post("/api/clientes", async (req, res) => {
@@ -182,6 +299,53 @@ app.get("/api/clientes", async (_req, res) => {
 
     res.status(500).json({
       mensaje: "Error al consultar los clientes",
+    });
+  }
+});
+
+// ==========================================
+// OBTENER EMPLEADOS POR CATEGORÍA
+// ==========================================
+app.get("/api/categorias/:id/empleados", async (req, res) => {
+  try {
+    const idCategoria = Number(req.params.id);
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de categoría inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT
+        e.id_empleado,
+        e.nombre_E,
+        e.correo,
+        e.celular,
+        e.titulo,
+        e.direccion,
+        e.estado,
+        e.N_trabajos,
+        c.id_categoria,
+        c.nombre AS categoria
+      FROM empleados e
+      INNER JOIN empleado_categorias ec
+        ON ec.id_empleado = e.id_empleado
+      INNER JOIN categorias c
+        ON c.id_categoria = ec.id_categoria
+      WHERE c.id_categoria = ?
+      ORDER BY e.nombre_E ASC
+      `,
+      [idCategoria]
+    );
+
+    return res.status(200).json(empleados);
+  } catch (error) {
+    console.error("Error al consultar empleados por categoría:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al consultar los trabajadores",
     });
   }
 });
@@ -299,6 +463,133 @@ app.get("/api/servicios", async (_req, res) => {
     });
   }
 });
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES lectura id 
+// ==========================================
+app.get("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const [resultado]: any = await database.execute(
+      `
+      SELECT *
+      FROM servicios
+      WHERE id_servicio = ?
+      `,
+      [idServicio]
+    );
+
+    if (resultado.length === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json(resultado[0]);
+  } catch (error) {
+    console.error("Error al consultar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al consultar el servicio",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES (UPDATE)
+// ==========================================
+app.put("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const {
+      fk_cliente,
+      fk_categoria,
+      fk_evidencia,
+      descripcion,
+      direccion,
+      presupuesto,
+      fecha,
+    } = req.body;
+
+    const [resultado]: any = await database.execute(
+      `
+      UPDATE servicios
+      SET
+        fk_cliente = ?,
+        fk_categoria = ?,
+        fk_evidencia = ?,
+        descripcion = ?,
+        direccion = ?,
+        presupuesto = ?,
+        fecha = ?
+      WHERE id_servicio = ?
+      `,
+      [
+        fk_cliente,
+        fk_categoria,
+        fk_evidencia || null,
+        descripcion,
+        direccion,
+        presupuesto,
+        fecha,
+        idServicio,
+      ]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json({
+      mensaje: "Servicio actualizado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al actualizar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al actualizar el servicio",
+    });
+  }
+});
+
+// ==========================================
+// RUTAS DE SERVICIOS / SOLICITUDES (DELETE)
+// ==========================================
+
+app.delete("/api/servicios/:id", async (req, res) => {
+  try {
+    const idServicio = Number(req.params.id);
+
+    const [resultado]: any = await database.execute(
+      `
+      DELETE FROM servicios
+      WHERE id_servicio = ?
+      `,
+      [idServicio]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Servicio no encontrado",
+      });
+    }
+
+    res.json({
+      mensaje: "Servicio eliminado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al eliminar servicio:", error);
+
+    res.status(500).json({
+      mensaje: "Error al eliminar el servicio",
+    });
+  }
+});
+
+
 
 // ==========================================
 // RUTAS DE CATEGORÍAS
@@ -316,6 +607,192 @@ app.get("/api/categorias", async (_req, res) => {
     });
   }
 });
+
+// ==========================================
+// CATEGORÍAS Y ASOCIACION CON EMPLEADO
+// ==========================================
+app.get("/api/empleados/:id/categorias", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT id_empleado
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+      const [categorias]: any = await database.execute(
+  `
+  SELECT
+    c.id_categoria,
+    c.nombre,
+    c.subCatgeoria
+  FROM categorias c
+  INNER JOIN empleado_categorias ec
+    ON ec.id_categoria = c.id_categoria
+  WHERE ec.id_empleado = ?
+  ORDER BY c.nombre ASC
+  `,
+  [idEmpleado]
+);
+    
+
+    return res.status(200).json({
+      idEmpleado,
+      categorias,
+    });
+  } catch (error) {
+    console.error("Error al consultar categorías del empleado:", error);
+
+    return res.status(500).json({
+      mensaje: "Error interno del servidor",
+    });
+  }
+});
+
+app.post("/api/empleados/:id/categorias", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+    const idCategoria = Number(req.body.idCategoria);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de categoría inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT id_empleado
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    const [categorias]: any = await database.execute(
+      `
+      SELECT id_categoria
+      FROM categorias
+      WHERE id_categoria = ?
+      LIMIT 1
+      `,
+      [idCategoria]
+    );
+
+    if (categorias.length === 0) {
+      return res.status(404).json({
+        mensaje: "Categoría no encontrada",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      INSERT INTO empleado_categorias (
+        id_empleado,
+        id_categoria
+      )
+      VALUES (?, ?)
+      `,
+      [idEmpleado, idCategoria]
+    );
+
+    return res.status(201).json({
+      mensaje: "Categoría agregada correctamente",
+      relacion: {
+        id_empleado_categoria: resultado.insertId,
+        idEmpleado,
+        idCategoria,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error al agregar categoría:", error);
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        mensaje: "El empleado ya tiene esa categoría",
+      });
+    }
+
+    return res.status(500).json({
+      mensaje: "Error interno del servidor",
+    });
+  }
+});
+
+app.delete(
+  "/api/empleados/:idEmpleado/categorias/:idCategoria",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+      const idCategoria = Number(req.params.idCategoria);
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0 ||
+        !Number.isInteger(idCategoria) ||
+        idCategoria <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "Identificadores inválidos",
+        });
+      }
+
+      const [resultado]: any = await database.execute(
+        `
+        DELETE FROM empleado_categorias
+        WHERE id_empleado = ?
+          AND id_categoria = ?
+        `,
+        [idEmpleado, idCategoria]
+      );
+
+      if (resultado.affectedRows === 0) {
+        return res.status(404).json({
+          mensaje: "La categoría no está asignada al empleado",
+        });
+      }
+
+      return res.status(200).json({
+        mensaje: "Categoría eliminada correctamente",
+      });
+    } catch (error) {
+      console.error("Error al eliminar categoría:", error);
+
+      return res.status(500).json({
+        mensaje: "Error interno del servidor",
+      });
+    }
+  }
+);
 
 // ==========================================
 // RUTA PARA ACTUALIZAR DISPONIBILIDAD (WORKER)
