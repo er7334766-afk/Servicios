@@ -34,6 +34,7 @@ export async function crearSolicitud(
   const payloadBD = {
     fk_cliente: Number(params.fk_cliente),
     fk_categoria: Number(params.categoria),
+    fk_subcategoria: Number(params.fk_subcategoria),
     // Unimos el título y la descripción ya que la BD solo tiene un campo
     descripcion: params.descripcion 
       ? `${params.titulo} - ${params.descripcion}` 

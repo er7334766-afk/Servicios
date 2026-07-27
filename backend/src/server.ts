@@ -121,6 +121,71 @@ app.get('/api/empleados', async (_req, res) => {
   }
 });
 
+//disponibilidad de empleados
+app.get('/api/empleados/disponibles', async (_req, res) => {
+  try {
+    const [empleados] = await database.execute(
+    `
+    SELECT
+      id_empleado,
+      nombre_E,
+      correo,
+      celular,
+      titulo,
+      direccion,
+      fk_categoria,
+      estado,
+      N_trabajos,
+      sobre_mi,
+      fechaCreacion
+    FROM empleados
+    WHERE LOWER(TRIM(estado)) = 'disponible'
+    `
+    );
+
+    res.json(empleados);
+  } catch (error) {
+    console.error('Error al consultar empleados disponibles:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar los empleados disponibles',
+    });
+  }
+});
+
+//empleados destacados
+app.get('/api/empleados/destacados', async (_req, res) => {
+  try {
+    const [empleados] = await database.execute(
+      `
+      SELECT
+        id_empleado,
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        direccion,
+        fk_categoria,
+        estado,
+        N_trabajos,
+        sobre_mi,
+        fechaCreacion
+      FROM empleados
+      ORDER BY N_trabajos DESC, nombre_E ASC
+      LIMIT 5
+      `
+    );
+
+    res.json(empleados);
+  } catch (error) {
+    console.error('Error al consultar empleados destacados:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar los empleados destacados',
+    });
+  }
+});
+
 //agregado
 app.get("/api/empleados/:id", async (req, res) => {
   try {

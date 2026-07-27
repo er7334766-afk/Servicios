@@ -1,3 +1,4 @@
+//HomeClientScreen.tsx
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Bell, Search, MapPin, ChevronRight, Plus } from 'lucide-react';
@@ -5,10 +6,10 @@ import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { WorkerCard } from '../shared/WorkerCard';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
 import { useApp } from '../../context/AppContext';
-import { MOCK_WORKERS, MOCK_JOB_POSTS, SERVICE_CATEGORIES } from '../../data/mockData';
+import { MOCK_JOB_POSTS, SERVICE_CATEGORIES } from '../../data/mockData';
 import type { ServiceCategory } from '../../types';
 
-import { useState } from 'react'; //agredado
+import { useEffect, useState } from 'react'; //agredado
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -23,17 +24,94 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completado',
 };
 
+interface EmpleadoDisponible {
+  id_empleado: number;
+  nombre_E: string;
+  correo: string;
+  celular: string;
+  titulo: string | null;
+  direccion: string | null;
+  fk_categoria: number | null;
+  estado: string;
+  N_trabajos: number;
+  sobre_mi: string | null;
+}
+
 export default function HomeClientScreen() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('card'); //agregado
-  const { currentUser, unreadNotifications } = useApp();
+  const { currentUser, unreadNotifications } = useApp(); //agregado
+  const [empleadosDisponibles, setEmpleadosDisponibles] = useState<
+  EmpleadoDisponible[]
+  >([]); //agregado
+  const [empleadosDestacados, setEmpleadosDestacados] = useState<
+  EmpleadoDisponible[]
+  >([]); //agregado
 
-  const featured = [...MOCK_WORKERS].sort((a, b) => b.rating - a.rating).slice(0, 5);
+  const [cargandoDestacados, setCargandoDestacados] = useState(true);
+
+  const [cargandoEmpleados, setCargandoEmpleados] = useState(true);
+
+
   const myPosts = MOCK_JOB_POSTS.filter((p) => p.clientId === 'c1').slice(0, 2);
 
   const handleCategorySelect = (cat: ServiceCategory) => {
     navigate(`/home/search?cat=${cat}`);
   };
+
+  //trabajadores destacados
+  useEffect(() => {
+    const cargarEmpleadosDestacados = async () => {
+      try {
+        setCargandoDestacados(true);
+
+        const respuesta = await fetch(
+          'http://localhost:3000/api/empleados/destacados'
+        );
+
+        if (!respuesta.ok) {
+          throw new Error('No se pudieron cargar los empleados destacados');
+        }
+
+        const datos = await respuesta.json();
+        setEmpleadosDestacados(datos);
+      } catch (error) {
+        console.error('Error al cargar empleados destacados:', error);
+        setEmpleadosDestacados([]);
+      } finally {
+        setCargandoDestacados(false);
+      }
+    };
+
+    cargarEmpleadosDestacados();
+  }, []);
+
+  //empleados disponibles
+  useEffect(() => {
+    const cargarEmpleadosDisponibles = async () => {
+      try {
+        setCargandoEmpleados(true);
+
+        const respuesta = await fetch(
+          'http://localhost:3000/api/empleados/disponibles'
+        );
+
+        if (!respuesta.ok) {
+          throw new Error('No se pudieron cargar los empleados disponibles');
+        }
+
+        const datos = await respuesta.json();
+        setEmpleadosDisponibles(datos);
+      } catch (error) {
+        console.error('Error al cargar empleados disponibles:', error);
+        setEmpleadosDisponibles([]);
+      } finally {
+        setCargandoEmpleados(false);
+      }
+    };
+
+    cargarEmpleadosDisponibles();
+  }, []);
 
   return (
     <div className="pb-4">
@@ -80,8 +158,8 @@ export default function HomeClientScreen() {
         </motion.button>
       </div>
 
-      <div className="px-5 mt-5">
-        {/* Categories */}
+      {/* Categorias */}
+      <div className="px-5 mt-5">  
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-foreground">Categorías</h2>
           <button className="text-xs text-[#1A56DB] flex items-center gap-0.5" onClick={() => navigate('/home/search')}>
@@ -91,22 +169,74 @@ export default function HomeClientScreen() {
         <ServiceCategoryGrid onSelect={handleCategorySelect} categories={SERVICE_CATEGORIES} />
       </div>
 
-      {/* Featured workers */}
+      {/* Trabajadores destacados */}
       <div className="mt-6">
         <div className="flex items-center justify-between mb-3 px-5">
-          <h2 className="text-base font-bold text-foreground">Trabajadores destacados</h2>
-          <button className="text-xs text-[#1A56DB] flex items-center gap-0.5" onClick={() => navigate('/home/search')}>
+          <h2 className="text-base font-bold text-foreground">
+            Trabajadores destacados
+          </h2>
+
+          <button
+            className="text-xs text-[#1A56DB] flex items-center gap-0.5"
+            onClick={() => navigate('/home/search')}
+          >
             Ver todos <ChevronRight className="w-3.5 h-3.5" />
           </button>
+        </div>        
+
+        {cargandoDestacados ? (
+        <div className="px-5">
+          <p className="text-sm text-muted-foreground">
+            Cargando trabajadores destacados...
+          </p>
         </div>
+      ) : empleadosDestacados.length === 0 ? (
+        <div className="px-5">
+          <div className="rounded-2xl border border-border bg-card p-5 text-center">
+            <p className="text-sm text-muted-foreground">
+              No hay trabajadores destacados todavía.
+            </p>
+          </div>
+        </div>
+      ) : (
         <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-none">
-          {featured.map((w) => (
-            <WorkerCard key={w.id} worker={w} variant="compact" />
+          {empleadosDestacados.map((worker) => (
+            <motion.button
+              key={worker.id_empleado}
+              type="button"
+              whileTap={{ scale: 0.97 }}
+              onClick={() =>
+                navigate(`/home/worker/${worker.id_empleado}`)
+              }
+              className="min-w-[180px] bg-card rounded-2xl border border-border p-4 text-left shadow-sm"
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-16 h-16 rounded-full bg-[#EFF4FF] flex items-center justify-center">
+                  <span className="text-2xl font-bold text-[#1A56DB]">
+                    {worker.nombre_E.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              <h3 className="font-semibold text-center text-sm">
+                {worker.nombre_E}
+              </h3>
+
+              <p className="text-xs text-center text-muted-foreground mt-1">
+                {worker.N_trabajos ?? 0} Trabajos realizados
+              </p>
+
+              <p className="text-xs text-center text-green-600 font-medium mt-2">
+                {worker.estado || 'Disponible'}
+              </p>
+            </motion.button>
           ))}
         </div>
+      )}
+        
       </div>
 
-      {/* My job posts */}
+      {/* Mis publicaciones de */}
       <div className="mt-6 px-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-foreground">Mis solicitudes</h2>
@@ -169,15 +299,74 @@ export default function HomeClientScreen() {
         )}
       </div>
 
-      {/* Recent availability */}
+      {/* Trabajadores disponibles */}
       <div className="mt-6 px-5 pb-4">
-        <h2 className="text-base font-bold text-foreground mb-3">Disponibles ahora</h2>
-        <div className="flex flex-col gap-3">
-          {MOCK_WORKERS.filter((w) => w.isAvailable).slice(0, 3).map((w) => (
-            <WorkerCard key={w.id} worker={w} variant="full" />
-          ))}
-        </div>
+        <h2 className="text-base font-bold text-foreground mb-3">
+          Disponibles ahora
+        </h2>
+
+        {cargandoEmpleados ? (
+          <div className="bg-card rounded-2xl border border-border p-5 text-center">
+            <p className="text-sm text-muted-foreground">
+              Cargando trabajadores disponibles...
+            </p>
+          </div>
+        ) : empleadosDisponibles.length === 0 ? (
+          <div className="bg-card rounded-2xl border border-border p-5 text-center">
+            <p className="text-sm text-muted-foreground">
+              No hay trabajadores disponibles en este momento.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {empleadosDisponibles.slice(0, 3).map((worker) => (
+              <motion.button
+                key={worker.id_empleado}
+                type="button"
+                whileTap={{ scale: 0.98 }}
+                onClick={() =>
+                  navigate(`/home/worker/${worker.id_empleado}`)
+                }
+                className="w-full bg-card rounded-2xl border border-border p-3 text-left shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  {/* Avatar temporal */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-14 h-14 rounded-xl bg-[#EFF4FF] flex items-center justify-center">
+                      <span className="text-xl font-bold text-[#1A56DB]">
+                        {worker.nombre_E.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-foreground truncate">
+                      {worker.nombre_E}
+                    </h3>
+
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {worker.N_trabajos ?? 0} trabajos realizados
+                    </p>
+
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+
+                      <span className="text-xs text-green-600 font-medium">
+                        {worker.estado || 'Disponible'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        )}
       </div>
+
     </div>
   );
 }

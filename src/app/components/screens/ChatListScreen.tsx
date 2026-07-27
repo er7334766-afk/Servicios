@@ -1,3 +1,4 @@
+//CharListScreen.tsx
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Search, Edit } from 'lucide-react';
