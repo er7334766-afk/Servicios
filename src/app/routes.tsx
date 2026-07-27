@@ -1,3 +1,4 @@
+//routes.tsx
 import { createBrowserRouter, Navigate } from 'react-router';
 import { lazy, Suspense, type ReactNode } from 'react';
 import { MobileShell } from './components/layout/MobileShell';

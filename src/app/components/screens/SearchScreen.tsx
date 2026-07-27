@@ -56,6 +56,13 @@ interface EmpleadoDB {
   }>;
 }
 
+interface SubcategoriaDB {
+  id_subcategoria: number;
+  nombre: string;
+  descripcion?: string;
+  fk_categoria: number;
+}
+
 const CATEGORY_ID_MAP: Record<number, ServiceCategory> = {
   1: 'plomeria',
   2: 'electricidad',
@@ -106,6 +113,9 @@ export default function SearchScreen() {
   const [postCat, setPostCat] = useState<number | null>(null);
   const [publicando, setPublicando] = useState(false);
   const [categoriasDb, setCategoriasDb] = useState<CategoriaDB[]>([]);
+  const [subcategoriasDb, setSubcategoriasDb] = useState<SubcategoriaDB[]>([]);
+  const [postSubcategoria, setPostSubcategoria] = useState<number | null>(null);
+  const [cargandoSubcategorias, setCargandoSubcategorias] = useState(false);
   const [cargandoCats, setCargandoCats] = useState(true);
   // const [postDate, setPostDate] = useState('');
   const [empleados, setEmpleados] = useState<Worker[]>([]);
@@ -129,6 +139,30 @@ export default function SearchScreen() {
     };
     fetchCategorias();
   }, []);
+
+
+  const cargarSubcategorias = async (idCategoria: number) => {
+    try {
+      setCargandoSubcategorias(true);
+
+      const respuesta = await fetch(
+        `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`
+      );
+
+      if (!respuesta.ok) {
+        throw new Error('No se pudieron cargar las subcategorías');
+      }
+
+      const datos = await respuesta.json();
+      setSubcategoriasDb(datos);
+    } catch (error) {
+      console.error('Error al cargar subcategorías:', error);
+      toast.error('Error al cargar las subcategorías');
+      setSubcategoriasDb([]);
+    } finally {
+      setCargandoSubcategorias(false);
+    }
+  };
 
   // Cargar empleado
  useEffect(() => {
@@ -155,7 +189,7 @@ export default function SearchScreen() {
 
       const trabajadoresAdaptados: Worker[] = listaEmpleados.map(
         (empleado) => ({
-          id: String(empleado.id_empleado),
+          id: String(empleado.id_empleado), 
           name: empleado.nombre_E,
           email: empleado.correo || '',
           phone: empleado.celular || '',
@@ -270,12 +304,18 @@ export default function SearchScreen() {
       return;
     }
 
+    if (!postSubcategoria) {
+      toast.error('Selecciona una subcategoría');
+      return;
+    }
+
     try {
       setPublicando(true);
 
       await crearSolicitud({
         fk_cliente: Number(currentUser?.id),
         categoria: postCat,
+        fk_subcategoria: postSubcategoria,
         titulo: data.title.trim(),
         descripcion: data.description.trim(),
         presupuesto: Number(data.budget),
@@ -463,7 +503,7 @@ export default function SearchScreen() {
             {/* LISTA DE CATEGORÍAS DESDE LA BASE DE DATOS */}
             <div>
               <label className="text-sm font-semibold text-foreground mb-2 block">Categoría del servicio *</label>
-              
+                            
               {cargandoCats ? (
                 <p className="text-xs text-muted-foreground">Cargando categorías...</p>
               ) : (
@@ -490,7 +530,17 @@ export default function SearchScreen() {
                         type="button"
                         key={cat.id_categoria}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => setPostCat(isSelected ? null : cat.id_categoria)}
+                        onClick={() => {
+                          if (isSelected) {
+                            setPostCat(null);
+                            setPostSubcategoria(null);
+                            setSubcategoriasDb([]);
+                          } else {
+                            setPostCat(cat.id_categoria);
+                            setPostSubcategoria(null);
+                            cargarSubcategorias(cat.id_categoria);
+                          }
+                        }}
                         className={`relative rounded-2xl border p-4 text-left transition-all ${
                           isSelected
                             ? 'border-[#1A56DB] bg-[#EFF4FF] shadow-md shadow-[#1A56DB]/10'
@@ -526,6 +576,74 @@ export default function SearchScreen() {
                 </div>
               )}
             </div>
+
+            {/* muestra la subcategorias */}
+            {postCat && (
+                <div className="mt-4">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">
+                    Subcategoría *
+                  </label>
+
+                  {cargandoSubcategorias ? (
+                    <p className="text-sm text-muted-foreground">
+                      Cargando subcategorías...
+                    </p>
+                  ) : subcategoriasDb.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay subcategorías disponibles.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                      {subcategoriasDb.map((subcategoria) => {
+                        const isSelected =
+                          postSubcategoria === subcategoria.id_subcategoria;
+
+                        return (
+                          <label
+                            key={subcategoria.id_subcategoria}
+                            className={`flex cursor-pointer items-start gap-3 rounded-lg p-3 transition-colors ${
+                              isSelected
+                                ? 'bg-[#EFF4FF]'
+                                : 'hover:bg-muted/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() =>
+                                setPostSubcategoria(
+                                  isSelected
+                                    ? null
+                                    : subcategoria.id_subcategoria
+                                )
+                              }
+                              className="mt-1 h-4 w-4 cursor-pointer accent-[#1A56DB]"
+                            />
+
+                            <div className="flex-1">
+                              <p
+                                className={`text-sm font-semibold ${
+                                  isSelected
+                                    ? 'text-[#1A56DB]'
+                                    : 'text-foreground'
+                                }`}
+                              >
+                                {subcategoria.nombre}
+                              </p>
+
+                              {subcategoria.descripcion && (
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {subcategoria.descripcion}
+                                </p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
             <div>
               <label className="text-sm font-semibold text-foreground mb-1.5 block">Título de la solicitud *</label>

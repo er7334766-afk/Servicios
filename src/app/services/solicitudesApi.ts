@@ -1,7 +1,8 @@
-
+//server.ts
 interface NuevaSolicitudParams {
   fk_cliente: number;
   categoria: number | null;
+  fk_subcategoria: number;
   titulo: string;
   descripcion: string;
   presupuesto: number;

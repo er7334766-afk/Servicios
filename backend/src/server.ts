@@ -283,6 +283,7 @@ app.post("/api/servicios", async (req, res) => {
     const {
       fk_cliente,
       fk_categoria,
+      fk_subcategoria,
       fk_evidencia,
       descripcion,
       direccion,
@@ -290,7 +291,7 @@ app.post("/api/servicios", async (req, res) => {
       fecha
     } = req.body;
 
-    if (!fk_cliente || !fk_categoria || !descripcion || !direccion || !presupuesto || !fecha) {
+    if (!fk_cliente || !fk_categoria || !fk_subcategoria || !descripcion || !direccion || !presupuesto || !fecha) {
       return res.status(400).json({
         mensaje: "Faltan datos obligatorios para crear la solicitud"
       });
@@ -299,12 +300,13 @@ app.post("/api/servicios", async (req, res) => {
     const [resultado] = await database.execute(
       `
       INSERT INTO servicios 
-      (fk_cliente, fk_categoria, fk_evidencia, descripcion, direccion, presupuesto, fecha) 
+      (fk_cliente, fk_categoria, fk_evidencia, fk_subcategoria, descripcion, direccion, presupuesto, fecha) 
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
       [
         fk_cliente,
         fk_categoria,
+        fk_subcategoria,
         fk_evidencia || null, // Si no viene, guardamos null
         descripcion,
         direccion,
@@ -470,16 +472,58 @@ app.delete("/api/servicios/:id", async (req, res) => {
 // ==========================================
 // RUTAS DE CATEGORÍAS
 // ==========================================
-app.get("/api/categorias", async (_req, res) => {
+app.get('/api/categorias', async (req, res) => {
   try {
-    const [categorias] = await database.query(
-      "SELECT id_categoria, nombre, subCatgeoria FROM categorias"
+    const [categorias]: any = await database.execute(
+      `
+      SELECT
+        id_categoria,
+        nombre
+      FROM categorias
+      ORDER BY nombre ASC
+      `
     );
+
     res.json(categorias);
   } catch (error) {
-    console.error("Error al consultar categorías:", error);
+    console.error('Error al obtener categorías:', error);
+
     res.status(500).json({
-      mensaje: "Error al consultar las categorías",
+      mensaje: 'Error al obtener las categorías',
+    });
+  }
+});
+
+app.get('/api/categorias/:id/subcategorias', async (req, res) => {
+  try {
+    const idCategoria = Number(req.params.id);
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de categoría inválido',
+      });
+    }
+
+    const [subcategorias]: any = await database.execute(
+      `
+      SELECT
+        id_subcategoria,
+        nombre,
+        descripcion,
+        fk_categoria
+      FROM subcategorias
+      WHERE fk_categoria = ?
+      ORDER BY nombre ASC
+      `,
+      [idCategoria]
+    );
+
+    res.json(subcategorias);
+  } catch (error) {
+    console.error('Error al obtener subcategorías:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al obtener las subcategorías',
     });
   }
 });
@@ -517,7 +561,6 @@ app.get("/api/empleados/:id/categorias", async (req, res) => {
   SELECT
     c.id_categoria,
     c.nombre,
-    c.subCatgeoria
   FROM categorias c
   INNER JOIN empleado_categorias ec
     ON ec.id_categoria = c.id_categoria
