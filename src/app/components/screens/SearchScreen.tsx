@@ -26,7 +26,6 @@ interface PostJobForm {
 interface CategoriaDB {
   id_categoria: number;
   nombre: string;
-  subCatgeoria: string;
 }
 
 interface EmpleadoDB {
@@ -567,9 +566,7 @@ export default function SearchScreen() {
                           </span>
                         </div>
 
-                        <p className="text-[11px] leading-4 text-muted-foreground">
-                          {cat.subCatgeoria}
-                        </p>
+                        
                       </motion.button>
                     );
                   })}
