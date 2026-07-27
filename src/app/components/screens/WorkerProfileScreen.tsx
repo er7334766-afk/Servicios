@@ -184,7 +184,7 @@ export default function WorkerProfileScreen() {
       <div className="sticky bottom-0 bg-card border-t border-border px-5 py-3 flex gap-3">
         <motion.button
           whileTap={{ scale: 0.97 }}
-          onClick={() => navigate('/home/chat')}
+          onClick={() => navigate(`/home/chat/${id}`)}
           className="flex-1 border-2 border-[#1A56DB] text-[#1A56DB] rounded-xl py-3 font-semibold flex items-center justify-center gap-2"
         >
           <MessageCircle className="w-4 h-4" />
