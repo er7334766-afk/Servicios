@@ -11,8 +11,17 @@ interface EditServicesScreenProps {
 interface Categoria {
   id_categoria: number | string;
   nombre: string;
-  subCategoria?: string;
-  subCatgeoria?: string;
+  //subCategoria?: string;
+  //subCatgeoria?: string;
+}
+
+
+interface Subcategoria {
+  id_subcategoria: number;
+  nombre: string;
+  descripcion?: string;
+  fk_categoria?: number;
+  id_categoria?: number;
 }
 
 export default function EditServicesScreen({
@@ -27,73 +36,334 @@ export default function EditServicesScreen({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [subcategoriasPorCategoria, setSubcategoriasPorCategoria] =
+  useState<Record<number, Subcategoria[]>>({});
+
+  const [subcategoriasSeleccionadas, setSubcategoriasSeleccionadas] =
+  useState<number[]>([]);
+
+  const [cargandoSubcategorias, setCargandoSubcategorias] =
+  useState<Record<number, boolean>>({});
 
   useEffect(() => {
-    const cargarCategorias = async () => {
-      try {
-        setCargando(true);
+  const cargarDatosIniciales = async () => {
+    try {
+      setCargando(true);
+      setError('');
 
-        const [respuestaCategorias, respuestaEmpleado] = await Promise.all([
-          fetch('http://localhost:3000/api/categorias'),
-          fetch(
-            `http://localhost:3000/api/empleados/${idEmpleado}/categorias`
-          ),
-        ]);
+      const [
+        respuestaCategorias,
+        respuestaCategoriasEmpleado,
+        respuestaSubcategoriasEmpleado,
+      ] = await Promise.all([
+        fetch(
+          'http://localhost:3000/api/categorias',
+          { cache: 'no-store' }
+        ),
 
-        if (!respuestaCategorias.ok) {
-          throw new Error('No se pudieron cargar todas las categorías');
-        }
+        fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+          { cache: 'no-store' }
+        ),
 
-        const todasLasCategorias = await respuestaCategorias.json();
+        fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}/subcategorias`,
+          { cache: 'no-store' }
+        ),
+      ]);
 
-        const categoriasNormalizadas: Categoria[] = Array.isArray(
-          todasLasCategorias
-        )
-          ? todasLasCategorias
-          : todasLasCategorias.categorias || [];
-
-        setCategorias(categoriasNormalizadas);
-
-        if (respuestaEmpleado.ok) {
-          const datosEmpleado = await respuestaEmpleado.json();
-
-          const categoriasEmpleado: Categoria[] = Array.isArray(datosEmpleado)
-            ? datosEmpleado
-            : datosEmpleado.categorias || [];
-
-          const idsSeleccionados = categoriasEmpleado.map((categoria) =>
-            Number(categoria.id_categoria)
-          );
-
-          setSeleccionadas(idsSeleccionados);
-          setSeleccionadasOriginales(idsSeleccionados);
-        } else {
-          setSeleccionadas([]);
-          setSeleccionadasOriginales([]);
-        }
-      } catch (error) {
-        console.error('Error al cargar categorías:', error);
-        setError('No se pudieron cargar los servicios');
-        window.setTimeout(() => setError(''), 4000);
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    cargarCategorias();
-  }, [idEmpleado]);
-
-  const toggleCategoria = (idCategoria: number) => {
-    setSeleccionadas((anteriores) => {
-      if (anteriores.includes(idCategoria)) {
-        return anteriores.filter((id) => id !== idCategoria);
+      if (!respuestaCategorias.ok) {
+        throw new Error(
+          'No se pudieron cargar las categorías'
+        );
       }
 
-      return [...anteriores, idCategoria];
-    });
+      const datosCategorias =
+        await respuestaCategorias.json();
+
+      const todasLasCategorias: Categoria[] =
+        Array.isArray(datosCategorias)
+          ? datosCategorias
+          : Array.isArray(
+                datosCategorias?.categorias
+              )
+            ? datosCategorias.categorias
+            : [];
+
+      setCategorias(todasLasCategorias);
+
+      // ==========================================
+      // CATEGORÍAS GUARDADAS DEL EMPLEADO
+      // ==========================================
+      let idsCategoriasSeleccionadas: number[] = [];
+
+      if (respuestaCategoriasEmpleado.ok) {
+        const datosCategoriasEmpleado =
+          await respuestaCategoriasEmpleado.json();
+
+        const categoriasEmpleado: Categoria[] =
+          Array.isArray(datosCategoriasEmpleado)
+            ? datosCategoriasEmpleado
+            : Array.isArray(
+                  datosCategoriasEmpleado?.categorias
+                )
+              ? datosCategoriasEmpleado.categorias
+              : [];
+
+        idsCategoriasSeleccionadas =
+          categoriasEmpleado
+            .map((categoria) =>
+              Number(categoria.id_categoria)
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) && id > 0
+            );
+      }
+
+      setSeleccionadas(
+        idsCategoriasSeleccionadas
+      );
+
+      setSeleccionadasOriginales(
+        idsCategoriasSeleccionadas
+      );
+
+      // ==========================================
+      // SUBCATEGORÍAS GUARDADAS DEL EMPLEADO
+      // ==========================================
+      if (respuestaSubcategoriasEmpleado.ok) {
+        const datosSubcategoriasEmpleado =
+          await respuestaSubcategoriasEmpleado.json();
+
+        const subcategoriasEmpleado:
+          Subcategoria[] = Array.isArray(
+            datosSubcategoriasEmpleado
+          )
+            ? datosSubcategoriasEmpleado
+            : Array.isArray(
+                  datosSubcategoriasEmpleado
+                    ?.subcategorias
+                )
+              ? datosSubcategoriasEmpleado
+                  .subcategorias
+              : [];
+
+        const idsSubcategorias =
+          subcategoriasEmpleado
+            .map((subcategoria) =>
+              Number(
+                subcategoria.id_subcategoria
+              )
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) && id > 0
+            );
+
+        setSubcategoriasSeleccionadas(
+          idsSubcategorias
+        );
+      } else {
+        setSubcategoriasSeleccionadas([]);
+      }
+
+      // ==========================================
+      // CARGAR LAS SUBCATEGORÍAS DE TODAS LAS
+      // CATEGORÍAS YA SELECCIONADAS
+      // ==========================================
+      const resultadosSubcategorias =
+        await Promise.all(
+          idsCategoriasSeleccionadas.map(
+            async (idCategoria) => {
+              try {
+                const respuesta = await fetch(
+                  `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`,
+                  { cache: 'no-store' }
+                );
+
+                if (!respuesta.ok) {
+                  return {
+                    idCategoria,
+                    subcategorias: [] as Subcategoria[],
+                  };
+                }
+
+                const datos =
+                  await respuesta.json();
+
+                const subcategorias:
+                  Subcategoria[] = Array.isArray(
+                    datos
+                  )
+                    ? datos
+                    : Array.isArray(
+                          datos?.subcategorias
+                        )
+                      ? datos.subcategorias
+                      : [];
+
+                return {
+                  idCategoria,
+                  subcategorias,
+                };
+              } catch (error) {
+                console.error(
+                  `Error al cargar subcategorías de la categoría ${idCategoria}:`,
+                  error
+                );
+
+                return {
+                  idCategoria,
+                  subcategorias:
+                    [] as Subcategoria[],
+                };
+              }
+            }
+          )
+        );
+
+      const subcategoriasAgrupadas: Record<
+        number,
+        Subcategoria[]
+      > = {};
+
+      resultadosSubcategorias.forEach(
+        ({
+          idCategoria,
+          subcategorias,
+        }) => {
+          subcategoriasAgrupadas[idCategoria] =
+            subcategorias;
+        }
+      );
+
+      setSubcategoriasPorCategoria(
+        subcategoriasAgrupadas
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar servicios:',
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar los servicios'
+      );
+    } finally {
+      setCargando(false);
+    }
   };
 
- const guardar = async () => {
+  if (
+    Number.isInteger(idEmpleado) &&
+    idEmpleado > 0
+  ) {
+    cargarDatosIniciales();
+  }
+}, [idEmpleado]);
+
+  const toggleCategoria = async (idCategoria: number) => {
+  const yaSeleccionada = seleccionadas.includes(idCategoria);
+
+  if (yaSeleccionada) {
+    setSeleccionadas((anteriores) =>
+      anteriores.filter((id) => id !== idCategoria)
+    );
+
+    const subcategoriasCategoria =
+      subcategoriasPorCategoria[idCategoria] ?? [];
+
+    const idsSubcategoriasCategoria = subcategoriasCategoria.map(
+      (subcategoria) => Number(subcategoria.id_subcategoria)
+    );
+
+    setSubcategoriasSeleccionadas((anteriores) =>
+      anteriores.filter(
+        (idSubcategoria) =>
+          !idsSubcategoriasCategoria.includes(idSubcategoria)
+      )
+    );
+
+    return;
+  }
+
+  setSeleccionadas((anteriores) => [
+    ...anteriores,
+    idCategoria,
+  ]);
+
+  // Evita volver a consultar si ya fueron cargadas
+  if (subcategoriasPorCategoria[idCategoria]) {
+    return;
+  }
+
+  try {
+    setCargandoSubcategorias((anteriores) => ({
+      ...anteriores,
+      [idCategoria]: true,
+    }));
+
+    console.log('ID EMPLEADO ENVIADO:', idEmpleado);
+    const respuesta = await fetch(
+      `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`
+    );
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos.mensaje || 'No se pudieron cargar las subcategorías'
+      );
+    }
+
+    // Funciona si el backend devuelve un arreglo directo
+    // o { subcategorias: [...] }
+    const subcategorias: Subcategoria[] = Array.isArray(datos)
+      ? datos
+      : datos.subcategorias ?? [];
+
+    setSubcategoriasPorCategoria((anteriores) => ({
+      ...anteriores,
+      [idCategoria]: subcategorias,
+    }));
+  } catch (error) {
+    console.error('Error al cargar subcategorías:', error);
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'No se pudieron cargar las subcategorías'
+    );
+
+    setSeleccionadas((anteriores) =>
+      anteriores.filter((id) => id !== idCategoria)
+    );
+  } finally {
+    setCargandoSubcategorias((anteriores) => ({
+      ...anteriores,
+      [idCategoria]: false,
+    }));
+  }
+};
+
+const toggleSubcategoria = (idSubcategoria: number) => {
+  setSubcategoriasSeleccionadas((anteriores) => {
+    if (anteriores.includes(idSubcategoria)) {
+      return anteriores.filter(
+        (id) => id !== idSubcategoria
+      );
+    }
+
+    return [...anteriores, idSubcategoria];
+  });
+};
+
+
+
+ /*const guardar = async () => {
   try {
     setGuardando(true);
 
@@ -151,6 +421,91 @@ export default function EditServicesScreen({
   } finally {
     setGuardando(false);
   }
+};*/
+const guardar = async () => {
+  try {
+    setGuardando(true);
+    setError('');
+    setSuccess('');
+
+    const cuerpo = {
+      categorias: seleccionadas,
+      subcategorias:
+        subcategoriasSeleccionadas,
+    };
+
+    console.log(
+      'ID empleado:',
+      idEmpleado
+    );
+
+    console.log(
+      'Datos que se enviarán:',
+      cuerpo
+    );
+
+    const respuesta = await fetch(
+      `http://localhost:3000/api/empleados/${idEmpleado}/servicios`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+        body: JSON.stringify(cuerpo),
+      }
+    );
+
+    const texto = await respuesta.text();
+
+    console.log(
+      'Respuesta cruda:',
+      texto
+    );
+
+    let datos: any = {};
+
+    try {
+      datos = JSON.parse(texto);
+    } catch {
+      datos = {
+        mensaje: texto,
+      };
+    }
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos.detalle ||
+          datos.mensaje ||
+          `Error HTTP ${respuesta.status}`
+      );
+    }
+
+    setSuccess(
+      'Servicios guardados correctamente'
+    );
+
+    alert(
+      'Categorías y subcategorías guardadas correctamente'
+    );
+
+    onBack();
+  } catch (error) {
+    console.error(
+      'ERROR DEL FRONTEND:',
+      error
+    );
+
+    const mensaje =
+      error instanceof Error
+        ? error.message
+        : 'No se pudo guardar';
+
+    setError(mensaje);
+    alert(mensaje);
+  } finally {
+    setGuardando(false);
+  }
 };
 
   return (
@@ -183,40 +538,105 @@ export default function EditServicesScreen({
           </p>
         ) : (
           <div className="space-y-3">
-            {categorias.map((categoria) => {
-              const idCategoria = Number(categoria.id_categoria);
+  {categorias.map((categoria) => {
+    const idCategoria = Number(categoria.id_categoria);
+    const categoriaSeleccionada =
+      seleccionadas.includes(idCategoria);
 
-              return (
-                <label
-                  key={idCategoria}
-                  className="flex items-center justify-between p-4 rounded-xl border border-border cursor-pointer hover:bg-secondary transition-colors"
-                >
-                  <span className="font-medium">
-                    {categoria.nombre}
-                  </span>
+    const subcategorias =
+      subcategoriasPorCategoria[idCategoria] ?? [];
 
-                  <input
-                    type="checkbox"
-                    checked={seleccionadas.includes(idCategoria)}
-                    onChange={() => toggleCategoria(idCategoria)}
-                    className="w-5 h-5 accent-[#1A56DB]"
-                  />
-                </label>
-              );
-            })}
+    return (
+      <div
+        key={idCategoria}
+        className="overflow-hidden rounded-xl border border-border"
+      >
+        <label className="flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-secondary">
+          <span className="font-medium">
+            {categoria.nombre}
+          </span>
+
+          <input
+            type="checkbox"
+            checked={categoriaSeleccionada}
+            onChange={() => toggleCategoria(idCategoria)}
+            className="h-5 w-5 accent-[#1A56DB]"
+          />
+        </label>
+
+        {categoriaSeleccionada && (
+          <div className="border-t border-border bg-slate-50 px-4 py-3">
+            {cargandoSubcategorias[idCategoria] ? (
+              <p className="text-sm text-muted-foreground">
+                Cargando subcategorías...
+              </p>
+            ) : subcategorias.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Esta categoría no tiene subcategorías.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                  Selecciona las subcategorías
+                </p>
+
+                {subcategorias.map((subcategoria) => {
+                  const idSubcategoria = Number(
+                    subcategoria.id_subcategoria
+                  );
+
+                  return (
+                    <label
+                      key={idSubcategoria}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg bg-white p-3"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={subcategoriasSeleccionadas.includes(
+                          idSubcategoria
+                        )}
+                        onChange={() =>
+                          toggleSubcategoria(idSubcategoria)
+                        }
+                        className="mt-0.5 h-4 w-4 accent-[#1A56DB]"
+                      />
+
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {subcategoria.nombre}
+                        </p>
+
+                        {subcategoria.descripcion && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {subcategoria.descripcion}
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        )}
+      </div>
+    );
+  })}
+</div>
         )}
       </div>
 
       {/* Botón */}
       <div className="px-5 pb-6">
         <motion.button
-          whileTap={{ scale: 0.98 }}
+          type="button"
           onClick={guardar}
           disabled={guardando || cargando}
           className="w-full bg-[#1A56DB] text-white rounded-xl py-3 font-semibold disabled:opacity-60"
         >
-          {guardando ? 'Guardando...' : 'Guardar cambios'}
+          {guardando
+            ? 'Guardando...'
+            : 'Guardar cambios'}
         </motion.button>
       </div>
     </div>

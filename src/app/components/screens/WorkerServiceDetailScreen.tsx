@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { MessageCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
   obtenerEstadoPostulacion,
@@ -11,6 +12,17 @@ import {
 type ServicioConHorario = ServicioDisponible & {
   hora_inicio?: string | null;
   hora_fin?: string | null;
+  estado?: string | null;
+  fk_cliente?: number | string | null;
+  id_cliente?: number | string | null;
+  nombre_cliente?: string | null;
+  foto_cliente?: string | null;
+};
+
+type UsuarioSesion = {
+  id?: number | string | null;
+  idEmpleado?: number | string | null;
+  id_empleado?: number | string | null;
 };
 
 function formatearPresupuesto(
@@ -56,14 +68,64 @@ function formatearHora(hora?: string | null): string {
     return 'No especificada';
   }
 
-  const [horas, minutos] = hora.split(':').map(Number);
+  const valor = String(hora).trim();
 
-  if (Number.isNaN(horas) || Number.isNaN(minutos)) {
-    return hora;
+  // Caso 1: viene como fecha ISO:
+  // 1970-01-01T09:00:00.000Z
+  if (valor.includes('T')) {
+    const parteHora = valor.split('T')[1]?.split('.')[0];
+
+    if (!parteHora) {
+      return valor;
+    }
+
+    const [horas, minutos] = parteHora
+      .split(':')
+      .map(Number);
+
+    if (
+      Number.isNaN(horas) ||
+      Number.isNaN(minutos)
+    ) {
+      return valor;
+    }
+
+    const fecha = new Date();
+
+    fecha.setHours(
+      horas,
+      minutos,
+      0,
+      0
+    );
+
+    return new Intl.DateTimeFormat('es-HN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(fecha);
+  }
+
+  // Caso 2: viene como 09:00:00
+  const [horas, minutos] = valor
+    .split(':')
+    .map(Number);
+
+  if (
+    Number.isNaN(horas) ||
+    Number.isNaN(minutos)
+  ) {
+    return valor;
   }
 
   const fecha = new Date();
-  fecha.setHours(horas, minutos, 0, 0);
+
+  fecha.setHours(
+    horas,
+    minutos,
+    0,
+    0
+  );
 
   return new Intl.DateTimeFormat('es-HN', {
     hour: '2-digit',
@@ -153,15 +215,24 @@ export default function WorkerServiceDetailScreen() {
   const [mensaje, setMensaje] = useState('');
 
   const servicioId = Number(idServicio);
-  const empleadoId = Number(currentUser?.idEmpleado);
+
+  const usuarioSesion = currentUser as UsuarioSesion | null;
+
+  const empleadoId = Number(
+    usuarioSesion?.idEmpleado ??
+      usuarioSesion?.id_empleado ??
+      usuarioSesion?.id
+  );
 
   useEffect(() => {
     async function cargarDetalle() {
       if (
-        !Number.isInteger(servicioId) ||
-        servicioId <= 0
+        !Number.isInteger(empleadoId) ||
+        empleadoId <= 0
       ) {
-        setError('El servicio solicitado no es válido.');
+        setError(
+          'No se encontró el perfil de empleado de la sesión.'
+        );
         setCargando(false);
         return;
       }
@@ -220,6 +291,10 @@ export default function WorkerServiceDetailScreen() {
       return;
     }
 
+    if (estadoPostulacion) {
+      return;
+    }
+
     try {
       setPostulando(true);
       setError('');
@@ -231,21 +306,70 @@ export default function WorkerServiceDetailScreen() {
           empleadoId
         );
 
-      setEstadoPostulacion('pendiente');
+      setEstadoPostulacion('Pendiente');
       setMensaje(
         respuesta.mensaje ||
           'Tu postulación fue registrada correctamente.'
       );
     } catch (errorDesconocido) {
-      setError(
+      const mensajeError =
         errorDesconocido instanceof Error
           ? errorDesconocido.message
-          : 'No se pudo registrar la postulación.'
-      );
+          : 'No se pudo registrar la postulación.';
+
+      if (
+        mensajeError
+          .toLowerCase()
+          .includes('ya te postulaste')
+      ) {
+        setEstadoPostulacion('Pendiente');
+        setError('');
+        setMensaje(
+          'Ya estás postulado a este servicio.'
+        );
+        return;
+      }
+
+      setError(mensajeError);
     } finally {
       setPostulando(false);
     }
   }
+
+  function abrirChatCliente() {
+  const idCliente = Number(
+    servicio?.fk_cliente ??
+      servicio?.id_cliente
+  );
+
+  if (
+    !Number.isInteger(idCliente) ||
+    idCliente <= 0
+  ) {
+    setError(
+      'No se pudo identificar al cliente.'
+    );
+    return;
+  }
+
+  navigate(`/home/chat/${idCliente}`, {
+    state: {
+      idCliente,
+      idEmpleado: empleadoId,
+      participantId: idCliente,
+      participantName:
+        servicio?.nombre_cliente ||
+        'Cliente',
+      participantAvatar:
+        servicio?.foto_cliente || '',
+      idServicio: servicioId,
+      tituloServicio:
+        servicio?.titulo ||
+        servicio?.nombre_categoria ||
+        'Servicio',
+    },
+  });
+}
 
   if (cargando) {
     return (
@@ -341,9 +465,20 @@ export default function WorkerServiceDetailScreen() {
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-bold text-gray-900">
-            Cliente
-          </h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-gray-900">
+              Cliente
+            </h2>
+
+            <button
+              type="button"
+              onClick={abrirChatCliente}
+              aria-label="Hablar con el cliente"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-[#1A56DB] transition hover:bg-blue-200"
+            >
+              <MessageCircle className="h-5 w-5" />
+            </button>
+          </div>
 
           <div className="flex items-center gap-4">
             {servicio.foto_cliente ? (
@@ -364,7 +499,7 @@ export default function WorkerServiceDetailScreen() {
               </div>
             )}
 
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="font-semibold text-gray-900">
                 {servicio.nombre_cliente ||
                   'Cliente no disponible'}
@@ -513,7 +648,7 @@ export default function WorkerServiceDetailScreen() {
             disabled={
               yaPostulado ||
               postulando ||
-              servicio.estado
+              String(servicio.estado ?? '')
                 .trim()
                 .toLowerCase() !== 'pendiente'
             }

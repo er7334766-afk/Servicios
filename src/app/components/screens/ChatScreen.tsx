@@ -4,6 +4,7 @@ import {
   useState,
 } from 'react';
 import {
+  useLocation,
   useNavigate,
   useParams,
 } from 'react-router';
@@ -83,8 +84,14 @@ function leerUsuarioLocal(): UsuarioGuardado | null {
 }
 
 export default function ChatScreen() {
-  const { id } = useParams<{ id: string }>();
+  const parametros = useParams<{
+    id?: string;
+    idCliente?: string;
+    idContacto?: string;
+    participantId?: string;
+  }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { currentUser, role } = useApp();
 
@@ -115,7 +122,37 @@ export default function ChatScreen() {
    * Empleado:
    * /home/chat/:id representa el ID del cliente.
    */
-  const idSeleccionado = Number(id);
+  /*const idSeleccionado = Number(
+    parametros.id ??
+      parametros.idCliente ??
+      parametros.idContacto ??
+      parametros.participantId
+  );*/
+  const estadoNavegacion =
+  location.state as
+    | {
+        idCliente?: number | string;
+        idEmpleado?: number | string;
+        participantId?: number | string;
+      }
+    | null;
+
+const ultimoSegmentoUrl =
+  location.pathname
+    .split('/')
+    .filter(Boolean)
+    .at(-1);
+
+const idSeleccionado = Number(
+  parametros.id ??
+    parametros.idCliente ??
+    parametros.idContacto ??
+    parametros.participantId ??
+    estadoNavegacion?.participantId ??
+    estadoNavegacion?.idCliente ??
+    estadoNavegacion?.idEmpleado ??
+    ultimoSegmentoUrl
+);
 
   const rolActual =
     role ??
@@ -158,9 +195,24 @@ export default function ChatScreen() {
       ? `http://localhost:3000/api/clientes/${idCliente}`
       : `http://localhost:3000/api/empleados/${idEmpleado}`;
 
-    const respuesta = await fetch(url);
+    
+      const respuesta = await fetch(url, {
+  cache: 'no-store',
+});
 
-    const datos = await respuesta.json();
+const texto = await respuesta.text();
+
+let datos: any = {};
+
+if (texto) {
+  try {
+    datos = JSON.parse(texto);
+  } catch {
+    throw new Error(
+      'El servidor devolvió una respuesta inválida al consultar el contacto'
+    );
+  }
+}
 
     if (!respuesta.ok) {
       throw new Error(

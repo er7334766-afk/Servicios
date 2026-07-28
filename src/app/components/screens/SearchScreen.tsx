@@ -53,13 +53,116 @@ interface EmpleadoDB {
   categoria?: string;
 }
 
+interface ServicioDB {
+  id_servicio: number;
+  fk_cliente: number;
+  fk_categoria: number;
+  titulo?: string;
+  descripcion: string;
+  direccion: string;
+  presupuesto: number;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado?: string;
+  nombre_cliente?: string;
+  nombre_categoria?: string;
+}
+
 type WorkerCardData =
   ComponentProps<typeof WorkerCard>['worker'];
+
+function formatearFecha(
+  fecha?: string | null
+): string {
+  if (!fecha) {
+    return 'Fecha no disponible';
+  }
+
+  const valor = String(fecha).trim();
+
+  const parteFecha = valor.includes('T')
+    ? valor.split('T')[0]
+    : valor;
+
+  const [anio, mes, dia] = parteFecha
+    .split('-')
+    .map(Number);
+
+  if (
+    Number.isNaN(anio) ||
+    Number.isNaN(mes) ||
+    Number.isNaN(dia)
+  ) {
+    return valor;
+  }
+
+  const objetoFecha = new Date(
+    anio,
+    mes - 1,
+    dia
+  );
+
+  return new Intl.DateTimeFormat('es-HN', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(objetoFecha);
+}
+
+function formatearHora(
+  hora?: string | null
+): string {
+  if (!hora) {
+    return 'No especificada';
+  }
+
+  const valor = String(hora).trim();
+
+  const parteHora = valor.includes('T')
+    ? valor.split('T')[1]?.split('.')[0]
+    : valor;
+
+  if (!parteHora) {
+    return valor;
+  }
+
+  const [horas, minutos] = parteHora
+    .split(':')
+    .map(Number);
+
+  if (
+    Number.isNaN(horas) ||
+    Number.isNaN(minutos)
+  ) {
+    return valor;
+  }
+
+  const fechaTemporal = new Date();
+
+  fechaTemporal.setHours(
+    horas,
+    minutos,
+    0,
+    0
+  );
+
+  return new Intl.DateTimeFormat('es-HN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(fechaTemporal);
+}
+
+
 
 export default function SearchScreen() {
   const navigate = useNavigate();
   const { currentUser, role } = useApp();
+  const esCliente = role === 'client';
+  const esTrabajador = role === 'worker';
 
+  
   const [tab, setTab] =
     useState<'explore' | 'post'>('explore');
 
@@ -88,6 +191,12 @@ export default function SearchScreen() {
     useState<EmpleadoDB[]>([]);
 
   const [cargandoEmpleados, setCargandoEmpleados] =
+    useState(false);
+
+  const [serviciosDb, setServiciosDb] =
+    useState<ServicioDB[]>([]);
+
+  const [cargandoServicios, setCargandoServicios] =
     useState(false);
 
   const {
@@ -186,9 +295,81 @@ export default function SearchScreen() {
     }
   };
 
+
+  const cargarServicios = async () => {
+  try {
+    setCargandoServicios(true);
+
+    const respuesta = await fetch(
+      'http://localhost:3000/api/servicios'
+    );
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos?.mensaje ||
+          'No se pudieron cargar los trabajos'
+      );
+    }
+
+    setServiciosDb(
+      Array.isArray(datos) ? datos : []
+    );
+  } catch (error) {
+    console.error(
+      'Error al cargar trabajos:',
+      error
+    );
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : 'No se pudieron cargar los trabajos'
+    );
+
+    setServiciosDb([]);
+  } finally {
+    setCargandoServicios(false);
+  }
+};
+
   useEffect(() => {
-    cargarEmpleados(selectedCat);
-  }, [selectedCat]);
+    if (esCliente) {
+      cargarEmpleados(selectedCat);
+    }
+  }, [selectedCat, esCliente]);
+
+  useEffect(() => {
+    if (esTrabajador) {
+      cargarServicios();
+    }
+  }, [esTrabajador]);
+
+  const trabajosFiltrados = serviciosDb.filter((servicio) => {
+    const coincideCategoria =
+      selectedCat === null ||
+      Number(servicio.fk_categoria) === Number(selectedCat);
+
+    const texto = searchText.trim().toLowerCase();
+
+    const coincideBusqueda =
+      !texto ||
+      servicio.titulo?.toLowerCase().includes(texto) ||
+      servicio.descripcion?.toLowerCase().includes(texto) ||
+      servicio.direccion?.toLowerCase().includes(texto) ||
+      servicio.nombre_categoria?.toLowerCase().includes(texto) ||
+      servicio.nombre_cliente?.toLowerCase().includes(texto);
+
+      ;
+
+    return coincideCategoria && Boolean(coincideBusqueda);
+  });
+
+      console.log('ROL:', role);
+      console.log('CATEGORÍA SELECCIONADA:', selectedCat);
+      console.log('SERVICIOS:', serviciosDb);
+      console.log('TRABAJOS FILTRADOS:', trabajosFiltrados)
 
   // ==========================================
   // CONVERTIR EMPLEADOS DE MYSQL AL FORMATO
@@ -197,7 +378,7 @@ export default function SearchScreen() {
  const trabajadoresConvertidos: WorkerCardData[] =
   empleadosDb.map((empleado) => {
     const worker: WorkerCardData = {
-      id: empleado.id_empleado as string | number,
+      id: String(empleado.id_empleado),
       name: empleado.nombre_E || 'Trabajador',
       email: '',
       phone: '',
@@ -365,30 +546,31 @@ export default function SearchScreen() {
 
         {/* Pestañas */}
         <div className="flex bg-muted rounded-xl p-1">
-          {(
-            [
-              ['explore', 'Explorar servicios'],
-              [
-                'post',
-                role === 'client'
-                  ? 'Publicar servicio'
-                  : 'Publicar trabajo',
-              ],
-            ] as const
-          ).map(([key, label]) => (
+          <button
+            type="button"
+            onClick={() => setTab('explore')}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+              tab === 'explore'
+                ? 'bg-white text-foreground shadow-sm'
+                : 'text-muted-foreground'
+            }`}
+          >
+            {esCliente ? 'Explorar trabajadores' : 'Explorar trabajos'}
+          </button>
+
+          {esCliente && (
             <button
               type="button"
-              key={key}
-              onClick={() => setTab(key)}
+              onClick={() => setTab('post')}
               className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                tab === key
+                tab === 'post'
                   ? 'bg-white text-foreground shadow-sm'
                   : 'text-muted-foreground'
               }`}
             >
-              {label}
+              Publicar servicio
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -407,7 +589,11 @@ export default function SearchScreen() {
                       e.target.value
                     )
                   }
-                  placeholder="Buscar trabajador o servicio..."
+                  placeholder={
+                    esCliente
+                      ? 'Buscar trabajador o servicio...'
+                      : 'Buscar trabajo, categoría o dirección...'
+                  }
                   className="w-full bg-input-background rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
                 />
               </div>
@@ -420,6 +606,8 @@ export default function SearchScreen() {
               </button>
             </div>
 
+            {esCliente && (
+              <>
             {/* Ordenamiento */}
             <div className="flex gap-2 mt-3 overflow-x-auto">
               {(
@@ -454,7 +642,9 @@ export default function SearchScreen() {
                 </button>
               ))}
             </div>
-          </div>
+
+              </>
+            )}          </div>
 
           {/* Categorías desde MySQL */}
           <div className="px-5 pb-3">
@@ -541,25 +731,25 @@ export default function SearchScreen() {
             )}
           </div>
 
-          {/* Resultados */}
-          <div className="px-5 pb-6">
-            <p className="text-sm font-semibold text-foreground mb-3">
-              {cargandoEmpleados
-                ? 'Buscando trabajadores...'
-                : `${filteredWorkers.length} trabajadores encontrados`}
-            </p>
+          {/* Resultados para clientes */}
+          {esCliente && (
+            <div className="px-5 pb-6">
+              <p className="text-sm font-semibold text-foreground mb-3">
+                {cargandoEmpleados
+                  ? 'Buscando trabajadores...'
+                  : `${filteredWorkers.length} trabajadores encontrados`}
+              </p>
 
-            <div className="flex flex-col gap-3">
-              {cargandoEmpleados ? (
-                <div className="text-center py-10">
-                  <p className="text-muted-foreground text-sm">
-                    Cargando trabajadores...
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {filteredWorkers.map(
-                    (worker) => (
+              <div className="flex flex-col gap-3">
+                {cargandoEmpleados ? (
+                  <div className="text-center py-10">
+                    <p className="text-muted-foreground text-sm">
+                      Cargando trabajadores...
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {filteredWorkers.map((worker) => (
                       <div
                         key={worker.id}
                         role="button"
@@ -577,43 +767,117 @@ export default function SearchScreen() {
                         }}
                         className="cursor-pointer"
                       >
-                        <WorkerCard
-                          worker={worker}
-                          variant="full"
-                        />
+                        <WorkerCard worker={worker} variant="full" />
                       </div>
-                    )
-                  )}
+                    ))}
 
-                  {filteredWorkers.length ===
-                    0 && (
-                    <div className="text-center py-10">
-                      <p className="text-muted-foreground text-sm">
-                        No se encontraron
-                        trabajadores
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCat(
-                            null
-                          );
-
-                          setSearchText('');
-                        }}
-                        className="text-[#1A56DB] text-sm mt-1"
-                      >
-                        Limpiar filtros
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
+                    {filteredWorkers.length === 0 && (
+                      <div className="text-center py-10">
+                        <p className="text-muted-foreground text-sm">
+                          No se encontraron trabajadores
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCat(null);
+                            setSearchText('');
+                          }}
+                          className="text-[#1A56DB] text-sm mt-1"
+                        >
+                          Limpiar filtros
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Resultados para trabajadores */}
+          {esTrabajador && (
+            <div className="px-5 pb-6">
+              <p className="text-sm font-semibold text-foreground mb-3">
+                {cargandoServicios
+                  ? 'Buscando trabajos...'
+                  : `${trabajosFiltrados.length} trabajos encontrados`}
+              </p>
+
+              <div className="flex flex-col gap-3">
+                {cargandoServicios ? (
+                  <div className="text-center py-10">
+                    <p className="text-muted-foreground text-sm">
+                      Cargando trabajos...
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {trabajosFiltrados.map((servicio) => (
+                      <button
+                        key={servicio.id_servicio}
+                        type="button"
+                        onClick={() =>
+                          navigate(`/home/solicitud/${servicio.id_servicio}`)
+                        }
+                        className="w-full text-left bg-card border border-border rounded-xl p-4 transition-all hover:border-[#1A56DB]/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-foreground">
+                              {servicio.titulo?.trim() ||
+                                servicio.nombre_categoria ||
+                                'Solicitud de servicio'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                              {servicio.descripcion}
+                            </p>
+                          </div>
+
+                          <span className="text-sm font-bold text-[#1A56DB] whitespace-nowrap">
+                            L {Number(servicio.presupuesto ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                          {servicio.nombre_categoria && (
+                            <p>Categoría: {servicio.nombre_categoria}</p>
+                          )}
+                          <p>{servicio.direccion}</p>
+                          <p>{formatearFecha(servicio.fecha)}</p>
+
+                            <p>
+                              {formatearHora(servicio.hora_inicio)}
+                              {' - '}
+                              {formatearHora(servicio.hora_fin)}
+                            </p>
+                        </div>
+                      </button>
+                    ))}
+
+                    {trabajosFiltrados.length === 0 && (
+                      <div className="text-center py-10">
+                        <p className="text-muted-foreground text-sm">
+                          No hay trabajos disponibles en esta categoría
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCat(null);
+                            setSearchText('');
+                          }}
+                          className="text-[#1A56DB] text-sm mt-2"
+                        >
+                          Limpiar filtros
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
+      ) : esCliente ? (
         <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6">
           <form
             onSubmit={handleSubmit(
@@ -914,13 +1178,15 @@ export default function SearchScreen() {
               }
               className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold shadow-lg shadow-[#1A56DB]/30 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
             >
-              {publicando
-                ? 'Publicando...'
-                : role === 'client'
-                  ? 'Publicar servicio'
-                  : 'Publicar trabajo'}
+              {publicando ? 'Publicando...' : 'Publicar servicio'}
             </motion.button>
           </form>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center px-5">
+          <p className="text-sm text-muted-foreground text-center">
+            Los trabajadores pueden explorar solicitudes publicadas por clientes.
+          </p>
         </div>
       )}
     </div>

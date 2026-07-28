@@ -1,4 +1,3 @@
-//server.ts
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
@@ -226,6 +225,73 @@ app.get('/api/empleados', async (_req, res) => {
   }
 });
 
+//disponibilidad de empleados
+app.get('/api/empleados/disponibles', async (_req, res) => {
+  try {
+    const [empleados] = await database.execute(
+    `
+    SELECT
+      id_empleado,
+      nombre_E,
+      correo,
+      celular,
+      titulo,
+      direccion,
+      fk_categoria,
+      estado,
+      N_trabajos,
+      sobre_mi,
+      fechaCreacion
+    FROM empleados
+    WHERE LOWER(TRIM(estado)) = 'disponible'
+    `
+    );
+
+    res.json(empleados);
+  } catch (error) {
+    console.error('Error al consultar empleados disponibles:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar los empleados disponibles',
+    });
+  }
+});
+
+//empleados destacados
+app.get('/api/empleados/destacados', async (_req, res) => {
+  try {
+    const [empleados] = await database.execute(
+      `
+      SELECT
+        id_empleado,
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        direccion,
+        fk_categoria,
+        estado,
+        N_trabajos,
+        sobre_mi,
+        fechaCreacion
+      FROM empleados
+      ORDER BY N_trabajos DESC, nombre_E ASC
+      LIMIT 5
+      `
+    );
+
+    res.json(empleados);
+  } catch (error) {
+    console.error('Error al consultar empleados destacados:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar los empleados destacados',
+    });
+  }
+});
+
+
+
 // ==========================================
 // OBTENER EMPLEADO POR ID
 // ==========================================
@@ -239,9 +305,9 @@ app.get("/api/empleados/:id", async (req, res) => {
       });
     }
 
-    const [empleados]: any = await database.execute(
+    const respuesta: any = await database.query(
       `
-      SELECT
+      SELECT TOP 1
         id_empleado,
         nombre AS nombre_E,
         correo,
@@ -256,11 +322,18 @@ app.get("/api/empleados/:id", async (req, res) => {
         foto_url AS foto,
         fecha_creacion AS fechaCreacion
       FROM empleados
-      WHERE id_empleado = ?
-      LIMIT 1
-      `,
-      [idEmpleado]
+      WHERE id_empleado = ${idEmpleado}
+      `
     );
+
+    const empleados: any[] =
+      Array.isArray(respuesta?.[0])
+        ? respuesta[0]
+        : Array.isArray(respuesta?.recordset)
+          ? respuesta.recordset
+          : Array.isArray(respuesta?.rows)
+            ? respuesta.rows
+            : [];
 
     if (empleados.length === 0) {
       return res.status(404).json({
@@ -268,12 +341,13 @@ app.get("/api/empleados/:id", async (req, res) => {
       });
     }
 
-    res.json(empleados[0]);
-  } catch (error) {
+    return res.status(200).json(empleados[0]);
+  } catch (error: any) {
     console.error("Error al consultar empleado:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       mensaje: "Error al consultar empleado",
+      detalle: error?.message || String(error),
     });
   }
 });
@@ -402,7 +476,7 @@ app.post("/api/clientes", async (req, res) => {
   }
 });
 
-app.get("/api/clientes", async (_req, res) => {
+/*app.get("/api/clientes", async (_req, res) => {
   try {
     const [clientes] = await database.query(
       `SELECT id_cliente, nombre AS nombre_C, correo, telefono AS celular, dni, fecha_creacion AS fechaCreacion FROM clientes`
@@ -416,7 +490,88 @@ app.get("/api/clientes", async (_req, res) => {
       mensaje: "Error al consultar los clientes",
     });
   }
-});
+});*/
+
+// ==========================================
+// OBTENER CLIENTE POR ID
+// ==========================================
+app.get(
+  "/api/clientes/:id",
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.id
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            "ID de cliente inválido",
+        });
+      }
+
+      const respuesta: any =
+        await database.query(`
+          SELECT TOP 1
+            id_cliente,
+            nombre AS nombre_C,
+            correo,
+            telefono AS celular,
+            dni,
+            foto_url AS foto,
+            fecha_creacion AS fechaCreacion
+          FROM clientes
+          WHERE id_cliente = ${idCliente}
+        `);
+
+      const clientes: any[] =
+        Array.isArray(
+          respuesta?.recordset
+        )
+          ? respuesta.recordset
+          : Array.isArray(
+                respuesta?.recordsets?.[0]
+              )
+            ? respuesta.recordsets[0]
+            : Array.isArray(
+                  respuesta?.[0]
+                )
+              ? respuesta[0]
+              : Array.isArray(
+                    respuesta?.rows
+                  )
+                ? respuesta.rows
+                : [];
+
+      if (clientes.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            "Cliente no encontrado",
+        });
+      }
+
+      return res
+        .status(200)
+        .json(clientes[0]);
+    } catch (error: any) {
+      console.error(
+        "Error al consultar cliente:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar el cliente",
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
 
 // ==========================================
 // ACTUALIZAR CLIENTE
@@ -603,7 +758,20 @@ app.post("/api/login", async (req, res) => {
       if (rows.length > 0) usuario = rows[0];
     } else if (rol === 'worker') {
       const [rows]: any = await database.execute(
-        "SELECT id_empleado AS id, nombre AS nombre, correo, telefono AS celular, estado, foto_url AS foto FROM empleados WHERE correo = ? AND password_hash = ?",
+        `
+        SELECT
+          id_empleado AS id,
+          id_empleado AS idEmpleado,
+          id_empleado AS id_empleado,
+          nombre AS nombre,
+          correo,
+          telefono AS celular,
+          estado,
+          foto_url AS foto
+        FROM empleados
+        WHERE correo = ?
+          AND password_hash = ?
+        `,
         [correo, password]
       );
       if (rows.length > 0) usuario = rows[0];
@@ -739,8 +907,8 @@ app.get("/api/servicios", async (_req, res) => {
     s.hora_fin,
     s.estado,
 
-    c.nombre_C AS nombre_cliente,
-    c.foto AS foto_cliente,
+    c.nombre AS nombre_cliente,
+    c.foto_url AS foto_cliente,
 
     cat.nombre AS nombre_categoria
 
@@ -767,6 +935,9 @@ app.get("/api/servicios", async (_req, res) => {
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES lectura id 
 // ==========================================
+// ==========================================
+// OBTENER SERVICIO POR ID
+// ==========================================
 app.get('/api/servicios/:id', async (req, res) => {
   try {
     const idServicio = Number(req.params.id);
@@ -780,13 +951,30 @@ app.get('/api/servicios/:id', async (req, res) => {
       });
     }
 
-    const [resultado]: any =
-      await database.execute(
-        `
+    /*
+      Usamos database.query en lugar de database.execute.
+
+      El ID ya fue convertido y validado como número entero,
+      por lo que se puede colocar directamente en la consulta.
+    */
+    const respuesta: any = await database.query(
+      `
         SELECT
           s.id_servicio,
-          s.fk_cliente,
-          s.fk_categoria,
+
+          COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) AS fk_cliente,
+
+          COALESCE(
+            s.fk_categoria,
+            s.id_categoria
+          ) AS fk_categoria,
+
+          s.id_cliente,
+          s.id_categoria,
+          s.id_subcategoria,
           s.fk_empleado,
           s.fk_evidencia,
           s.titulo,
@@ -798,50 +986,89 @@ app.get('/api/servicios/:id', async (req, res) => {
           s.hora_fin,
           s.estado,
 
-          c.nombre_C AS nombre_cliente,
-          c.foto AS foto_cliente,
+          COALESCE(
+            NULLIF(c.nombre, ''),
+            NULLIF(c.nombre_C, ''),
+            'Cliente no disponible'
+          ) AS nombre_cliente,
 
-          e.nombre_E AS nombre_empleado,
+          COALESCE(
+            c.foto_url,
+            c.foto
+          ) AS foto_cliente,
+
+          e.nombre AS nombre_empleado,
 
           cat.nombre AS nombre_categoria
 
-        FROM servicios s
+        FROM servicios AS s
 
-        LEFT JOIN clientes c
-          ON c.id_cliente = s.fk_cliente
+        LEFT JOIN clientes AS c
+          ON c.id_cliente = COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          )
 
-        LEFT JOIN empleados e
+        LEFT JOIN empleados AS e
           ON e.id_empleado = s.fk_empleado
 
-        LEFT JOIN categorias cat
-          ON cat.id_categoria = s.fk_categoria
+        LEFT JOIN categorias AS cat
+          ON cat.id_categoria = COALESCE(
+            s.fk_categoria,
+            s.id_categoria
+          )
 
-        WHERE s.id_servicio = ?
-        LIMIT 1
-        `,
-        [idServicio]
-      );
+        WHERE s.id_servicio = ${idServicio}
+      `
+    );
 
-    if (resultado.length === 0) {
+    /*
+      Compatibilidad con las posibles formas en las que
+      el adaptador puede devolver los resultados.
+    */
+    let filas: any[] = [];
+
+    if (
+      Array.isArray(respuesta) &&
+      Array.isArray(respuesta[0])
+    ) {
+      // Formato: [filas, información]
+      filas = respuesta[0];
+    } else if (
+      Array.isArray(respuesta?.recordset)
+    ) {
+      // Formato directo de mssql
+      filas = respuesta.recordset;
+    } else if (
+      Array.isArray(respuesta?.rows)
+    ) {
+      filas = respuesta.rows;
+    } else if (Array.isArray(respuesta)) {
+      filas = respuesta;
+    }
+
+    if (filas.length === 0) {
       return res.status(404).json({
         mensaje: 'Servicio no encontrado',
+        idServicio,
       });
     }
 
-    return res.json(resultado[0]);
-  } catch (error) {
+    return res.status(200).json(filas[0]);
+  } catch (error: any) {
     console.error(
       'Error al consultar servicio:',
       error
     );
 
     return res.status(500).json({
-      mensaje:
-        'Error al consultar el servicio',
+      mensaje: 'Error al consultar el servicio',
+      detalle:
+        error?.message ||
+        'Error desconocido en la consulta',
     });
   }
 });
-
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES (UPDATE)
 // ==========================================
@@ -998,6 +1225,420 @@ app.get("/api/categorias", async (_req, res) => {
   }
 });
 
+app.get('/api/categorias/:id/subcategorias', async (req, res) => {
+  try {
+    const idCategoria = Number(req.params.id);
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de categoría inválido',
+      });
+    }
+
+    const [subcategorias] = await database.query(
+      `
+      SELECT
+        id_subcategoria,
+        nombre,
+        descripcion,
+        fk_categoria AS id_categoria
+      FROM subcategorias
+      WHERE fk_categoria = ?
+      ORDER BY nombre ASC
+      `,
+      [idCategoria]
+    );
+
+    res.json({
+      subcategorias,
+    });
+  } catch (error) {
+    console.error('Error al consultar subcategorías:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar las subcategorías',
+    });
+  }
+});
+
+// ==========================================
+// SUBCATEGORÍAS ASIGNADAS A UN EMPLEADO
+// ==========================================
+
+// Obtener las subcategorías seleccionadas por un empleado
+/*app.get(
+  "/api/empleados/:idEmpleado/subcategorias",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [empleados]: any =
+        await database.execute(
+          `
+          SELECT id_empleado
+          FROM empleados
+          WHERE id_empleado = ?
+          `,
+          [idEmpleado]
+        );
+
+      if (
+        !Array.isArray(empleados) ||
+        empleados.length === 0
+      ) {
+        return res.status(404).json({
+          mensaje: "Empleado no encontrado",
+        });
+      }
+
+      const [subcategorias]: any =
+        await database.execute(
+          `
+          SELECT
+            s.id_subcategoria,
+            s.fk_categoria AS id_categoria,
+            s.nombre,
+            s.descripcion
+          FROM empleado_subcategorias es
+          INNER JOIN subcategorias s
+            ON s.id_subcategoria =
+              es.id_subcategoria
+          WHERE es.id_empleado = ?
+          ORDER BY
+            s.fk_categoria ASC,
+            s.nombre ASC
+          `,
+          [idEmpleado]
+        );
+
+      return res.status(200).json({
+        idEmpleado,
+        subcategorias,
+      });
+    } catch (error: any) {
+      console.error(
+        "Error al consultar subcategorías del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar las subcategorías del empleado",
+        detalle: error.message,
+      });
+    }
+  }
+);*/
+
+
+// ==========================================
+// OBTENER SUBCATEGORÍAS DE UN EMPLEADO
+// ==========================================
+app.get(
+  "/api/empleados/:idEmpleado/subcategorias",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const respuesta: any =
+        await database.query(`
+          SELECT
+            s.id_subcategoria,
+            s.fk_categoria AS id_categoria,
+            s.nombre,
+            s.descripcion
+          FROM empleado_subcategorias es
+          INNER JOIN subcategorias s
+            ON s.id_subcategoria =
+               es.id_subcategoria
+          WHERE es.id_empleado = ${idEmpleado}
+          ORDER BY
+            s.fk_categoria ASC,
+            s.nombre ASC
+        `);
+
+      let subcategorias: any[] = [];
+
+      if (
+        Array.isArray(respuesta?.recordset)
+      ) {
+        subcategorias =
+          respuesta.recordset;
+      } else if (
+        Array.isArray(
+          respuesta?.recordsets?.[0]
+        )
+      ) {
+        subcategorias =
+          respuesta.recordsets[0];
+      } else if (
+        Array.isArray(respuesta?.[0])
+      ) {
+        subcategorias =
+          respuesta[0];
+      } else if (
+        Array.isArray(respuesta?.rows)
+      ) {
+        subcategorias =
+          respuesta.rows;
+      } else if (
+        Array.isArray(respuesta)
+      ) {
+        subcategorias = respuesta;
+      }
+
+      return res.status(200).json({
+        idEmpleado,
+        subcategorias,
+      });
+    } catch (error: any) {
+      console.error(
+        "Error al consultar subcategorías del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar las subcategorías del empleado",
+        detalle:
+          error?.message ||
+          "Error desconocido",
+      });
+    }
+  }
+);
+
+// ==========================================
+// GUARDAR CATEGORÍAS Y SUBCATEGORÍAS
+// ==========================================
+app.put(
+  "/api/empleados/:idEmpleado/servicios",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+
+      const categoriasRecibidas = Array.isArray(req.body?.categorias)
+        ? req.body.categorias
+        : [];
+
+      const subcategoriasRecibidas = Array.isArray(req.body?.subcategorias)
+        ? req.body.subcategorias
+        : [];
+
+      const categorias: number[] = categoriasRecibidas
+        .map((valor: unknown) => Number(valor))
+        .filter(
+          (id: number, indice: number, arreglo: number[]) =>
+            Number.isInteger(id) && id > 0 && arreglo.indexOf(id) === indice
+        );
+
+      const subcategorias: number[] = subcategoriasRecibidas
+        .map((valor: unknown) => Number(valor))
+        .filter(
+          (id: number, indice: number, arreglo: number[]) =>
+            Number.isInteger(id) && id > 0 && arreglo.indexOf(id) === indice
+        );
+
+      console.log("================================");
+      console.log("GUARDANDO SERVICIOS DEL EMPLEADO");
+      console.log("Empleado:", idEmpleado);
+      console.log("Categorías:", categorias);
+      console.log("Subcategorías:", subcategorias);
+      console.log("================================");
+
+      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      if (categorias.length === 0) {
+        return res.status(400).json({
+          mensaje: "Debes seleccionar al menos una categoría",
+        });
+      }
+
+      // Confirmar que el empleado existe.
+      const respuestaEmpleado: any = await database.query(
+        `
+        SELECT TOP 1 id_empleado
+        FROM empleados
+        WHERE id_empleado = ${idEmpleado}
+        `
+      );
+
+      const empleados: any[] =
+        Array.isArray(respuestaEmpleado?.[0])
+          ? respuestaEmpleado[0]
+          : Array.isArray(respuestaEmpleado?.recordset)
+            ? respuestaEmpleado.recordset
+            : Array.isArray(respuestaEmpleado?.rows)
+              ? respuestaEmpleado.rows
+              : [];
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: "Empleado no encontrado",
+          idEmpleado,
+        });
+      }
+
+      // Validar categorías.
+      for (const idCategoria of categorias) {
+        const respuestaCategoria: any = await database.query(
+          `
+          SELECT TOP 1 id_categoria
+          FROM categorias
+          WHERE id_categoria = ${idCategoria}
+          `
+        );
+
+        const filasCategoria: any[] =
+          Array.isArray(respuestaCategoria?.[0])
+            ? respuestaCategoria[0]
+            : Array.isArray(respuestaCategoria?.recordset)
+              ? respuestaCategoria.recordset
+              : Array.isArray(respuestaCategoria?.rows)
+                ? respuestaCategoria.rows
+                : [];
+
+        if (filasCategoria.length === 0) {
+          return res.status(400).json({
+            mensaje: `La categoría ${idCategoria} no existe`,
+          });
+        }
+      }
+
+      // Validar subcategorías y comprobar que pertenecen a las categorías seleccionadas.
+      for (const idSubcategoria of subcategorias) {
+        const respuestaSubcategoria: any = await database.query(
+          `
+          SELECT TOP 1
+            id_subcategoria,
+            fk_categoria
+          FROM subcategorias
+          WHERE id_subcategoria = ${idSubcategoria}
+          `
+        );
+
+        const filasSubcategoria: any[] =
+          Array.isArray(respuestaSubcategoria?.[0])
+            ? respuestaSubcategoria[0]
+            : Array.isArray(respuestaSubcategoria?.recordset)
+              ? respuestaSubcategoria.recordset
+              : Array.isArray(respuestaSubcategoria?.rows)
+                ? respuestaSubcategoria.rows
+                : [];
+
+        if (filasSubcategoria.length === 0) {
+          return res.status(400).json({
+            mensaje: `La subcategoría ${idSubcategoria} no existe`,
+          });
+        }
+
+        const idCategoriaDeSubcategoria = Number(
+          filasSubcategoria[0].fk_categoria
+        );
+
+        if (!categorias.includes(idCategoriaDeSubcategoria)) {
+          return res.status(400).json({
+            mensaje:
+              `La subcategoría ${idSubcategoria} no pertenece a una categoría seleccionada`,
+          });
+        }
+      }
+
+      // Guardar todo en una única transacción de Azure SQL.
+      const valoresCategorias = categorias
+        .map((idCategoria) => `(${idEmpleado}, ${idCategoria})`)
+        .join(", ");
+
+      const valoresSubcategorias = subcategorias
+        .map((idSubcategoria) => `(${idEmpleado}, ${idSubcategoria})`)
+        .join(", ");
+
+      const insertarCategorias = `
+        INSERT INTO empleado_categorias (id_empleado, id_categoria)
+        VALUES ${valoresCategorias};
+      `;
+
+      const insertarSubcategorias = subcategorias.length > 0
+        ? `
+          INSERT INTO empleado_subcategorias (id_empleado, id_subcategoria)
+          VALUES ${valoresSubcategorias};
+        `
+        : "";
+
+      await database.query(
+        `
+        SET XACT_ABORT ON;
+
+        BEGIN TRY
+          BEGIN TRANSACTION;
+
+          DELETE FROM empleado_subcategorias
+          WHERE id_empleado = ${idEmpleado};
+
+          DELETE FROM empleado_categorias
+          WHERE id_empleado = ${idEmpleado};
+
+          ${insertarCategorias}
+          ${insertarSubcategorias}
+
+          COMMIT TRANSACTION;
+        END TRY
+        BEGIN CATCH
+          IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+          THROW;
+        END CATCH;
+        `
+      );
+
+      console.log("Guardado terminado correctamente");
+
+      return res.status(200).json({
+        mensaje: "Categorías y subcategorías guardadas correctamente",
+        idEmpleado,
+        categorias,
+        subcategorias,
+      });
+    } catch (error: any) {
+      console.error("ERROR REAL AL GUARDAR:", error);
+
+      return res.status(500).json({
+        mensaje: "Error al guardar categorías y subcategorías",
+        detalle: error?.message || String(error),
+        numero: error?.number ?? null,
+        codigo: error?.code ?? null,
+      });
+    }
+  }
+);
+
 // ==========================================
 // ADMIN: exportar informes (CSV)
 // ==========================================
@@ -1118,7 +1759,7 @@ app.post('/api/reportes', async (req, res) => {
 // ==========================================
 // CATEGORÍAS Y ASOCIACION CON EMPLEADO
 // ==========================================
-app.get("/api/empleados/:id/categorias", async (req, res) => {
+/*app.get("/api/empleados/:id/categorias", async (req, res) => {
   try {
     const idEmpleado = Number(req.params.id);
 
@@ -1168,7 +1809,87 @@ app.get("/api/empleados/:id/categorias", async (req, res) => {
       mensaje: "Error interno del servidor",
     });
   }
-});
+});*/
+
+// ==========================================
+// OBTENER CATEGORÍAS DE UN EMPLEADO
+// ==========================================
+app.get(
+  "/api/empleados/:idEmpleado/categorias",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const respuesta: any =
+        await database.query(`
+          SELECT
+            c.id_categoria,
+            c.nombre
+          FROM empleado_categorias ec
+          INNER JOIN categorias c
+            ON c.id_categoria = ec.id_categoria
+          WHERE ec.id_empleado = ${idEmpleado}
+          ORDER BY c.nombre ASC
+        `);
+
+      let categorias: any[] = [];
+
+      if (
+        Array.isArray(respuesta?.recordset)
+      ) {
+        categorias = respuesta.recordset;
+      } else if (
+        Array.isArray(
+          respuesta?.recordsets?.[0]
+        )
+      ) {
+        categorias =
+          respuesta.recordsets[0];
+      } else if (
+        Array.isArray(respuesta?.[0])
+      ) {
+        categorias = respuesta[0];
+      } else if (
+        Array.isArray(respuesta?.rows)
+      ) {
+        categorias = respuesta.rows;
+      } else if (
+        Array.isArray(respuesta)
+      ) {
+        categorias = respuesta;
+      }
+
+      return res.status(200).json({
+        idEmpleado,
+        categorias,
+      });
+    } catch (error: any) {
+      console.error(
+        "Error al consultar categorías del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar las categorías del empleado",
+        detalle:
+          error?.message ||
+          "Error desconocido",
+      });
+    }
+  }
+);
 
 
 
@@ -1316,7 +2037,9 @@ app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
       disponible === '1';
 
     const idParaActualizar = Number(idEmpleado ?? id);
-    const nuevoEstado = valorDisponible ? 'Activo' : 'Descansando';
+   const nuevoEstado = valorDisponible
+    ? 'Disponible'
+    : 'Ocupado';
 
     if (!Number.isInteger(idParaActualizar) || idParaActualizar <= 0) {
       return res.status(400).json({ mensaje: 'ID de empleado inválido' });
@@ -1348,7 +2071,7 @@ app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
 // ==========================================
 // ENVIAR MENSAJE
 // ==========================================
-app.post("/api/chat", async (req, res) => {
+/*app.post("/api/chat", async (req, res) => {
   try {
     const {
       fk_cliente,
@@ -1443,12 +2166,264 @@ app.post("/api/chat", async (req, res) => {
       codigo: error.code,
     });
   }
+});*/
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    const {
+      fk_cliente,
+      fk_empleado,
+      remitente,
+      mensaje,
+    } = req.body;
+
+    const idCliente = Number(fk_cliente);
+    const idEmpleado = Number(fk_empleado);
+    const textoMensaje = String(
+      mensaje ?? ""
+    ).trim();
+
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "ID de cliente inválido",
+      });
+    }
+
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (
+      remitente !== "cliente" &&
+      remitente !== "empleado"
+    ) {
+      return res.status(400).json({
+        mensaje: "Remitente inválido",
+      });
+    }
+
+    if (!textoMensaje) {
+      return res.status(400).json({
+        mensaje:
+          "El mensaje no puede estar vacío",
+      });
+    }
+
+    const respuestaConversacion: any =
+      await database.query(`
+        SELECT TOP 1
+          id_conversacion
+        FROM chat_conversaciones
+        WHERE id_cliente = ${idCliente}
+          AND id_empleado = ${idEmpleado}
+      `);
+
+    let conversaciones: any[] = [];
+
+    if (
+      Array.isArray(
+        respuestaConversacion?.recordset
+      )
+    ) {
+      conversaciones =
+        respuestaConversacion.recordset;
+    } else if (
+      Array.isArray(
+        respuestaConversacion
+          ?.recordsets?.[0]
+      )
+    ) {
+      conversaciones =
+        respuestaConversacion.recordsets[0];
+    } else if (
+      Array.isArray(
+        respuestaConversacion?.[0]
+      )
+    ) {
+      conversaciones =
+        respuestaConversacion[0];
+    } else if (
+      Array.isArray(
+        respuestaConversacion?.rows
+      )
+    ) {
+      conversaciones =
+        respuestaConversacion.rows;
+    }
+
+    let idConversacion = Number(
+      conversaciones[0]?.id_conversacion
+    );
+
+    if (
+      !Number.isInteger(idConversacion) ||
+      idConversacion <= 0
+    ) {
+      const respuestaNuevaConversacion: any =
+        await database.query(`
+          INSERT INTO chat_conversaciones
+          (
+            id_cliente,
+            id_empleado,
+            fecha_creacion
+          )
+          OUTPUT INSERTED.id_conversacion
+          VALUES
+          (
+            ${idCliente},
+            ${idEmpleado},
+            GETDATE()
+          )
+        `);
+
+      let nuevaConversacion: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaNuevaConversacion
+            ?.recordset
+        )
+      ) {
+        nuevaConversacion =
+          respuestaNuevaConversacion
+            .recordset;
+      } else if (
+        Array.isArray(
+          respuestaNuevaConversacion
+            ?.recordsets?.[0]
+        )
+      ) {
+        nuevaConversacion =
+          respuestaNuevaConversacion
+            .recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaNuevaConversacion?.[0]
+        )
+      ) {
+        nuevaConversacion =
+          respuestaNuevaConversacion[0];
+      }
+
+      idConversacion = Number(
+        nuevaConversacion[0]
+          ?.id_conversacion
+      );
+    }
+
+    if (
+      !Number.isInteger(idConversacion) ||
+      idConversacion <= 0
+    ) {
+      throw new Error(
+        "No se pudo crear la conversación"
+      );
+    }
+
+    const remitenteBD =
+      remitente === "empleado"
+        ? "EMPLEADO"
+        : "CLIENTE";
+
+    const mensajeSeguro =
+      textoMensaje.replace(/'/g, "''");
+
+    const respuestaMensaje: any =
+      await database.query(`
+        INSERT INTO chat_mensajes
+        (
+          id_conversacion,
+          remitente,
+          mensaje,
+          fecha
+        )
+        OUTPUT
+          INSERTED.id_mensaje,
+          INSERTED.fecha
+        VALUES
+        (
+          ${idConversacion},
+          '${remitenteBD}',
+          N'${mensajeSeguro}',
+          GETDATE()
+        )
+      `);
+
+    let mensajesInsertados: any[] = [];
+
+    if (
+      Array.isArray(
+        respuestaMensaje?.recordset
+      )
+    ) {
+      mensajesInsertados =
+        respuestaMensaje.recordset;
+    } else if (
+      Array.isArray(
+        respuestaMensaje
+          ?.recordsets?.[0]
+      )
+    ) {
+      mensajesInsertados =
+        respuestaMensaje.recordsets[0];
+    } else if (
+      Array.isArray(
+        respuestaMensaje?.[0]
+      )
+    ) {
+      mensajesInsertados =
+        respuestaMensaje[0];
+    }
+
+    const mensajeInsertado =
+      mensajesInsertados[0] ?? {};
+
+    return res.status(201).json({
+      mensaje:
+        "Mensaje enviado correctamente",
+      chat: {
+        id_chat: Number(
+          mensajeInsertado.id_mensaje
+        ),
+        fk_cliente: idCliente,
+        fk_empleado: idEmpleado,
+        remitente,
+        mensaje: textoMensaje,
+        fecha:
+          mensajeInsertado.fecha ??
+          new Date().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    console.error(
+      "Error al enviar mensaje:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje:
+        "Error al enviar el mensaje",
+      detalle:
+        error?.message ||
+        String(error),
+      codigo:
+        error?.code ?? null,
+    });
+  }
 });
 
 // ==========================================
 // OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
 // ==========================================
-app.get(
+/*app.get(
   '/api/chat/cliente/:idCliente/empleado/:idEmpleado',
   async (req, res) => {
     try {
@@ -1498,7 +2473,184 @@ app.get(
       });
     }
   }
+);*/
+
+// ==========================================
+// OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
+// ==========================================
+app.get(
+  '/api/chat/cliente/:idCliente/empleado/:idEmpleado',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente
+      );
+
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de cliente inválido',
+        });
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de empleado inválido',
+        });
+      }
+
+      const respuestaConversacion: any =
+        await database.query(`
+          SELECT TOP 1
+            id_conversacion
+          FROM chat_conversaciones
+          WHERE id_cliente = ${idCliente}
+            AND id_empleado = ${idEmpleado}
+        `);
+
+      let conversaciones: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaConversacion?.recordset
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.recordset;
+      } else if (
+        Array.isArray(
+          respuestaConversacion
+            ?.recordsets?.[0]
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaConversacion?.[0]
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion[0];
+      } else if (
+        Array.isArray(
+          respuestaConversacion?.rows
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.rows;
+      } else if (
+        Array.isArray(
+          respuestaConversacion
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion;
+      }
+
+      if (conversaciones.length === 0) {
+        return res.status(200).json([]);
+      }
+
+      const idConversacion = Number(
+        conversaciones[0].id_conversacion
+      );
+
+      const respuestaMensajes: any =
+        await database.query(`
+          SELECT
+            id_mensaje AS id_chat,
+            ${idCliente} AS fk_cliente,
+            ${idEmpleado} AS fk_empleado,
+            CASE remitente
+              WHEN 'EMPLEADO'
+                THEN 'empleado'
+              ELSE 'cliente'
+            END AS remitente,
+            mensaje,
+            0 AS leido,
+            fecha
+          FROM chat_mensajes
+          WHERE id_conversacion =
+            ${idConversacion}
+          ORDER BY
+            fecha ASC,
+            id_mensaje ASC
+        `);
+
+      let mensajes: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaMensajes?.recordset
+        )
+      ) {
+        mensajes =
+          respuestaMensajes.recordset;
+      } else if (
+        Array.isArray(
+          respuestaMensajes
+            ?.recordsets?.[0]
+        )
+      ) {
+        mensajes =
+          respuestaMensajes.recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaMensajes?.[0]
+        )
+      ) {
+        mensajes =
+          respuestaMensajes[0];
+      } else if (
+        Array.isArray(
+          respuestaMensajes?.rows
+        )
+      ) {
+        mensajes =
+          respuestaMensajes.rows;
+      } else if (
+        Array.isArray(
+          respuestaMensajes
+        )
+      ) {
+        mensajes =
+          respuestaMensajes;
+      }
+
+      return res
+        .status(200)
+        .json(mensajes);
+    } catch (error: any) {
+      console.error(
+        'Error al consultar los mensajes:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar los mensajes',
+        detalle:
+          error?.message ||
+          String(error),
+        codigo:
+          error?.code ?? null,
+      });
+    }
+  }
 );
+
 
 // ==========================================
 // CONVERSACIONES DE UN EMPLEADO
@@ -1674,13 +2826,8 @@ app.post(
   '/api/servicios/:idServicio/postular',
   async (req, res) => {
     try {
-      const idServicio = Number(
-        req.params.idServicio
-      );
-
-      const idEmpleado = Number(
-        req.body.fk_empleado
-      );
+      const idServicio = Number(req.params.idServicio);
+      const idEmpleado = Number(req.body?.fk_empleado);
 
       if (
         !Number.isInteger(idServicio) ||
@@ -1700,18 +2847,28 @@ app.post(
         });
       }
 
-      const [servicios]: any =
-        await database.execute(
+      // Comprobar que el servicio existe y sigue pendiente.
+      const respuestaServicio: any =
+        await database.query(
           `
-          SELECT
+          SELECT TOP 1
             id_servicio,
             estado
           FROM servicios
-          WHERE id_servicio = ?
-          LIMIT 1
-          `,
-          [idServicio]
+          WHERE id_servicio = ${idServicio}
+          `
         );
+
+      const servicios: any[] =
+        Array.isArray(respuestaServicio?.recordset)
+          ? respuestaServicio.recordset
+          : Array.isArray(
+                respuestaServicio?.recordsets?.[0]
+              )
+            ? respuestaServicio.recordsets[0]
+            : Array.isArray(respuestaServicio?.[0])
+              ? respuestaServicio[0]
+              : [];
 
       if (servicios.length === 0) {
         return res.status(404).json({
@@ -1720,7 +2877,8 @@ app.post(
       }
 
       if (
-        servicios[0].estado !== 'Pendiente'
+        String(servicios[0].estado).trim() !==
+        'Pendiente'
       ) {
         return res.status(400).json({
           mensaje:
@@ -1728,16 +2886,27 @@ app.post(
         });
       }
 
-      const [empleados]: any =
-        await database.execute(
+      // Comprobar que el empleado existe.
+      const respuestaEmpleado: any =
+        await database.query(
           `
-          SELECT id_empleado
+          SELECT TOP 1
+            id_empleado
           FROM empleados
-          WHERE id_empleado = ?
-          LIMIT 1
-          `,
-          [idEmpleado]
+          WHERE id_empleado = ${idEmpleado}
+          `
         );
+
+      const empleados: any[] =
+        Array.isArray(respuestaEmpleado?.recordset)
+          ? respuestaEmpleado.recordset
+          : Array.isArray(
+                respuestaEmpleado?.recordsets?.[0]
+              )
+            ? respuestaEmpleado.recordsets[0]
+            : Array.isArray(respuestaEmpleado?.[0])
+              ? respuestaEmpleado[0]
+              : [];
 
       if (empleados.length === 0) {
         return res.status(404).json({
@@ -1745,42 +2914,115 @@ app.post(
         });
       }
 
-      await database.execute(
-        `
-        INSERT INTO postulaciones (
-          fk_servicio,
-          fk_empleado,
-          estado
+      // Evitar que el mismo empleado se postule dos veces.
+      const respuestaExistente: any =
+        await database.query(
+          `
+          SELECT TOP 1
+            id_postulacion,
+            estado
+          FROM postulaciones
+          WHERE fk_servicio = ${idServicio}
+            AND fk_empleado = ${idEmpleado}
+          `
+        );
+
+      const postulacionesExistentes: any[] =
+        Array.isArray(
+          respuestaExistente?.recordset
         )
-        VALUES (?, ?, 'pendiente')
-        `,
-        [
-          idServicio,
-          idEmpleado,
-        ]
-      );
+          ? respuestaExistente.recordset
+          : Array.isArray(
+                respuestaExistente?.recordsets?.[0]
+              )
+            ? respuestaExistente.recordsets[0]
+            : Array.isArray(
+                  respuestaExistente?.[0]
+                )
+              ? respuestaExistente[0]
+              : [];
+
+      if (postulacionesExistentes.length > 0) {
+        return res.status(409).json({
+          mensaje:
+            'Ya te postulaste a este servicio',
+          postulacion:
+            postulacionesExistentes[0],
+        });
+      }
+
+      const respuestaInsertar: any =
+        await database.query(
+          `
+          INSERT INTO postulaciones (
+            fk_servicio,
+            fk_empleado,
+            estado,
+            fecha
+          )
+          OUTPUT
+            INSERTED.id_postulacion,
+            INSERTED.fk_servicio,
+            INSERTED.fk_empleado,
+            INSERTED.estado,
+            INSERTED.fecha
+          VALUES (
+            ${idServicio},
+            ${idEmpleado},
+            'Pendiente',
+            GETDATE()
+          )
+          `
+        );
+
+      const postulacionesInsertadas: any[] =
+        Array.isArray(
+          respuestaInsertar?.recordset
+        )
+          ? respuestaInsertar.recordset
+          : Array.isArray(
+                respuestaInsertar?.recordsets?.[0]
+              )
+            ? respuestaInsertar.recordsets[0]
+            : Array.isArray(
+                  respuestaInsertar?.[0]
+                )
+              ? respuestaInsertar[0]
+              : [];
 
       return res.status(201).json({
         mensaje:
           'Postulación registrada correctamente',
+        postulacion:
+          postulacionesInsertadas[0] ?? {
+            fk_servicio: idServicio,
+            fk_empleado: idEmpleado,
+            estado: 'Pendiente',
+          },
       });
     } catch (error: any) {
-      if (error.code === 'ER_DUP_ENTRY') {
+      console.error(
+        'Error al registrar postulación:',
+        error
+      );
+
+      if (
+        error?.number === 2601 ||
+        error?.number === 2627
+      ) {
         return res.status(409).json({
           mensaje:
             'Ya te postulaste a este servicio',
         });
       }
 
-      console.error(
-        'Error al registrar postulación:',
-        error
-      );
-
       return res.status(500).json({
         mensaje:
           'Error al registrar la postulación',
-        detalle: error.message,
+        detalle:
+          error?.message || String(error),
+        numero: error?.number ?? null,
+        codigo: error?.code ?? null,
       });
     }
   }
@@ -1789,7 +3031,7 @@ app.post(
 // ==========================================
 // POSTULACIONES DE UN EMPLEADO
 // ==========================================
-app.get(
+/*app.get(
   '/api/empleados/:idEmpleado/postulaciones',
   async (req, res) => {
     try {
@@ -1852,6 +3094,150 @@ app.get(
         mensaje:
           'Error al obtener las postulaciones del empleado',
         detalle: error.message,
+      });
+    }
+  }
+);*/
+// ==========================================
+// POSTULACIONES DE UN EMPLEADO
+// ==========================================
+app.get(
+  '/api/empleados/:idEmpleado/postulaciones',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      // Comprobar que el empleado existe.
+      const respuestaEmpleado: any =
+        await database.query(`
+          SELECT TOP 1
+            id_empleado
+          FROM empleados
+          WHERE id_empleado = ${idEmpleado}
+        `);
+
+      let empleados: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaEmpleado?.recordset
+        )
+      ) {
+        empleados =
+          respuestaEmpleado.recordset;
+      } else if (
+        Array.isArray(
+          respuestaEmpleado?.recordsets?.[0]
+        )
+      ) {
+        empleados =
+          respuestaEmpleado.recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaEmpleado?.[0]
+        )
+      ) {
+        empleados =
+          respuestaEmpleado[0];
+      } else if (
+        Array.isArray(
+          respuestaEmpleado?.rows
+        )
+      ) {
+        empleados =
+          respuestaEmpleado.rows;
+      } else if (
+        Array.isArray(respuestaEmpleado)
+      ) {
+        empleados = respuestaEmpleado;
+      }
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El empleado no existe',
+        });
+      }
+
+      // Obtener las postulaciones guardadas.
+      const respuestaPostulaciones: any =
+        await database.query(`
+          SELECT
+            id_postulacion,
+            fk_servicio,
+            fk_empleado,
+            estado,
+            fecha
+          FROM postulaciones
+          WHERE fk_empleado = ${idEmpleado}
+          ORDER BY fecha DESC
+        `);
+
+      let postulaciones: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaPostulaciones?.recordset
+        )
+      ) {
+        postulaciones =
+          respuestaPostulaciones.recordset;
+      } else if (
+        Array.isArray(
+          respuestaPostulaciones?.recordsets?.[0]
+        )
+      ) {
+        postulaciones =
+          respuestaPostulaciones.recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaPostulaciones?.[0]
+        )
+      ) {
+        postulaciones =
+          respuestaPostulaciones[0];
+      } else if (
+        Array.isArray(
+          respuestaPostulaciones?.rows
+        )
+      ) {
+        postulaciones =
+          respuestaPostulaciones.rows;
+      } else if (
+        Array.isArray(
+          respuestaPostulaciones
+        )
+      ) {
+        postulaciones =
+          respuestaPostulaciones;
+      }
+
+      return res.status(200).json({
+        idEmpleado,
+        postulaciones,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al obtener postulaciones del empleado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las postulaciones del empleado',
+        detalle:
+          error?.message ||
+          String(error),
       });
     }
   }

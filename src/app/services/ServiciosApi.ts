@@ -1,5 +1,4 @@
-const API_URL =
-  'http://localhost:3000/api';
+const API_URL = '/api';
 
 export interface ServicioDisponible {
   id_servicio: number;
@@ -50,11 +49,53 @@ async function leerRespuesta(
   }
 }
 
+function extraerPostulaciones(
+  datos: any
+): any[] {
+  if (Array.isArray(datos)) {
+    return datos;
+  }
+
+  if (
+    datos &&
+    Array.isArray(datos.postulaciones)
+  ) {
+    return datos.postulaciones;
+  }
+
+  if (
+    datos &&
+    Array.isArray(datos.recordset)
+  ) {
+    return datos.recordset;
+  }
+
+  if (
+    datos &&
+    Array.isArray(datos.recordsets) &&
+    Array.isArray(datos.recordsets[0])
+  ) {
+    return datos.recordsets[0];
+  }
+
+  if (
+    datos &&
+    Array.isArray(datos.rows)
+  ) {
+    return datos.rows;
+  }
+
+  return [];
+}
+
 export async function obtenerServiciosDisponibles(): Promise<
   ServicioDisponible[]
 > {
   const respuesta = await fetch(
-    `${API_URL}/servicios`
+    `${API_URL}/servicios`,
+    {
+      cache: 'no-store',
+    }
   );
 
   const datos =
@@ -97,7 +138,10 @@ export async function obtenerServicioPorId(
   }
 
   const respuesta = await fetch(
-    `${API_URL}/servicios`
+    `${API_URL}/servicios/${idServicio}`,
+    {
+      cache: 'no-store',
+    }
   );
 
   const datos =
@@ -110,25 +154,20 @@ export async function obtenerServicioPorId(
     );
   }
 
-  if (!Array.isArray(datos)) {
-    throw new Error(
-      'El servidor no devolvió una lista válida'
-    );
-  }
+  const servicio =
+    datos?.servicio ?? datos;
 
-  const servicio = datos.find(
-    (item: ServicioDisponible) =>
-      Number(item.id_servicio) ===
+  if (
+    !servicio ||
+    Number(servicio.id_servicio) !==
       idServicio
-  );
-
-  if (!servicio) {
+  ) {
     throw new Error(
       'No se encontró la solicitud'
     );
   }
 
-  return servicio;
+  return servicio as ServicioDisponible;
 }
 
 export async function obtenerPostulacionesCompletasEmpleado(
@@ -142,7 +181,10 @@ export async function obtenerPostulacionesCompletasEmpleado(
   }
 
   const respuesta = await fetch(
-    `${API_URL}/empleados/${idEmpleado}/postulaciones`
+    `${API_URL}/empleados/${idEmpleado}/postulaciones`,
+    {
+      cache: 'no-store',
+    }
   );
 
   if (respuesta.status === 404) {
@@ -154,16 +196,16 @@ export async function obtenerPostulacionesCompletasEmpleado(
 
   if (!respuesta.ok) {
     throw new Error(
-      datos.mensaje ||
+      datos.detalle ||
+        datos.mensaje ||
         'No se pudieron consultar las postulaciones'
     );
   }
 
-  if (!Array.isArray(datos)) {
-    return [];
-  }
+  const lista =
+    extraerPostulaciones(datos);
 
-  return datos
+  return lista
     .map(
       (
         item: any
@@ -190,7 +232,7 @@ export async function obtenerPostulacionesCompletasEmpleado(
             : undefined,
 
         estado: String(
-          item.estado ?? 'pendiente'
+          item.estado ?? 'Pendiente'
         )
           .trim()
           .toLowerCase(),
@@ -218,9 +260,14 @@ export async function obtenerPostulacionesEmpleado(
       idEmpleado
     );
 
-  return postulaciones.map(
-    (item) => item.fk_servicio
-  );
+  return [
+    ...new Set(
+      postulaciones.map(
+        (item) =>
+          item.fk_servicio
+      )
+    ),
+  ];
 }
 
 export async function obtenerEstadoPostulacion(
@@ -244,8 +291,14 @@ export async function obtenerEstadoPostulacion(
   const postulacion =
     postulaciones.find(
       (item) =>
-        item.fk_servicio ===
-        idServicio
+        Number(item.fk_servicio) ===
+          idServicio &&
+        (
+          item.fk_empleado ===
+            undefined ||
+          Number(item.fk_empleado) ===
+            idEmpleado
+        )
     );
 
   return postulacion?.estado ?? null;
@@ -292,7 +345,8 @@ export async function postularEmpleadoServicio(
 
   if (!respuesta.ok) {
     throw new Error(
-      datos.mensaje ||
+      datos.detalle ||
+        datos.mensaje ||
         'No se pudo registrar la postulación'
     );
   }
