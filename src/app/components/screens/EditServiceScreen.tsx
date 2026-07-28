@@ -11,8 +11,14 @@ interface EditServicesScreenProps {
 interface Categoria {
   id_categoria: number | string;
   nombre: string;
-  subCategoria?: string;
-  subCatgeoria?: string;
+}
+
+//agregado
+interface Subcategoria {
+  id_subcategoria: number;
+  nombre: string;
+  descripcion?: string;
+  fk_categoria: number;
 }
 
 export default function EditServicesScreen({
@@ -25,6 +31,15 @@ export default function EditServicesScreen({
     useState<number[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
+  //agregado
+  const [subcategoriasPorCategoria, setSubcategoriasPorCategoria] =
+    useState<Record<number, Subcategoria[]>>({});
+
+  const [subcategoriasSeleccionadas, setSubcategoriasSeleccionadas] =
+    useState<number[]>([]);
+
+  const [cargandoSubcategorias, setCargandoSubcategorias] =
+    useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const cargarCategorias = async () => {
@@ -80,15 +95,102 @@ export default function EditServicesScreen({
     cargarCategorias();
   }, [idEmpleado]);
 
-  const toggleCategoria = (idCategoria: number) => {
-    setSeleccionadas((anteriores) => {
-      if (anteriores.includes(idCategoria)) {
-        return anteriores.filter((id) => id !== idCategoria);
+  //moficado
+  const toggleCategoria = async (idCategoria: number) => {
+    const yaSeleccionada = seleccionadas.includes(idCategoria);
+
+    if (yaSeleccionada) {
+      setSeleccionadas((anteriores) =>
+        anteriores.filter((id) => id !== idCategoria)
+      );
+
+      const subcategoriasCategoria =
+        subcategoriasPorCategoria[idCategoria] ?? [];
+
+      const idsSubcategoriasCategoria = subcategoriasCategoria.map(
+        (subcategoria) => Number(subcategoria.id_subcategoria)
+      );
+
+      setSubcategoriasSeleccionadas((anteriores) =>
+        anteriores.filter(
+          (idSubcategoria) =>
+            !idsSubcategoriasCategoria.includes(idSubcategoria)
+        )
+      );
+
+      return;
+    }
+
+    setSeleccionadas((anteriores) => [
+      ...anteriores,
+      idCategoria,
+    ]);
+
+    // Evita volver a consultar si ya fueron cargadas
+    if (subcategoriasPorCategoria[idCategoria]) {
+      return;
+    }
+
+    try {
+      setCargandoSubcategorias((anteriores) => ({
+        ...anteriores,
+        [idCategoria]: true,
+      }));
+
+      const respuesta = await fetch(
+        `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje || 'No se pudieron cargar las subcategorías'
+        );
       }
 
-      return [...anteriores, idCategoria];
-    });
+      // Funciona si el backend devuelve un arreglo directo
+      // o { subcategorias: [...] }
+      const subcategorias: Subcategoria[] = Array.isArray(datos)
+        ? datos
+        : datos.subcategorias ?? [];
+
+      setSubcategoriasPorCategoria((anteriores) => ({
+        ...anteriores,
+        [idCategoria]: subcategorias,
+      }));
+    } catch (error) {
+      console.error('Error al cargar subcategorías:', error);
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar las subcategorías'
+      );
+
+      setSeleccionadas((anteriores) =>
+        anteriores.filter((id) => id !== idCategoria)
+      );
+    } finally {
+      setCargandoSubcategorias((anteriores) => ({
+        ...anteriores,
+        [idCategoria]: false,
+      }));
+    }
   };
+
+  //agregado
+  const toggleSubcategoria = (idSubcategoria: number) => {
+  setSubcategoriasSeleccionadas((anteriores) => {
+    if (anteriores.includes(idSubcategoria)) {
+      return anteriores.filter(
+        (id) => id !== idSubcategoria
+      );
+    }
+
+    return [...anteriores, idSubcategoria];
+  });
+};
 
  const guardar = async () => {
   try {
@@ -176,30 +278,93 @@ export default function EditServicesScreen({
           <p className="text-sm text-muted-foreground">
             Cargando servicios...
           </p>
-        ) : (
-          <div className="space-y-3">
+        ) : (//modificado
+          <div className="space-y-3"> 
             {categorias.map((categoria) => {
               const idCategoria = Number(categoria.id_categoria);
+              const categoriaSeleccionada =
+                seleccionadas.includes(idCategoria);
+
+              const subcategorias =
+                subcategoriasPorCategoria[idCategoria] ?? [];
 
               return (
-                <label
+                <div
                   key={idCategoria}
-                  className="flex items-center justify-between p-4 rounded-xl border border-border cursor-pointer hover:bg-secondary transition-colors"
+                  className="overflow-hidden rounded-xl border border-border"
                 >
-                  <span className="font-medium">
-                    {categoria.nombre}
-                  </span>
+                  <label className="flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-secondary">
+                    <span className="font-medium">
+                      {categoria.nombre}
+                    </span>
 
-                  <input
-                    type="checkbox"
-                    checked={seleccionadas.includes(idCategoria)}
-                    onChange={() => toggleCategoria(idCategoria)}
-                    className="w-5 h-5 accent-[#1A56DB]"
-                  />
-                </label>
+                    <input
+                      type="checkbox"
+                      checked={categoriaSeleccionada}
+                      onChange={() => toggleCategoria(idCategoria)}
+                      className="h-5 w-5 accent-[#1A56DB]"
+                    />
+                  </label>
+
+                  {categoriaSeleccionada && (
+                    <div className="border-t border-border bg-slate-50 px-4 py-3">
+                      {cargandoSubcategorias[idCategoria] ? (
+                        <p className="text-sm text-muted-foreground">
+                          Cargando subcategorías...
+                        </p>
+                      ) : subcategorias.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Esta categoría no tiene subcategorías.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                            Selecciona las subcategorías
+                          </p>
+
+                          {subcategorias.map((subcategoria) => {
+                            const idSubcategoria = Number(
+                              subcategoria.id_subcategoria
+                            );
+
+                            return (
+                              <label
+                                key={idSubcategoria}
+                                className="flex cursor-pointer items-start gap-3 rounded-lg bg-white p-3"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={subcategoriasSeleccionadas.includes(
+                                    idSubcategoria
+                                  )}
+                                  onChange={() =>
+                                    toggleSubcategoria(idSubcategoria)
+                                  }
+                                  className="mt-0.5 h-4 w-4 accent-[#1A56DB]"
+                                />
+
+                                <div>
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {subcategoria.nombre}
+                                  </p>
+
+                                  {subcategoria.descripcion && (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {subcategoria.descripcion}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
-          </div>
+        </div>
         )}
       </div>
 

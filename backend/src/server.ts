@@ -232,6 +232,131 @@ app.get("/api/empleados/:id", async (req, res) => {
 });
 
 // ==========================================
+// OBTENER EMPLEADO POR ID
+// ==========================================
+app.get("/api/empleados/:id", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT
+        id_empleado,
+        nombre_E,
+        correo,
+        celular,
+        titulo,
+        dni,
+        antecedente,
+        direccion,
+        estado,
+        N_trabajos,
+        fechaCreacion
+      FROM empleados
+      WHERE id_empleado = ?
+      LIMIT 1
+      `,
+      [idEmpleado]
+    );
+
+    if (empleados.length === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    res.json(empleados[0]);
+  } catch (error) {
+    console.error("Error al consultar empleado:", error);
+
+    res.status(500).json({
+      mensaje: "Error al consultar empleado",
+    });
+  }
+});
+
+// ==========================================
+// ACTUALIZAR EMPLEADO
+// ==========================================
+app.put("/api/empleados/:id", async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.id);
+
+    const {
+      nombre_E,
+      correo,
+      celular,
+      titulo,
+      dni,
+      antecedente,
+      direccion,
+      sobre_mi,
+    } = req.body;
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (!nombre_E?.trim() || !correo?.trim()) {
+      return res.status(400).json({
+        mensaje: "Nombre y correo son obligatorios",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      UPDATE empleados
+      SET
+        nombre_E = ?,
+        correo = ?,
+        celular = ?,
+        titulo = ?,
+        dni = ?,
+        antecedente = ?,
+        direccion = ?,
+        sobre_mi = ?
+      WHERE id_empleado = ?
+      `,
+      [
+        nombre_E.trim(),
+        correo.trim().toLowerCase(),
+        celular?.trim() || null,
+        titulo?.trim() || null,
+        dni?.trim() || null,
+        antecedente?.trim() || null,
+        direccion?.trim() || null,
+        sobre_mi?.trim() || null,
+        idEmpleado,
+      ]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Empleado no encontrado",
+      });
+    }
+
+    return res.status(200).json({
+      mensaje: "Perfil actualizado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al actualizar empleado:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al actualizar empleado",
+    });
+  }
+});
+
+// ==========================================
 // RUTAS DE CLIENTES
 // ==========================================
 app.post("/api/clientes", async (req, res) => {
@@ -293,6 +418,203 @@ app.get("/api/clientes", async (_req, res) => {
 });
 
 // ==========================================
+// ACTUALIZAR CLIENTE
+// ==========================================
+app.put("/api/clientes/:id", async (req, res) => {
+  try {
+    const idCliente = Number(req.params.id);
+
+    const {
+      nombre_C,
+      correo,
+      celular,
+      dni,
+      password_C,
+      foto,
+    } = req.body;
+
+    if (!Number.isInteger(idCliente) || idCliente <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de cliente inválido",
+      });
+    }
+
+    if (!nombre_C || !correo) {
+      return res.status(400).json({
+        mensaje: "Nombre y correo son obligatorios",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      UPDATE clientes
+      SET
+        nombre_C = ?,
+        correo = ?,
+        celular = ?,
+        dni = ?,
+        password_C = ?,
+        foto = ?
+      WHERE id_cliente = ?
+      `,
+      [
+        nombre_C,
+        correo,
+        celular || null,
+        dni || null,
+        password_C || null,
+        foto || null,
+        idCliente,
+      ]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({
+        mensaje: "Cliente no encontrado",
+      });
+    }
+
+    return res.status(200).json({
+      mensaje: "Perfil del cliente actualizado correctamente",
+    });
+  } catch (error) {
+    console.error("Error al actualizar cliente:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al actualizar el cliente",
+    });
+  }
+});
+// ==========================================
+// OBTENER CLIENTE POR ID
+// ==========================================
+app.get("/api/clientes/:id", async (req, res) => {
+  try {
+    const idCliente = Number(req.params.id);
+
+    if (!Number.isInteger(idCliente) || idCliente <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de cliente inválido",
+      });
+    }
+
+    const [clientes]: any = await database.execute(
+      `
+      SELECT
+        id_cliente,
+        nombre_C,
+        correo,
+        celular,
+        dni,
+        foto,
+        fechaCreacion
+      FROM clientes
+      WHERE id_cliente = ?
+      LIMIT 1
+      `,
+      [idCliente]
+    );
+
+    if (clientes.length === 0) {
+      return res.status(404).json({
+        mensaje: "Cliente no encontrado",
+      });
+    }
+
+    return res.status(200).json(clientes[0]);
+  } catch (error) {
+    console.error("Error al consultar cliente:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al consultar el cliente",
+    });
+  }
+});
+
+// ==========================================
+// OBTENER EMPLEADOS POR CATEGORÍA
+// ==========================================
+app.get("/api/categorias/:id/empleados", async (req, res) => {
+  try {
+    const idCategoria = Number(req.params.id);
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de categoría inválido",
+      });
+    }
+
+    const [empleados]: any = await database.execute(
+      `
+      SELECT
+        e.id_empleado,
+        e.nombre_E,
+        e.correo,
+        e.celular,
+        e.titulo,
+        e.direccion,
+        e.estado,
+        e.N_trabajos,
+        c.id_categoria,
+        c.nombre AS categoria
+      FROM empleados e
+      INNER JOIN empleado_categorias ec
+        ON ec.id_empleado = e.id_empleado
+      INNER JOIN categorias c
+        ON c.id_categoria = ec.id_categoria
+      WHERE c.id_categoria = ?
+      ORDER BY e.nombre_E ASC
+      `,
+      [idCategoria]
+    );
+
+    return res.status(200).json(empleados);
+  } catch (error) {
+    console.error("Error al consultar empleados por categoría:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al consultar los trabajadores",
+    });
+  }
+});
+
+app.get('/api/categorias/:id/subcategorias', async (req, res) => {
+  try {
+    const idCategoria = Number(req.params.id);
+
+    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de categoría inválido',
+      });
+    }
+
+    const [subcategorias] = await database.query(
+      `
+      SELECT
+        id_subcategoria,
+        nombre,
+        descripcion,
+        fk_categoria
+      FROM subcategorias
+      WHERE fk_categoria = ?
+      ORDER BY nombre ASC
+      `,
+      [idCategoria]
+    );
+
+    res.json({
+      subcategorias,
+    });
+  } catch (error) {
+    console.error('Error al consultar subcategorías:', error);
+
+    res.status(500).json({
+      mensaje: 'Error al consultar las subcategorías',
+    });
+  }
+});
+
+// ==========================================
 // RUTA DE LOGIN (NUEVA)
 // ==========================================
 app.post("/api/login", async (req, res) => {
@@ -344,59 +666,136 @@ app.post("/api/login", async (req, res) => {
 // RUTAS DE SERVICIOS / SOLICITUDES (NUEVAS)
 // ==========================================
 app.post("/api/servicios", async (req, res) => {
+  console.log('DATOS RECIBIDOS EN /api/servicios:', req.body);
   try {
     const {
       fk_cliente,
       fk_categoria,
-      fk_subcategoria,
       fk_evidencia,
       descripcion,
       direccion,
       presupuesto,
-      fecha
+      fecha,
+      hora_inicio,
+      hora_fin,
     } = req.body;
 
-    if (!fk_cliente || !fk_categoria || !fk_subcategoria || !descripcion || !direccion || !presupuesto || !fecha) {
+    console.log({
+      fk_cliente,
+      fk_categoria,
+      descripcion,
+      direccion,
+      presupuesto,
+      fecha,
+      hora_inicio,
+      hora_fin,
+    });
+
+    if (
+      !fk_cliente ||
+      !fk_categoria ||
+      !descripcion ||
+      !direccion ||
+      !presupuesto ||
+      !fecha ||
+      !hora_inicio ||
+      !hora_fin
+    ) {
       return res.status(400).json({
-        mensaje: "Faltan datos obligatorios para crear la solicitud"
+        mensaje:
+          "Faltan datos obligatorios para crear la solicitud",
+          datosRecibidos: req.body,
+      });
+    }
+
+    if (String(hora_fin) <= String(hora_inicio)) {
+      return res.status(400).json({
+        mensaje:
+          "La hora final debe ser posterior a la hora inicial",
       });
     }
 
     const [resultado] = await database.execute(
       `
-      INSERT INTO servicios 
-      (fk_cliente, fk_categoria, fk_evidencia, fk_subcategoria, descripcion, direccion, presupuesto, fecha) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO servicios
+      (
+        fk_cliente,
+        fk_categoria,
+        fk_evidencia,
+        descripcion,
+        direccion,
+        presupuesto,
+        fecha,
+        hora_inicio,
+        hora_fin
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         fk_cliente,
         fk_categoria,
-        fk_subcategoria,
         fk_evidencia || null, // Si no viene, guardamos null
         descripcion,
         direccion,
         presupuesto,
-        fecha
+        fecha,
+        hora_inicio,
+        hora_fin,
       ]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       mensaje: "Solicitud publicada correctamente",
-      resultado
+      resultado,
     });
   } catch (error) {
-    console.error("Error al registrar servicio:", error);
-    res.status(500).json({
-      mensaje: "Error al publicar la solicitud"
+    console.error(
+      "Error al registrar servicio:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: "Error al publicar la solicitud",
     });
   }
 });
 
+
+
 app.get("/api/servicios", async (_req, res) => {
   try {
     const [servicios] = await database.query(
-      "SELECT * FROM servicios ORDER BY fecha DESC"
-    );
+  `
+  SELECT
+    s.id_servicio,
+    s.fk_cliente,
+    s.fk_categoria,
+    s.fk_evidencia,
+    s.titulo,
+    s.descripcion,
+    s.direccion,
+    s.presupuesto,
+    s.fecha,
+    s.hora_inicio,
+    s.hora_fin,
+    s.estado,
+
+    c.nombre_C AS nombre_cliente,
+    c.foto AS foto_cliente,
+
+    cat.nombre AS nombre_categoria
+
+  FROM servicios s
+
+  LEFT JOIN clientes c
+    ON c.id_cliente = s.fk_cliente
+
+  LEFT JOIN categorias cat
+    ON cat.id_categoria = s.fk_categoria
+
+  ORDER BY s.fecha DESC
+  `
+);
 
     res.json(servicios);
   } catch (error) {
@@ -409,31 +808,77 @@ app.get("/api/servicios", async (_req, res) => {
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES lectura id 
 // ==========================================
-app.get("/api/servicios/:id", async (req, res) => {
+app.get('/api/servicios/:id', async (req, res) => {
   try {
     const idServicio = Number(req.params.id);
 
-    const [resultado]: any = await database.execute(
-      `
-      SELECT *
-      FROM servicios
-      WHERE id_servicio = ?
-      `,
-      [idServicio]
-    );
-
-    if (resultado.length === 0) {
-      return res.status(404).json({
-        mensaje: "Servicio no encontrado",
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: 'ID de servicio inválido',
       });
     }
 
-    res.json(resultado[0]);
-  } catch (error) {
-    console.error("Error al consultar servicio:", error);
+    const [resultado]: any =
+      await database.execute(
+        `
+        SELECT
+          s.id_servicio,
+          s.fk_cliente,
+          s.fk_categoria,
+          s.fk_empleado,
+          s.fk_evidencia,
+          s.titulo,
+          s.descripcion,
+          s.direccion,
+          s.presupuesto,
+          s.fecha,
+          s.hora_inicio,
+          s.hora_fin,
+          s.estado,
 
-    res.status(500).json({
-      mensaje: "Error al consultar el servicio",
+          c.nombre_C AS nombre_cliente,
+          c.foto AS foto_cliente,
+
+          e.nombre_E AS nombre_empleado,
+
+          cat.nombre AS nombre_categoria
+
+        FROM servicios s
+
+        LEFT JOIN clientes c
+          ON c.id_cliente = s.fk_cliente
+
+        LEFT JOIN empleados e
+          ON e.id_empleado = s.fk_empleado
+
+        LEFT JOIN categorias cat
+          ON cat.id_categoria = s.fk_categoria
+
+        WHERE s.id_servicio = ?
+        LIMIT 1
+        `,
+        [idServicio]
+      );
+
+    if (resultado.length === 0) {
+      return res.status(404).json({
+        mensaje: 'Servicio no encontrado',
+      });
+    }
+
+    return res.json(resultado[0]);
+  } catch (error) {
+    console.error(
+      'Error al consultar servicio:',
+      error
+    );
+
+    return res.status(500).json({
+      mensaje:
+        'Error al consultar el servicio',
     });
   }
 });
@@ -445,6 +890,15 @@ app.put("/api/servicios/:id", async (req, res) => {
   try {
     const idServicio = Number(req.params.id);
 
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "ID de servicio inválido",
+      });
+    }
+
     const {
       fk_cliente,
       fk_categoria,
@@ -453,32 +907,62 @@ app.put("/api/servicios/:id", async (req, res) => {
       direccion,
       presupuesto,
       fecha,
+      hora_inicio,
+      hora_fin,
     } = req.body;
 
-    const [resultado]: any = await database.execute(
-      `
-      UPDATE servicios
-      SET
-        fk_cliente = ?,
-        fk_categoria = ?,
-        fk_evidencia = ?,
-        descripcion = ?,
-        direccion = ?,
-        presupuesto = ?,
-        fecha = ?
-      WHERE id_servicio = ?
-      `,
-      [
-        fk_cliente,
-        fk_categoria,
-        fk_evidencia || null,
-        descripcion,
-        direccion,
-        presupuesto,
-        fecha,
-        idServicio,
-      ]
-    );
+    if (
+      !fk_cliente ||
+      !fk_categoria ||
+      !descripcion ||
+      !direccion ||
+      !presupuesto ||
+      !fecha ||
+      !hora_inicio ||
+      !hora_fin
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "Faltan datos obligatorios para actualizar la solicitud",
+      });
+    }
+
+    if (String(hora_fin) <= String(hora_inicio)) {
+      return res.status(400).json({
+        mensaje:
+          "La hora final debe ser posterior a la hora inicial",
+      });
+    }
+
+    const [resultado]: any =
+      await database.execute(
+        `
+        UPDATE servicios
+        SET
+          fk_cliente = ?,
+          fk_categoria = ?,
+          fk_evidencia = ?,
+          descripcion = ?,
+          direccion = ?,
+          presupuesto = ?,
+          fecha = ?,
+          hora_inicio = ?,
+          hora_fin = ?
+        WHERE id_servicio = ?
+        `,
+        [
+          fk_cliente,
+          fk_categoria,
+          fk_evidencia || null,
+          descripcion,
+          direccion,
+          presupuesto,
+          fecha,
+          hora_inicio,
+          hora_fin,
+          idServicio,
+        ]
+      );
 
     if (resultado.affectedRows === 0) {
       return res.status(404).json({
@@ -486,18 +970,22 @@ app.put("/api/servicios/:id", async (req, res) => {
       });
     }
 
-    res.json({
-      mensaje: "Servicio actualizado correctamente",
+    return res.json({
+      mensaje:
+        "Servicio actualizado correctamente",
     });
   } catch (error) {
-    console.error("Error al actualizar servicio:", error);
+    console.error(
+      "Error al actualizar servicio:",
+      error
+    );
 
-    res.status(500).json({
-      mensaje: "Error al actualizar el servicio",
+    return res.status(500).json({
+      mensaje:
+        "Error al actualizar el servicio",
     });
   }
 });
-
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES (DELETE)
 // ==========================================
@@ -811,7 +1299,1165 @@ app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
       mensaje: "Error interno al actualizar disponibilidad"
     });
   }
+});   
+
+
+// ==========================================
+// ENVIAR MENSAJE
+// ==========================================
+app.post("/api/chat", async (req, res) => {
+  try {
+    const {
+      fk_cliente,
+      fk_empleado,
+      remitente,
+      mensaje,
+    } = req.body;
+
+    const idCliente = Number(fk_cliente);
+    const idEmpleado = Number(fk_empleado);
+    const textoMensaje = String(mensaje ?? "").trim();
+
+    if (!Number.isInteger(idCliente) || idCliente <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de cliente inválido",
+      });
+    }
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de empleado inválido",
+      });
+    }
+
+    if (
+      remitente !== "cliente" &&
+      remitente !== "empleado"
+    ) {
+      return res.status(400).json({
+        mensaje: "Remitente inválido",
+      });
+    }
+
+    if (!textoMensaje) {
+      return res.status(400).json({
+        mensaje: "El mensaje no puede estar vacío",
+      });
+    }
+
+    const [resultado]: any = await database.execute(
+      `
+      INSERT INTO chat
+      (
+        fk_cliente,
+        fk_empleado,
+        remitente,
+        mensaje,
+        fecha
+      )
+      VALUES (?, ?, ?, ?, NOW())
+      `,
+      [
+        idCliente,
+        idEmpleado,
+        remitente,
+        textoMensaje,
+      ]
+    );
+
+    return res.status(201).json({
+      mensaje: "Mensaje enviado correctamente",
+      chat: {
+        id_chat: resultado.insertId,
+        fk_cliente: idCliente,
+        fk_empleado: idEmpleado,
+        remitente,
+        mensaje: textoMensaje,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error al enviar mensaje:", error);
+
+    return res.status(500).json({
+      mensaje: "Error al enviar el mensaje",
+      detalle: error.message,
+      codigo: error.code,
+    });
+  }
 });
+
+// ==========================================
+// OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
+// ==========================================
+app.get(
+  '/api/chat/cliente/:idCliente/empleado/:idEmpleado',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente
+      );
+
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      const [mensajes]: any =
+        await database.execute(
+          `
+          SELECT
+            id_chat,
+            fk_cliente,
+            fk_empleado,
+            remitente,
+            mensaje,
+            leido,
+            fecha
+          FROM chat
+          WHERE fk_cliente = ?
+            AND fk_empleado = ?
+          ORDER BY fecha ASC, id_chat ASC
+          `,
+          [idCliente, idEmpleado]
+        );
+
+      return res.status(200).json(
+        mensajes
+      );
+    } catch (error: any) {
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar los mensajes',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// CONVERSACIONES DE UN EMPLEADO
+// ==========================================
+app.get(
+  "/api/chat/empleado/:idEmpleado/conversaciones",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+
+      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [conversaciones]: any = await database.execute(
+        `
+        SELECT
+          c.fk_cliente AS id,
+          cl.nombre_C AS participantName,
+          cl.foto AS participantAvatar,
+          c.mensaje AS lastMessage,
+          c.fecha AS lastMessageTime,
+          0 AS unreadCount,
+          0 AS participantOnline
+        FROM chat c
+        INNER JOIN clientes cl
+          ON cl.id_cliente = c.fk_cliente
+        INNER JOIN (
+          SELECT
+            fk_cliente,
+            MAX(id_chat) AS ultimoMensaje
+          FROM chat
+          WHERE fk_empleado = ?
+          GROUP BY fk_cliente
+        ) ultimos
+          ON ultimos.ultimoMensaje = c.id_chat
+        WHERE c.fk_empleado = ?
+        ORDER BY c.fecha DESC
+        `,
+        [idEmpleado, idEmpleado]
+      );
+
+      return res.status(200).json(conversaciones);
+    } catch (error) {
+      console.error(
+        "Error al consultar conversaciones del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje: "Error al consultar las conversaciones",
+      });
+    }
+  }
+);
+
+// ==========================================
+// CONVERSACIONES DE UN CLIENTE
+// ==========================================
+
+
+app.get(
+  "/api/chat/cliente/:idCliente/conversaciones",
+  async (req, res) => {
+    try {
+      const idCliente = Number(req.params.idCliente);
+
+      if (!Number.isInteger(idCliente) || idCliente <= 0) {
+        return res.status(400).json({
+          mensaje: "ID de cliente inválido",
+        });
+      }
+
+      const [conversaciones]: any = await database.execute(
+        `
+        SELECT
+          c.fk_empleado AS id,
+          e.nombre_E AS participantName,
+          NULL AS participantAvatar,
+          c.mensaje AS lastMessage,
+          c.fecha AS lastMessageTime,
+          0 AS unreadCount,
+          CASE
+            WHEN e.estado = 'Disponible' THEN 1
+            ELSE 0
+          END AS participantOnline
+        FROM chat c
+        INNER JOIN empleados e
+          ON e.id_empleado = c.fk_empleado
+        INNER JOIN (
+          SELECT
+            fk_empleado,
+            MAX(id_chat) AS ultimoMensaje
+          FROM chat
+          WHERE fk_cliente = ?
+          GROUP BY fk_empleado
+        ) ultimos
+          ON ultimos.ultimoMensaje = c.id_chat
+        WHERE c.fk_cliente = ?
+        ORDER BY c.fecha DESC
+        `,
+        [idCliente, idCliente]
+      );
+
+      return res.status(200).json(conversaciones);
+    } catch (error: any) {
+      console.error(
+        "Error al consultar conversaciones del cliente:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje: "Error al consultar las conversaciones",
+        detalle: error.message,
+        codigo: error.code,
+      });
+    }
+  }
+);
+
+// ==========================================
+// MARCAR MENSAJES COMO LEÍDOS
+// ==========================================
+app.put("/api/chat/leidos", async (req, res) => {
+  try {
+    const {
+      fk_cliente,
+      fk_empleado,
+      lector,
+    } = req.body;
+
+    const idCliente = Number(fk_cliente);
+    const idEmpleado = Number(fk_empleado);
+
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0 ||
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: "Datos inválidos",
+      });
+    }
+
+    if (
+      lector !== "cliente" &&
+      lector !== "empleado"
+    ) {
+      return res.status(400).json({
+        mensaje: "Lector inválido",
+      });
+    }
+
+    /*
+     * Si lee el empleado, se marcan como leídos
+     * los mensajes que envió el cliente.
+     *
+     * Si lee el cliente, se marcan como leídos
+     * los mensajes que envió el empleado.
+     */
+    const remitenteMensaje =
+      lector === "empleado"
+        ? "cliente"
+        : "empleado";
+
+    const [resultado]: any =
+      await database.execute(
+        `
+        UPDATE chat
+        SET leido = 1
+        WHERE fk_cliente = ?
+          AND fk_empleado = ?
+          AND remitente = ?
+          AND leido = 0
+        `,
+        [
+          idCliente,
+          idEmpleado,
+          remitenteMensaje,
+        ]
+      );
+
+    return res.status(200).json({
+      mensaje: "Mensajes marcados como leídos",
+      actualizados: resultado.affectedRows,
+    });
+  } catch (error: any) {
+    console.error(
+      "Error al marcar mensajes como leídos:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: "Error al actualizar mensajes",
+      detalle: error.message,
+    });
+  }
+});
+
+app.post(
+  '/api/servicios/:idServicio/postular',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      const idEmpleado = Number(
+        req.body.fk_empleado
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const [servicios]: any =
+        await database.execute(
+          `
+          SELECT
+            id_servicio,
+            estado
+          FROM servicios
+          WHERE id_servicio = ?
+          LIMIT 1
+          `,
+          [idServicio]
+        );
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El servicio no existe',
+        });
+      }
+
+      if (
+        servicios[0].estado !== 'Pendiente'
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Este servicio ya no acepta postulaciones',
+        });
+      }
+
+      const [empleados]: any =
+        await database.execute(
+          `
+          SELECT id_empleado
+          FROM empleados
+          WHERE id_empleado = ?
+          LIMIT 1
+          `,
+          [idEmpleado]
+        );
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El empleado no existe',
+        });
+      }
+
+      await database.execute(
+        `
+        INSERT INTO postulaciones (
+          fk_servicio,
+          fk_empleado,
+          estado
+        )
+        VALUES (?, ?, 'pendiente')
+        `,
+        [
+          idServicio,
+          idEmpleado,
+        ]
+      );
+
+      return res.status(201).json({
+        mensaje:
+          'Postulación registrada correctamente',
+      });
+    } catch (error: any) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({
+          mensaje:
+            'Ya te postulaste a este servicio',
+        });
+      }
+
+      console.error(
+        'Error al registrar postulación:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al registrar la postulación',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// POSTULACIONES DE UN EMPLEADO
+// ==========================================
+app.get(
+  '/api/empleados/:idEmpleado/postulaciones',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const [empleados]: any =
+        await database.execute(
+          `
+          SELECT id_empleado
+          FROM empleados
+          WHERE id_empleado = ?
+          LIMIT 1
+          `,
+          [idEmpleado]
+        );
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El empleado no existe',
+        });
+      }
+
+      const [postulaciones]: any =
+        await database.execute(
+          `
+          SELECT
+            id_postulacion,
+            fk_servicio,
+            fk_empleado,
+            estado,
+            fecha
+          FROM postulaciones
+          WHERE fk_empleado = ?
+          ORDER BY fecha DESC
+          `,
+          [idEmpleado]
+        );
+
+      return res.status(200).json(
+        postulaciones
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al obtener postulaciones del empleado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las postulaciones del empleado',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// SERVICIOS POSTULACIONES DE EMPLEADOS RECIBIDAS
+// ==========================================
+app.get(
+  '/api/servicios/:idServicio/postulaciones',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      const [servicios]: any =
+        await database.execute(
+          `
+          SELECT
+            s.id_servicio,
+            s.fk_cliente,
+            s.fk_categoria,
+            s.fk_empleado,
+            s.fk_evidencia,
+            s.titulo,
+            s.descripcion,
+            s.direccion,
+            s.presupuesto,
+            s.fecha,
+            s.hora_inicio,
+            s.hora_fin,
+            s.estado,
+            c.nombre_C AS nombre_cliente,
+            c.foto AS foto_cliente,
+            cat.nombre AS nombre_categoria
+          FROM servicios s
+          LEFT JOIN clientes c
+            ON c.id_cliente = s.fk_cliente
+          LEFT JOIN categorias cat
+            ON cat.id_categoria = s.fk_categoria
+          WHERE s.id_servicio = ?
+          LIMIT 1
+          `,
+          [idServicio]
+        );
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El servicio no existe',
+        });
+      }
+
+      const [postulaciones]: any =
+        await database.execute(
+          `
+          SELECT
+            p.id_postulacion,
+            p.fk_servicio,
+            p.fk_empleado,
+            p.estado AS estado_postulacion,
+            p.fecha AS fecha_postulacion,
+
+            e.id_empleado,
+            e.nombre_E,
+            e.correo,
+            e.celular,
+            e.titulo,
+            e.direccion,
+            e.estado AS estado_empleado,
+            e.N_trabajos
+
+          FROM postulaciones p
+
+          INNER JOIN empleados e
+            ON e.id_empleado = p.fk_empleado
+
+          WHERE p.fk_servicio = ?
+
+          ORDER BY p.fecha DESC
+          `,
+          [idServicio]
+        );
+
+      return res.status(200).json({
+        servicio: servicios[0],
+        postulaciones,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al obtener postulaciones:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las postulaciones',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+//  SERVICIOS ACEPTADOS 
+// ==========================================
+
+app.put(
+  '/api/servicios/:idServicio/aceptar',
+  async (req, res) => {
+    const conexion =
+      await database.getConnection();
+
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      const idEmpleado = Number(
+        req.body.fk_empleado
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      await conexion.beginTransaction();
+
+      const [servicios]: any =
+        await conexion.execute(
+          `
+          SELECT
+            id_servicio,
+            estado
+          FROM servicios
+          WHERE id_servicio = ?
+          FOR UPDATE
+          `,
+          [idServicio]
+        );
+
+      if (servicios.length === 0) {
+        await conexion.rollback();
+
+        return res.status(404).json({
+          mensaje: 'El servicio no existe',
+        });
+      }
+
+      if (
+        servicios[0].estado !== 'Pendiente'
+      ) {
+        await conexion.rollback();
+
+        return res.status(400).json({
+          mensaje:
+            'Este servicio ya fue asignado',
+        });
+      }
+
+      const [postulaciones]: any =
+        await conexion.execute(
+          `
+          SELECT id_postulacion
+          FROM postulaciones
+          WHERE fk_servicio = ?
+            AND fk_empleado = ?
+          LIMIT 1
+          `,
+          [
+            idServicio,
+            idEmpleado,
+          ]
+        );
+
+      if (postulaciones.length === 0) {
+        await conexion.rollback();
+
+        return res.status(404).json({
+          mensaje:
+            'El empleado no está postulado a este servicio',
+        });
+      }
+
+      const [resultado]: any =
+        await conexion.execute(
+          `
+          UPDATE servicios
+          SET
+            fk_empleado = ?,
+            estado = 'Asignado'
+          WHERE id_servicio = ?
+            AND estado = 'Pendiente'
+          `,
+          [
+            idEmpleado,
+            idServicio,
+          ]
+        );
+
+      if (resultado.affectedRows === 0) {
+        await conexion.rollback();
+
+        return res.status(409).json({
+          mensaje:
+            'El servicio ya fue asignado',
+        });
+      }
+
+      await conexion.execute(
+        `
+        UPDATE postulaciones
+        SET estado =
+          CASE
+            WHEN fk_empleado = ?
+              THEN 'aceptada'
+            ELSE 'rechazada'
+          END
+        WHERE fk_servicio = ?
+        `,
+        [
+          idEmpleado,
+          idServicio,
+        ]
+      );
+
+      await conexion.commit();
+
+      return res.status(200).json({
+        mensaje:
+          'Empleado seleccionado correctamente',
+        id_servicio: idServicio,
+        fk_empleado: idEmpleado,
+      });
+    } catch (error: any) {
+      await conexion.rollback();
+
+      console.error(
+        'Error al seleccionar empleado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al seleccionar al empleado',
+        detalle: error.message,
+      });
+    } finally {
+      conexion.release();
+    }
+  }
+);
+
+// ==========================================
+// AGENDA / SERVICIOS ESTADOS
+// ==========================================
+app.put(
+  '/api/servicios/:idServicio/estado',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      const estadoNuevo = String(
+        req.body.estado ?? ''
+      ).trim();
+
+      const motivoCancelacion = String(
+        req.body.motivo_cancelacion ?? ''
+      ).trim();
+
+      const canceladoPor = String(
+        req.body.cancelado_por ?? ''
+      ).trim();
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      const estadosPermitidos = [
+        'Asignado',
+        'En proceso',
+        'Completado',
+        'Cancelado',
+      ];
+
+      if (
+        !estadosPermitidos.includes(
+          estadoNuevo
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El estado indicado no es válido',
+        });
+      }
+
+      if (
+        estadoNuevo === 'Cancelado' &&
+        motivoCancelacion.length < 5
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Debes indicar el motivo de la cancelación',
+        });
+      }
+
+      if (
+        estadoNuevo === 'Cancelado' &&
+        canceladoPor !== 'cliente' &&
+        canceladoPor !== 'empleado'
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'No se pudo identificar quién canceló el servicio',
+        });
+      }
+
+      const [servicios]: any =
+        await database.execute(
+          `
+          SELECT
+            id_servicio,
+            estado,
+            fk_empleado
+          FROM servicios
+          WHERE id_servicio = ?
+          LIMIT 1
+          `,
+          [idServicio]
+        );
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'Servicio no encontrado',
+        });
+      }
+
+      const estadoActual = String(
+        servicios[0].estado ?? ''
+      )
+        .trim()
+        .toLowerCase()
+        .replace('_', ' ');
+
+      const nuevoNormalizado =
+        estadoNuevo
+          .trim()
+          .toLowerCase()
+          .replace('_', ' ');
+
+      const transicionesPermitidas: Record<
+        string,
+        string[]
+      > = {
+        asignado: [
+          'en proceso',
+          'cancelado',
+        ],
+        'en proceso': [
+          'completado',
+          'cancelado',
+        ],
+        completado: [],
+        cancelado: [],
+      };
+
+      const siguientes =
+        transicionesPermitidas[
+          estadoActual
+        ];
+
+      if (
+        !siguientes ||
+        !siguientes.includes(
+          nuevoNormalizado
+        )
+      ) {
+        return res.status(409).json({
+          mensaje: `No se puede cambiar el servicio de "${servicios[0].estado}" a "${estadoNuevo}"`,
+        });
+      }
+
+      if (
+        estadoNuevo !== 'Cancelado'
+      ) {
+        const [resultado]: any =
+          await database.execute(
+            `
+            UPDATE servicios
+            SET
+              estado = ?,
+              motivo_cancelacion = NULL,
+              cancelado_por = NULL
+            WHERE id_servicio = ?
+            `,
+            [
+              estadoNuevo,
+              idServicio,
+            ]
+          );
+
+        return res.status(200).json({
+          mensaje:
+            'Estado actualizado correctamente',
+          estado: estadoNuevo,
+          actualizados:
+            resultado.affectedRows,
+        });
+      }
+
+      const [resultado]: any =
+        await database.execute(
+          `
+          UPDATE servicios
+          SET
+            estado = 'Cancelado',
+            motivo_cancelacion = ?,
+            cancelado_por = ?
+          WHERE id_servicio = ?
+          `,
+          [
+            motivoCancelacion,
+            canceladoPor,
+            idServicio,
+          ]
+        );
+
+      return res.status(200).json({
+        mensaje:
+          'Servicio cancelado correctamente',
+        estado: 'Cancelado',
+        motivo_cancelacion:
+          motivoCancelacion,
+        cancelado_por: canceladoPor,
+        actualizados:
+          resultado.affectedRows,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al actualizar estado:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al actualizar el estado del servicio',
+        detalle: error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
+// AGENDA / SERVICIOS ASIGNADOS AL EMPLEADO
+// ==========================================
+app.get(
+  "/api/empleados/:idEmpleado/servicios",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(req.params.idEmpleado);
+
+      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [empleados]: any = await database.execute(
+        `
+        SELECT id_empleado
+        FROM empleados
+        WHERE id_empleado = ?
+        LIMIT 1
+        `,
+        [idEmpleado]
+      );
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: "El empleado no existe",
+        });
+      }
+
+      const [servicios] = await database.execute(
+        `
+        SELECT
+          s.id_servicio,
+          s.fk_cliente,
+          s.fk_categoria,
+          s.fk_empleado,
+          s.fk_evidencia,
+          s.titulo,
+          s.descripcion,
+          s.direccion,
+          s.presupuesto,
+          s.fecha,
+          s.hora_inicio,
+          s.hora_fin,
+          s.estado,
+
+          c.nombre_C AS nombre_cliente,
+          c.foto AS foto_cliente,
+
+          cat.nombre AS nombre_categoria
+
+        FROM servicios s
+
+        LEFT JOIN clientes c
+          ON c.id_cliente = s.fk_cliente
+
+        LEFT JOIN categorias cat
+          ON cat.id_categoria = s.fk_categoria
+
+        WHERE s.fk_empleado = ?
+          AND LOWER(TRIM(s.estado)) IN (
+            'asignado',
+            'en proceso',
+            'en_proceso',
+            'completado'
+          )
+
+        ORDER BY
+          s.fecha ASC,
+          s.hora_inicio ASC,
+          s.id_servicio ASC
+        `,
+        [idEmpleado]
+      );
+
+      return res.status(200).json(servicios);
+    } catch (error) {
+      console.error(
+        "Error al consultar agenda del empleado:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje: "Error al consultar la agenda",
+      });
+    }
+  }
+);
+
+/*app.get(
+  "/api/empleados/:idEmpleado/servicios",
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de empleado inválido",
+        });
+      }
+
+      const [servicios] =
+        await database.execute(
+          `
+          SELECT
+            s.id_servicio,
+            s.fk_cliente,
+            s.fk_categoria,
+            s.fk_empleado,
+            s.titulo,
+            s.descripcion,
+            s.direccion,
+            s.presupuesto,
+            s.fecha,
+            s.hora_inicio,
+            s.hora_fin,
+            s.estado,
+            c.nombre_C AS nombre_cliente,
+            c.foto AS foto_cliente,
+            cat.nombre AS nombre_categoria
+          FROM servicios s
+          LEFT JOIN clientes c
+            ON c.id_cliente = s.fk_cliente
+          LEFT JOIN categorias cat
+            ON cat.id_categoria = s.fk_categoria
+          WHERE s.fk_empleado = ?
+            AND LOWER(s.estado) IN (
+              'asignado',
+              'en proceso',
+              'en_proceso',
+              'completado'
+            )
+          ORDER BY
+            s.fecha ASC,
+            s.hora_inicio ASC
+          `,
+          [idEmpleado]
+        );
+
+      return res.status(200).json(servicios);
+    } catch (error) {
+      console.error(
+        "Error al consultar agenda:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al consultar la agenda",
+      });
+    }
+  }
+);*/
 
 // ==========================================
 // INICIO DEL SERVIDOR
@@ -819,4 +2465,3 @@ app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });
-
