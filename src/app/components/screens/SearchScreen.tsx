@@ -15,7 +15,6 @@ import { toast } from 'sonner';
 
 import { useApp } from '../../context/AppContext';
 import { WorkerCard } from '../shared/WorkerCard';
-import { MOCK_WORKERS } from '../../data/mockData';
 
 import {
   crearSolicitud,
@@ -156,12 +155,12 @@ export default function SearchScreen() {
         : 'http://localhost:3000/api/empleados';
 
       const respuesta = await fetch(url);
-
-      const datos = await respuesta.json();
+      const texto = await respuesta.text();
+      const datos = texto ? JSON.parse(texto) : null;
 
       if (!respuesta.ok) {
         throw new Error(
-          datos.mensaje ||
+          datos?.mensaje ||
             'No se pudieron cargar los trabajadores'
         );
       }
@@ -176,7 +175,9 @@ export default function SearchScreen() {
       );
 
       toast.error(
-        'No se pudieron cargar los trabajadores'
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar los trabajadores'
       );
 
       setEmpleadosDb([]);
@@ -194,53 +195,31 @@ export default function SearchScreen() {
   // QUE NECESITA WORKERCARD
   // ==========================================
  const trabajadoresConvertidos: WorkerCardData[] =
-  empleadosDb.map((empleado, index) => {
-    const plantilla =
-      MOCK_WORKERS[
-        index % MOCK_WORKERS.length
-      ] ?? MOCK_WORKERS[0];
-
-    const disponible =
-      empleado.estado
-        ?.trim()
-        .toLowerCase() === 'disponible';
-
+  empleadosDb.map((empleado) => {
     const worker: WorkerCardData = {
-      ...plantilla,
-
-      id: empleado.id_empleado as typeof plantilla.id,
-
-      name:
-        empleado.nombre_E ||
-        'Trabajador',
-
-      location:
-        empleado.direccion?.trim() ||
-        'Dirección no especificada',
-
-      services: [
-        empleado.titulo?.trim() ||
-          empleado.categoria ||
-          'Servicios generales',
-      ] as typeof plantilla.services,
-
+      id: empleado.id_empleado as string | number,
+      name: empleado.nombre_E || 'Trabajador',
+      email: '',
+      phone: '',
+      avatarUrl: '',
+      role: 'worker',
+      location: empleado.direccion?.trim() || 'Dirección no especificada',
+      joinedDate: '',
       categories: empleado.id_categoria
-        ? [
-            String(
-              empleado.id_categoria
-            ),
-          ] as typeof plantilla.categories
+        ? [String(empleado.id_categoria) as any]
         : [],
-
-      jobCount: Number(
-        empleado.N_trabajos ?? 0
-      ),
-
       rating: 0,
       reviewCount: 0,
-      pricePerHour: 0,
+      jobCount: Number(empleado.N_trabajos ?? 0),
+      bio: '',
       distanceKm: 0,
-      };
+      pricePerHour: 0,
+      isAvailable: empleado.estado?.trim().toLowerCase() === 'disponible',
+      galleryUrls: [],
+      services: [
+        empleado.titulo?.trim() || empleado.categoria || 'Servicios generales',
+      ],
+    };
 
     return worker;
   });

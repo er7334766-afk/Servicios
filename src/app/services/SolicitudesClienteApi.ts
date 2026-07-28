@@ -224,3 +224,26 @@ export async function aceptarPostulante(
 
   return datos;
 }
+
+export async function rechazarPostulante(
+  idPostulacion: number
+): Promise<RespuestaMensaje> {
+  if (!Number.isInteger(idPostulacion) || idPostulacion <= 0) {
+    throw new Error('ID de postulación inválido');
+  }
+
+  const respuesta = await fetch(
+    `${API_URL}/postulaciones/${idPostulacion}/rechazar`,
+    {
+      method: 'PUT',
+    }
+  );
+
+  const datos = await leerRespuesta(respuesta);
+
+  if (!respuesta.ok) {
+    throw new Error(datos.mensaje || 'No se pudo rechazar la postulación');
+  }
+
+  return datos;
+}

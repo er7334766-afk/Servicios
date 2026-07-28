@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 
 import { useApp } from '../../context/AppContext';
-import { MOCK_CLIENT, MOCK_WORKERS } from '../../data/mockData';
 import { registrarEmpleado } from '../../services/empleadosApi';
 import { registrarCliente } from '../../services/clientesApi';
 import { iniciarSesion } from '../../services/LoginApi';
@@ -97,13 +96,16 @@ export default function AuthScreen() {
         '',
 
       avatarUrl:
-        role === 'worker'
-          ? MOCK_WORKERS[0].avatarUrl
-          : MOCK_CLIENT.avatarUrl,
+        (respuesta.usuario as any)?.foto ||
+        '',
 
       role,
 
       location: 'No especificada',
+
+      estado:
+        (respuesta.usuario as any)?.estado ||
+        undefined,
 
       joinedDate: new Date()
         .toISOString()
@@ -165,12 +167,10 @@ export default function AuthScreen() {
         name: data.name.trim(),
         email: data.email.trim().toLowerCase(),
         phone: data.phone.trim(),
-        avatarUrl:
-          role === 'worker'
-            ? MOCK_WORKERS[0].avatarUrl
-            : MOCK_CLIENT.avatarUrl,
+        avatarUrl: '',
         role,
         location: 'Pendiente',
+        estado: role === 'worker' ? 'Descansando' : undefined,
         joinedDate: new Date().toISOString().split('T')[0],
       });
 

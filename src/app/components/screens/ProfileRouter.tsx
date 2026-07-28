@@ -4,6 +4,8 @@ import ClientProfileScreen from './ClientProfileScreen';
 import WorkerOwnProfileScreen from './WorkerOwnProfileScreen';
 
 export default function ProfileRouter() {
-  const { role } = useApp();
-  return role === 'worker' ? <WorkerOwnProfileScreen /> : <ClientProfileScreen />;
+  const { role, currentUser } = useApp();
+  const rolActivo = currentUser?.role ?? role;
+
+  return rolActivo === 'worker' ? <WorkerOwnProfileScreen /> : <ClientProfileScreen />;
 }

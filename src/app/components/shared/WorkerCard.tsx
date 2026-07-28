@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { MapPin, Star, Clock } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import type { Worker } from '../../types';
-import { SERVICE_CATEGORIES } from '../../data/mockData';
 
 interface WorkerCardProps {
   worker: Worker;
@@ -13,7 +12,6 @@ interface WorkerCardProps {
 export function WorkerCard({ worker, variant = 'full' }: WorkerCardProps) {
   const navigate = useNavigate();
   const categoryLabels = worker.categories
-    .map((c) => SERVICE_CATEGORIES.find((s) => s.id === c)?.label)
     .filter(Boolean)
     .join(', ');
 

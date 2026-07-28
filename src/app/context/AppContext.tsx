@@ -13,11 +13,6 @@ import type {
   AgendaSlot,
 } from '../types';
 
-import {
-  MOCK_CONVERSATIONS,
-  MOCK_NOTIFICATIONS,
-  MOCK_AGENDA_SLOTS,
-} from '../data/mockData';
 
 interface AppContextType {
   role: Role;
@@ -148,16 +143,12 @@ export function AppProvider({
   const [
     conversations,
     setConversations,
-  ] = useState<Conversation[]>(
-    MOCK_CONVERSATIONS
-  );
+  ] = useState<Conversation[]>([]);
 
   const [
     notifications,
     setNotifications,
-  ] = useState<Notification[]>(
-    MOCK_NOTIFICATIONS
-  );
+  ] = useState<Notification[]>([]);
 
   const [
     workerAvailability,
@@ -167,9 +158,7 @@ export function AppProvider({
   const [
     agendaSlots,
     setAgendaSlots,
-  ] = useState<AgendaSlot[]>(
-    MOCK_AGENDA_SLOTS
-  );
+  ] = useState<AgendaSlot[]>([]);
 
   const [
     selectedWorkerId,
@@ -192,21 +181,28 @@ export function AppProvider({
   const setCurrentUser = (
     user: User | null
   ) => {
-    setCurrentUserState(user);
-
     if (user) {
+      const usuarioNormalizado = {
+        ...user,
+        role: user.role ?? role,
+      } as User;
+
+      setCurrentUserState(usuarioNormalizado);
+
       localStorage.setItem(
         USER_STORAGE_KEY,
-        JSON.stringify(user)
+        JSON.stringify(usuarioNormalizado)
       );
 
       localStorage.setItem(
         ROLE_STORAGE_KEY,
-        user.role
+        usuarioNormalizado.role
       );
 
-      setRoleState(user.role);
+      setRoleState(usuarioNormalizado.role);
     } else {
+      setCurrentUserState(null);
+
       localStorage.removeItem(
         USER_STORAGE_KEY
       );

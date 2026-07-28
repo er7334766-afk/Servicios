@@ -137,12 +137,13 @@ export default function ChatListScreen() {
           : `http://localhost:3000/api/chat/cliente/${idUsuario}/conversaciones`;
 
         const respuesta = await fetch(url);
-        const datos = await respuesta.json();
+        const texto = await respuesta.text();
+        const datos = texto ? JSON.parse(texto) : null;
 
         if (!respuesta.ok) {
           throw new Error(
-            datos.detalle ||
-              datos.mensaje ||
+            datos?.detalle ||
+              datos?.mensaje ||
               'No se pudieron cargar las conversaciones'
           );
         }

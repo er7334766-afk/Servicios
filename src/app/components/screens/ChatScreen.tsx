@@ -252,11 +252,12 @@ export default function ChatScreen() {
       `http://localhost:3000/api/chat/cliente/${idCliente}/empleado/${idEmpleado}`
     );
 
-    const datos = await respuesta.json();
+    const texto = await respuesta.text();
+    const datos = texto ? JSON.parse(texto) : null;
 
     if (!respuesta.ok) {
       throw new Error(
-        datos.mensaje ||
+        datos?.mensaje ||
           'No se pudieron cargar los mensajes'
       );
     }
@@ -387,7 +388,7 @@ export default function ChatScreen() {
       !Number.isInteger(idCliente) ||
       idCliente <= 0
     ) {
-      alert('ID de cliente inválido');
+      setError('ID de cliente inválido');
       return;
     }
 
@@ -395,7 +396,7 @@ export default function ChatScreen() {
       !Number.isInteger(idEmpleado) ||
       idEmpleado <= 0
     ) {
-      alert('ID de empleado inválido');
+      setError('ID de empleado inválido');
       return;
     }
 
@@ -421,12 +422,13 @@ export default function ChatScreen() {
         }
       );
 
-      const datos = await respuesta.json();
+      const textoRespuesta = await respuesta.text();
+      const datos = textoRespuesta ? JSON.parse(textoRespuesta) : null;
 
       if (!respuesta.ok) {
         throw new Error(
-          datos.detalle ||
-            datos.mensaje ||
+          datos?.detalle ||
+            datos?.mensaje ||
             'No se pudo enviar el mensaje'
         );
       }
@@ -445,7 +447,7 @@ export default function ChatScreen() {
         error
       );
 
-      alert(mensaje);
+      setError(mensaje);
     } finally {
       setEnviando(false);
     }

@@ -39,10 +39,31 @@ export default function ReportScreen() {
       toast.error('La descripción debe tener al menos 20 caracteres');
       return;
     }
-    toast.success('Reporte enviado', {
-      description: 'Nuestro equipo revisará tu caso en menos de 48 horas',
-    });
-    setTimeout(() => navigate(-1), 1000);
+    (async () => {
+      try {
+        const respuesta = await fetch('http://localhost:3000/api/reportes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoria: selectedCat, descripcion: description, fotos: photos }),
+        });
+
+        const texto = await respuesta.text();
+        const datos = texto ? JSON.parse(texto) : null;
+
+        if (!respuesta.ok) {
+          throw new Error(datos?.mensaje || 'No se pudo enviar el reporte');
+        }
+
+        toast.success('Reporte enviado', {
+          description: 'Nuestro equipo revisará tu caso en menos de 48 horas',
+        });
+
+        setTimeout(() => navigate(-1), 1000);
+      } catch (err) {
+        console.error('Error enviando reporte:', err);
+        toast.error('No se pudo enviar el reporte. Intenta nuevamente.');
+      }
+    })();
   };
 
   return (

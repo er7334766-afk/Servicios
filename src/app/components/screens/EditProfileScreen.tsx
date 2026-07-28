@@ -1,5 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Save } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { ArrowLeft, Save, Upload } from 'lucide-react';
+
+async function leerRespuestaJson(respuesta: Response) {
+  const texto = await respuesta.text();
+
+  if (!texto) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    return { mensaje: texto };
+  }
+}
 
 interface EditProfileProps {
   onBack: () => void;
@@ -12,7 +27,8 @@ export default function EditProfileScreen({
   usuarioActual,
   rol,
 }: EditProfileProps) {
-  const esEmpleado = rol === 'worker';
+  const { currentUser, setCurrentUser } = useApp();
+  const esEmpleado = rol === 'worker' || currentUser?.role === 'worker';
 
   const idUsuario = Number(
     usuarioActual?.idEmpleado ??
@@ -63,9 +79,13 @@ export default function EditProfileScreen({
   );
 
   const [foto, setFoto] = useState(String(usuarioActual?.foto ?? ''));
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [subiendoAntecedente, setSubiendoAntecedente] = useState(false);
 
   const [cargando, setCargando] = useState(false);
   const [cargandoPerfil, setCargandoPerfil] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     const cargarPerfilEmpleado = async () => {
@@ -84,22 +104,23 @@ export default function EditProfileScreen({
           `http://localhost:3000/api/empleados/${idUsuario}`
         );
 
-        const datos = await respuesta.json();
+        const datos = await leerRespuestaJson(respuesta);
 
         if (!respuesta.ok) {
           throw new Error(
-            datos.mensaje || 'No se pudo cargar el perfil'
+            datos?.mensaje || 'No se pudo cargar el perfil'
           );
         }
 
-        setNombre(String(datos.nombre_E ?? ''));
-        setCorreo(String(datos.correo ?? ''));
-        setCelular(String(datos.celular ?? ''));
-        setDni(String(datos.dni ?? ''));
-        setTitulo(String(datos.titulo ?? ''));
-        setDireccion(String(datos.direccion ?? ''));
-        setAntecedente(String(datos.antecedente ?? ''));
-        setSobreMi(String(datos.sobre_mi ?? datos.sobreMi ?? ''));
+        setNombre(String(datos?.nombre_E ?? ''));
+        setCorreo(String(datos?.correo ?? ''));
+        setCelular(String(datos?.celular ?? ''));
+        setDni(String(datos?.dni ?? ''));
+        setTitulo(String(datos?.titulo ?? ''));
+        setDireccion(String(datos?.direccion ?? ''));
+        setAntecedente(String(datos?.antecedente ?? ''));
+        setFoto(String(datos?.foto ?? ''));
+        setSobreMi(String(datos?.sobre_mi ?? datos?.sobreMi ?? ''));
       } catch (error) {
         const mensaje =
           error instanceof Error
@@ -115,6 +136,102 @@ export default function EditProfileScreen({
 
     cargarPerfilEmpleado();
   }, [esEmpleado, idUsuario]);
+
+  const subirArchivo = async (archivo: File, endpoint: string) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    if (!allowedTypes.includes(archivo.type)) {
+      throw new Error('Solo se permiten archivos JPG, PNG, JPEG o PDF');
+    }
+
+    const extension = archivo.name.split('.').pop()?.toLowerCase();
+    if (!extension || !['jpg', 'jpeg', 'png', 'pdf'].includes(extension)) {
+      throw new Error('Solo se permiten archivos JPG, PNG, JPEG o PDF');
+    }
+
+    const reader = new FileReader();
+
+    const contenido = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.readAsDataURL(archivo);
+    });
+
+    const base64 = contenido.split(',')[1];
+
+    const respuesta = await fetch(`http://localhost:3000${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base64,
+        fileName: archivo.name,
+        contentType: archivo.type,
+      }),
+    });
+
+    const datos = await leerRespuestaJson(respuesta);
+
+    if (!respuesta.ok) {
+      throw new Error(datos?.mensaje || 'No se pudo subir el archivo');
+    }
+
+    return datos?.url as string;
+  };
+
+  const handleSubirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+
+    try {
+      setSubiendoFoto(true);
+      setErrorMessage('');
+      setSuccessMessage('');
+
+      const nuevaFotoUrl = await subirArchivo(archivo, '/api/upload-foto');
+      setFoto(nuevaFotoUrl);
+
+      if (currentUser) {
+        const usuarioActualizado = {
+          ...currentUser,
+          role: currentUser?.role ?? rol ?? 'client',
+          avatarUrl: nuevaFotoUrl,
+          foto: nuevaFotoUrl,
+          photoUrl: nuevaFotoUrl,
+        };
+        setCurrentUser(usuarioActualizado);
+      }
+
+      setSuccessMessage('Foto subida correctamente');
+      window.setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : 'Error al subir la foto';
+      setErrorMessage(mensaje);
+      window.setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
+
+  const handleSubirAntecedente = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+
+    try {
+      setSubiendoAntecedente(true);
+      setErrorMessage('');
+      setSuccessMessage('');
+
+      const url = await subirArchivo(archivo, '/api/upload-antecedente');
+      setAntecedente(url);
+      setSuccessMessage('Documento subido correctamente');
+      window.setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : 'Error al subir el documento';
+      setErrorMessage(mensaje);
+      window.setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setSubiendoAntecedente(false);
+    }
+  };
 
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +258,7 @@ export default function EditProfileScreen({
             direccion: String(direccion).trim(),
             antecedente: String(antecedente).trim(),
             sobre_mi: String(sobreMi).trim(),
+            foto: String(foto).trim(),
           }
         : {
             nombre_C: String(nombre).trim(),
@@ -159,23 +277,45 @@ export default function EditProfileScreen({
         body: JSON.stringify(body),
       });
 
-      const datos = await respuesta.json();
+      const datos = await leerRespuestaJson(respuesta);
 
       if (!respuesta.ok) {
-        throw new Error(
-          datos.mensaje || 'No se pudieron guardar los cambios'
-        );
+        throw new Error(datos?.mensaje || 'No se pudieron guardar los cambios');
       }
 
-      alert(datos.mensaje || 'Cambios guardados correctamente');
-      onBack();
+      setSuccessMessage(datos.mensaje || 'Cambios guardados correctamente');
+
+      // Actualizar contexto si el usuario actual fue modificado
+      try {
+        const nuevoUsuario = {
+          ...(currentUser ?? usuarioActual ?? {}),
+          id: String(idUsuario),
+          name: nombre,
+          email: correo,
+          phone: celular,
+          avatarUrl: foto || currentUser?.avatarUrl || usuarioActual?.avatarUrl || usuarioActual?.foto || '',
+          foto: foto || currentUser?.foto || usuarioActual?.foto || usuarioActual?.avatarUrl || '',
+          role: currentUser?.role ?? rol ?? 'client',
+          location: direccion || currentUser?.location || usuarioActual?.location || 'No especificada',
+          estado: currentUser?.estado ?? usuarioActual?.estado,
+        };
+
+        setCurrentUser(nuevoUsuario);
+      } catch (e) {
+        // noop
+      }
+
+      window.setTimeout(() => {
+        setSuccessMessage('');
+        onBack();
+      }, 900);
     } catch (error) {
       const mensaje =
         error instanceof Error
           ? error.message
           : 'Error al guardar los cambios';
-
-      alert(mensaje);
+      setErrorMessage(mensaje);
+      window.setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setCargando(false);
     }
@@ -342,36 +482,47 @@ export default function EditProfileScreen({
         )}
 
         {esEmpleado && (
-          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
             <label className="px-1 text-xs font-bold uppercase text-slate-500">
               Antecedente
             </label>
 
-            <input
-              type="text"
-              value={antecedente}
-              onChange={(e) => setAntecedente(e.target.value)}
-              placeholder="Detalles o estado de antecedentes"
-              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        )}
-
-        {!esEmpleado && (
-          <div className="flex flex-col gap-1.5">
-            <label className="px-1 text-xs font-bold uppercase text-slate-500">
-              URL de la foto
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-[#f8fafc] px-4 py-4 text-sm font-medium text-slate-600 transition-colors hover:border-blue-500 hover:text-blue-600">
+              <Upload className="h-4 w-4" />
+              {subiendoAntecedente ? 'Subiendo...' : antecedente ? 'Cambiar documento' : 'Seleccionar PDF o imagen'}
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleSubirAntecedente} />
             </label>
 
-            <input
-              type="text"
-              value={foto}
-              onChange={(e) => setFoto(e.target.value)}
-              placeholder="https://enlace-de-tu-foto.com"
-              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
-            />
+            {antecedente && (
+              <a
+                href={antecedente}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-xs text-blue-600 underline"
+              >
+                Ver documento cargado
+              </a>
+            )}
           </div>
         )}
+
+        <div className="flex flex-col gap-1.5">
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
+            Foto de perfil
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-[#f8fafc] px-4 py-4 text-sm font-medium text-slate-600 transition-colors hover:border-blue-500 hover:text-blue-600">
+            <Upload className="h-4 w-4" />
+            {subiendoFoto ? 'Subiendo...' : foto ? 'Cambiar foto' : 'Seleccionar foto'}
+            <input type="file" accept=".jpg,.jpeg,.png" className="hidden" onChange={handleSubirFoto} />
+          </label>
+
+          {foto && (
+            <p className="break-all text-xs text-slate-500">
+              {foto}
+            </p>
+          )}
+        </div>
 
         <button
           type="submit"

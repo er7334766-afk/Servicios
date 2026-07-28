@@ -21,6 +21,7 @@ import {
 import {
   aceptarPostulante,
   obtenerPostulacionesServicio,
+  rechazarPostulante,
   type SolicitudCliente,
   type PostulanteServicio,
 } from '../../services/SolicitudesClienteApi';
@@ -143,14 +144,11 @@ export default function ClientServiceDetailScreen() {
   const manejarAceptar = async (
     idEmpleado: number
   ) => {
-    const confirmado =
-      window.confirm(
-        '¿Deseas seleccionar a este trabajador? Las demás postulaciones serán rechazadas.'
-      );
+    const confirmado = window.confirm(
+      '¿Deseas seleccionar a este trabajador? Las demás postulaciones serán rechazadas.'
+    );
 
-    if (!confirmado) {
-      return;
-    }
+    if (!confirmado) return;
 
     try {
       setAceptandoId(idEmpleado);
@@ -177,6 +175,25 @@ export default function ClientServiceDetailScreen() {
       );
     } finally {
       setAceptandoId(null);
+    }
+  };
+
+  const manejarRechazar = async (
+    idPostulacion: number
+  ) => {
+    const confirmado = window.confirm('¿Deseas rechazar esta postulación?');
+    if (!confirmado) return;
+
+    try {
+      setError('');
+      setMensaje('');
+
+      await rechazarPostulante(idPostulacion);
+
+      setMensaje('Postulación rechazada correctamente');
+      await cargarDetalle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo rechazar');
     }
   };
 
@@ -460,7 +477,7 @@ export default function ClientServiceDetailScreen() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 mt-5">
+                          <div className="flex gap-2 mt-5">
                           <button
                             type="button"
                             onClick={() =>
@@ -472,40 +489,43 @@ export default function ClientServiceDetailScreen() {
                           >
                             Ver perfil
                           </button>
+                          <div className="flex gap-2 w-full">
+                            <button
+                              type="button"
+                              disabled={
+                                servicioAsignado || aceptandoId !== null || aceptada || rechazada
+                              }
+                              onClick={() =>
+                                manejarAceptar(Number(postulacion.id_empleado))
+                              }
+                              className="flex-1 rounded-xl bg-[#1A56DB] text-white px-3 py-2.5 text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                            >
+                              {aceptandoId === postulacion.id_empleado ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  Aceptando
+                                </>
+                              ) : aceptada ? (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  Aceptado
+                                </>
+                              ) : (
+                                'Aceptar'
+                              )}
+                            </button>
 
-                          <button
-                            type="button"
-                            disabled={
-                              servicioAsignado ||
-                              aceptandoId !==
-                                null ||
-                              aceptada ||
-                              rechazada
-                            }
-                            onClick={() =>
-                              manejarAceptar(
-                                Number(
-                                  postulacion.id_empleado
-                                )
-                              )
-                            }
-                            className="flex-1 rounded-xl bg-[#1A56DB] text-white px-3 py-2.5 text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                          >
-                            {aceptandoId ===
-                            postulacion.id_empleado ? (
-                              <>
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                Aceptando
-                              </>
-                            ) : aceptada ? (
-                              <>
-                                <Check className="w-4 h-4" />
-                                Aceptado
-                              </>
-                            ) : (
-                              'Aceptar'
-                            )}
-                          </button>
+                            <button
+                              type="button"
+                              disabled={aceptada || rechazada}
+                              onClick={() =>
+                                manejarRechazar(Number(postulacion.id_postulacion))
+                              }
+                              className="flex-1 rounded-xl border border-red-200 bg-red-50 text-red-600 px-3 py-2.5 text-xs font-semibold disabled:bg-gray-200 disabled:cursor-not-allowed"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

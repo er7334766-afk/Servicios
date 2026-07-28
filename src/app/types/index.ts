@@ -146,4 +146,5 @@ export interface ServiceCategoryItem {
   icon: string;
   color: string;
   bgColor: string;
+  iconUrl?: string;
 }

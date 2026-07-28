@@ -20,11 +20,6 @@ import {
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useApp } from '../../context/AppContext';
 
-import {
-  MOCK_BOOKINGS,
-  MOCK_WORKERS,
-  SERVICE_CATEGORIES,
-} from '../../data/mockData';
 
 import {
   actualizarDisponibilidad,
@@ -55,12 +50,21 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
 };
 
+// Categories loaded at runtime; keep a typed empty list to satisfy TypeScript
+const SERVICE_CATEGORIES_RUNTIME: Array<{
+  id: string;
+  label?: string;
+  bgColor?: string;
+  color?: string;
+}> = [];
+
 
 export default function HomeWorkerScreen() {
   const navigate = useNavigate();
 
   const {
     currentUser,
+    setCurrentUser,
     workerAvailability,
     setWorkerAvailability,
     unreadNotifications,
@@ -85,6 +89,7 @@ export default function HomeWorkerScreen() {
 
   const [errorServicios, setErrorServicios] =
     useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const idEmpleado = Number(
     currentUser?.idEmpleado ?? currentUser?.id
   );
@@ -92,40 +97,25 @@ export default function HomeWorkerScreen() {
   const nombreEmpleado =
     currentUser?.name?.trim() || 'Empleado';
 
-  /*
-   * Estas secciones siguen usando datos mock.
-   * Solo "Nuevas solicitudes" se conecta
-   * con MySQL.
-   */
-  const workerProfile = MOCK_WORKERS[0];
+  const myBookings: any[] = [];
 
-  const myBookings = useMemo(
-    () =>
-      MOCK_BOOKINGS.filter(
-        (booking) =>
-          booking.workerId === 'w1' &&
-          [
-            'accepted',
-            'in_progress',
-            'pending',
-          ].includes(booking.status)
-      ).slice(0, 3),
-    []
-  );
+  const weekEarnings = 0;
 
-  const weekEarnings = useMemo(
-    () =>
-      MOCK_BOOKINGS.filter(
-        (booking) =>
-          booking.workerId === 'w1' &&
-          booking.status === 'completed'
-      ).reduce(
-        (total, booking) =>
-          total + booking.price,
-        0
-      ),
-    []
-  );
+  const normalizarDisponibilidad = (
+    valor: unknown
+  ) => {
+    const texto =
+      String(valor ?? '').trim().toLowerCase();
+
+    return (
+      texto === 'disponible' ||
+      texto === 'activo' ||
+      texto === 'activa' ||
+      texto === 'available' ||
+      texto === 'true' ||
+      texto === '1'
+    );
+  };
 
   const cargarServicios = async (
     mostrarCargaInicial = false
@@ -190,6 +180,80 @@ export default function HomeWorkerScreen() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const cargarDisponibilidad = async () => {
+      const estadoActual = String(
+        currentUser?.estado ?? ''
+      ).trim().toLowerCase();
+
+      if (
+        estadoActual === 'disponible' ||
+        estadoActual === 'activo'
+      ) {
+        if (isMounted) {
+          setWorkerAvailability(true);
+        }
+        return;
+      }
+
+      if (
+        estadoActual === 'no disponible' ||
+        estadoActual === 'ocupado' ||
+        estadoActual === 'bloqueado' ||
+        estadoActual === 'descansando' ||
+        estadoActual === 'pausa' ||
+        estadoActual === 'break'
+      ) {
+        if (isMounted) {
+          setWorkerAvailability(false);
+        }
+        return;
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return;
+      }
+
+      try {
+        const respuesta = await fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}`
+        );
+
+        if (!respuesta.ok) {
+          throw new Error(
+            'No se pudo obtener la disponibilidad del trabajador'
+          );
+        }
+
+        const datos = await respuesta.json();
+
+        if (isMounted) {
+          setWorkerAvailability(
+            normalizarDisponibilidad(
+              datos?.estado
+            )
+          );
+        }
+      } catch (error) {
+        console.error(
+          'No se pudo cargar la disponibilidad:',
+          error
+        );
+      }
+    };
+
+    cargarDisponibilidad();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.estado, idEmpleado, setWorkerAvailability]);
+
+  useEffect(() => {
     cargarPostulacionesEmpleado();
   }, [idEmpleado]);
 
@@ -225,10 +289,36 @@ export default function HomeWorkerScreen() {
         );
       }
 
-      await actualizarDisponibilidad(
+      const respuesta = await actualizarDisponibilidad(
         String(idEmpleado),
-        nuevoEstado
+        nuevoEstado,
+        String(idEmpleado)
       );
+
+      const estadoServidor =
+        String(
+          respuesta?.nuevoEstado ?? ''
+        ).trim().toLowerCase();
+
+      const disponibilidadFinal =
+        estadoServidor
+          ? normalizarDisponibilidad(
+              estadoServidor
+            )
+          : nuevoEstado;
+
+      setWorkerAvailability(
+        disponibilidadFinal
+      );
+
+      if (currentUser) {
+        setCurrentUser({
+          ...currentUser,
+          estado: disponibilidadFinal
+            ? 'Activo'
+            : 'Descansando',
+        });
+      }
     } catch (error) {
       console.error(
         'Error al actualizar disponibilidad:',
@@ -238,10 +328,8 @@ export default function HomeWorkerScreen() {
       setWorkerAvailability(
         !nuevoEstado
       );
-
-      alert(
-        'No se pudo actualizar el estado.'
-      );
+      setErrorServicios('No se pudo actualizar el estado.');
+      window.setTimeout(() => setErrorServicios(''), 4000);
     }
   };
 
@@ -256,9 +344,8 @@ export default function HomeWorkerScreen() {
       !Number.isInteger(idEmpleado) ||
       idEmpleado <= 0
     ) {
-      alert(
-        'No se encontró el ID del empleado. Inicia sesión nuevamente.'
-      );
+      setErrorServicios('No se encontró el ID del empleado. Inicia sesión nuevamente.');
+      window.setTimeout(() => setErrorServicios(''), 4000);
 
       return;
     }
@@ -286,11 +373,8 @@ export default function HomeWorkerScreen() {
           ];
         }
       );
-
-      alert(
-        resultado.mensaje ||
-          'Te postulaste correctamente'
-      );
+      setSuccessMessage(resultado.mensaje || 'Te postulaste correctamente');
+      window.setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       const mensaje =
         error instanceof Error
@@ -327,7 +411,8 @@ export default function HomeWorkerScreen() {
         );
       }
 
-      alert(mensaje);
+      setErrorServicios(mensaje);
+      window.setTimeout(() => setErrorServicios(''), 4000);
     } finally {
       setPostulandoId(null);
     }
@@ -386,7 +471,7 @@ export default function HomeWorkerScreen() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <ImageWithFallback
-              src={workerProfile.avatarUrl}
+              src={currentUser?.avatarUrl || ''}
               alt={nombreEmpleado}
               className="w-11 h-11 rounded-full object-cover border-2 border-white/50"
             />
@@ -394,6 +479,11 @@ export default function HomeWorkerScreen() {
             <div>
               <p className="text-white/70 text-xs">
                 Hola,
+                {successMessage && (
+                  <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 p-3 text-center">
+                    <p className="text-sm text-green-700">{successMessage}</p>
+                  </div>
+                )}
               </p>
 
               <p className="text-white font-bold">
@@ -435,8 +525,8 @@ export default function HomeWorkerScreen() {
 
             <span className="text-white text-sm font-medium">
               {workerAvailability
-                ? 'Disponible para trabajos'
-                : 'No disponible'}
+                ? 'Activo'
+                : 'Descansando'}
             </span>
           </div>
 
@@ -479,13 +569,13 @@ export default function HomeWorkerScreen() {
             {
               icon: Briefcase,
               label: 'Trabajos',
-              value: `${workerProfile.jobCount}`,
+              value: `${Number(currentUser?.numeroTrabajos ?? 0)}`,
               color: '#16A34A',
             },
             {
               icon: Star,
               label: 'Calificación',
-              value: `${workerProfile.rating}★`,
+              value: '0★',
               color: '#D97706',
             },
           ].map(
@@ -556,10 +646,9 @@ export default function HomeWorkerScreen() {
             {myBookings.map(
               (booking) => {
                 const categoria =
-                  SERVICE_CATEGORIES.find(
-                    (item) =>
-                      item.id ===
-                      booking.category
+                  SERVICE_CATEGORIES_RUNTIME.find(
+                    (item: { id: string }) =>
+                      item.id === booking.category
                   );
 
                 return (

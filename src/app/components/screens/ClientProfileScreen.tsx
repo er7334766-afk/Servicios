@@ -6,7 +6,9 @@ import { Settings, Star, Briefcase, MapPin, Calendar, ChevronRight, LogOut } fro
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
-import { MOCK_BOOKINGS, MOCK_REVIEWS, SERVICE_CATEGORIES } from '../../data/mockData';
+
+// No mock categories imported — use a safe empty list until real categories are loaded
+const SERVICE_CATEGORIES_LOCAL: any[] = [];
 import EditProfileScreen from './EditProfileScreen'; //agregado
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,9 +30,11 @@ export default function ClientProfileScreen() {
   const navigate = useNavigate();
   const { currentUser, setCurrentUser } = useApp();
   const [isEditing, setIsEditing] = useState(false); //agregado
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const myBookings = MOCK_BOOKINGS.filter((b) => b.clientId === 'c1');
-  const myReviews = MOCK_REVIEWS.filter((r) => r.reviewerId === 'c1');
+  const myBookings: Array<any> = [];
+  const myReviews: Array<any> = [];
 
   
   //agregado
@@ -55,8 +59,9 @@ export default function ClientProfileScreen() {
     }
 
     booking.status = 'cancelled';
-    alert('El servicio ha sido cancelado exitosamente.');
-    
+    setSuccessMessage('El servicio ha sido cancelado exitosamente.');
+    window.setTimeout(() => setSuccessMessage(''), 4000);
+
     navigate('/home/profile');
   };
 
@@ -75,9 +80,25 @@ export default function ClientProfileScreen() {
       />
     );
   }
+ 
 
   return (
     <div className="pb-6">
+      {errorMessage && (
+        <div className="px-5 mt-3">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
+            <p className="text-sm text-red-700">{errorMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="px-5 mt-3">
+          <div className="rounded-2xl border border-green-200 bg-green-50 p-3">
+            <p className="text-sm text-green-700">{successMessage}</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-[#1A56DB] px-5 pt-10 pb-16">
         <div className="flex items-center justify-between">
@@ -142,7 +163,7 @@ export default function ClientProfileScreen() {
         </div>
         <div className="flex flex-col gap-3">
           {myBookings.map((booking) => {
-            const cat = SERVICE_CATEGORIES.find((c) => c.id === booking.category);
+            const cat = SERVICE_CATEGORIES_LOCAL.find((c) => c.id === booking.category);
             return (
               <motion.div
                 key={booking.id}

@@ -11,6 +11,8 @@ export interface RespuestaLogin {
     nombre: string;
     correo: string;
     celular: string;
+    estado?: string;
+    foto?: string;
   };
 }
 

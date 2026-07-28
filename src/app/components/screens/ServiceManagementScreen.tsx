@@ -343,7 +343,8 @@ export default function ServiceManagementScreen() {
       !servicio.fk_cliente ||
       Number(servicio.fk_cliente) <= 0
     ) {
-      alert('No se encontró el cliente.');
+      setError('No se encontró el cliente.');
+      window.setTimeout(() => setError(''), 4000);
       return;
     }
 
@@ -357,7 +358,8 @@ export default function ServiceManagementScreen() {
     !servicio.fk_empleado ||
     Number(servicio.fk_empleado) <= 0
   ) {
-    alert('No hay un trabajador asignado.');
+    setError('No hay un trabajador asignado.');
+    window.setTimeout(() => setError(''), 4000);
     return;
   }
 

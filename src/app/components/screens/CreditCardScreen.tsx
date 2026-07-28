@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CreditCard, Calendar, Lock, User, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useApp } from '../../context/AppContext';
 
 interface CreditCardScreenProps {
   onBack: () => void;
@@ -13,6 +14,7 @@ export default function CreditCardScreen({ onBack, onPaymentSuccess, montoTotal 
   onPaymentSuccess: () => void;
   montoTotal?: number;
 }) {
+  const app = useApp();
   const [numero, setNumero] = useState('');
   const [vencimiento, setVencimiento] = useState('');
   const [cvv, setCvv] = useState('');
@@ -38,14 +40,54 @@ export default function CreditCardScreen({ onBack, onPaymentSuccess, montoTotal 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setCargando(true);
+    (async () => {
+      try {
+        setCargando(true);
 
-    // Simulación del procesamiento del pago seguro
-    setTimeout(() => {
-      setCargando(false);
-      alert('¡Pago procesado con éxito!');
-      onPaymentSuccess();
-    }, 2000);
+        const currentUser = app.currentUser;
+
+        if (!currentUser) {
+          throw new Error('Usuario no autenticado');
+        }
+
+        const numericUserId = Number(currentUser.id);
+        if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+          throw new Error('ID de usuario inválido');
+        }
+
+        const rawNumber = (numero || '').replace(/\s+/g, '').slice(-16);
+        const last4 = rawNumber.slice(-4);
+        const numero_enmascarado = `**** **** **** ${last4}`;
+
+        // Guardar método de pago en backend (no almacenamos CVV)
+        const resp = await fetch('http://localhost:3000/api/payment-methods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fk_usuario: numericUserId,
+            tipo: 'card',
+            titular: nombre || '',
+            numero_enmascarado,
+            expiracion: vencimiento || null,
+          }),
+        });
+
+        const datos = await resp.json();
+        if (!resp.ok) {
+          throw new Error(datos.mensaje || 'No se pudo guardar el método de pago');
+        }
+
+        // Simulación de pago exitoso
+        setTimeout(() => {
+          setCargando(false);
+          onPaymentSuccess();
+        }, 800);
+      } catch (err: any) {
+        console.error('Error procesando pago:', err);
+        setCargando(false);
+        alert(err?.message || 'Error al procesar el pago');
+      }
+    })();
   };
 
   return (

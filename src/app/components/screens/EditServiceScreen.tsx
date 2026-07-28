@@ -25,6 +25,8 @@ export default function EditServicesScreen({
     useState<number[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     const cargarCategorias = async () => {
@@ -71,7 +73,8 @@ export default function EditServicesScreen({
         }
       } catch (error) {
         console.error('Error al cargar categorías:', error);
-        alert('No se pudieron cargar los servicios');
+        setError('No se pudieron cargar los servicios');
+        window.setTimeout(() => setError(''), 4000);
       } finally {
         setCargando(false);
       }
@@ -139,10 +142,12 @@ export default function EditServicesScreen({
     console.error(error);
 
     if (error instanceof Error) {
-      alert(error.message);
+      setError(error.message);
     } else {
-      alert('No se pudieron guardar los servicios');
+      setError('No se pudieron guardar los servicios');
     }
+
+    window.setTimeout(() => setError(''), 5000);
   } finally {
     setGuardando(false);
   }

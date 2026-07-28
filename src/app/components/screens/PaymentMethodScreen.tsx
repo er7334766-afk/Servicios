@@ -19,6 +19,22 @@ export default function PaymentMethodScreen() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('card');
   const [isEnteringCard, setIsEnteringCard] = useState(false); //agregado
+  const { currentUser } = useApp();
+  const [methodsList, setMethodsList] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        if (!currentUser) return;
+        const resp = await fetch(`http://localhost:3000/api/payment-methods/${currentUser.id}`);
+        if (!resp.ok) return;
+        const datos = await resp.json();
+        setMethodsList(Array.isArray(datos) ? datos : []);
+      } catch (err) {
+        console.error('Error cargando métodos de pago:', err);
+      }
+    })();
+  }, [currentUser]);
 
   // Métodos de pago 
   const methods = [
@@ -141,6 +157,23 @@ export default function PaymentMethodScreen() {
             El monto será cobrado al confirmar la reserva.
           </p>
         </div>
+
+        {methodsList.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-xs font-semibold text-slate-500 mb-2">Métodos guardados</h4>
+            <div className="flex flex-col gap-2">
+              {methodsList.map((m) => (
+                <div key={m.id_payment_method} className="flex items-center justify-between bg-white p-3 rounded-xl border">
+                  <div>
+                    <div className="text-sm font-semibold">{m.titular}</div>
+                    <div className="text-xs text-muted-foreground">{m.tipo} · {m.numero_enmascarado}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{m.expiracion ?? ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <motion.button
           whileTap={{ scale: 0.98 }}

@@ -67,6 +67,20 @@ export default function WorkerProfileScreen() {
         setCargando(true);
         setError('');
 
+        const parsearJsonSeguro = async (respuesta: Response) => {
+          const texto = await respuesta.text();
+
+          if (!texto) {
+            return null;
+          }
+
+          try {
+            return JSON.parse(texto);
+          } catch {
+            return null;
+          }
+        };
+
         const respuesta = await fetch(
           `http://localhost:3000/api/empleados/${id}`
         );
@@ -85,27 +99,31 @@ export default function WorkerProfileScreen() {
           );
         }
 
-        const datos = await respuesta.json();
-        const empleadoRecibido = datos.empleado ?? datos;
+        const datos = await parsearJsonSeguro(respuesta);
+        const empleadoRecibido = datos?.empleado ?? datos ?? null;
 
-        setWorker(empleadoRecibido);
+        if (!empleadoRecibido || typeof empleadoRecibido !== 'object') {
+          throw new Error('No se pudo cargar la información del empleado');
+        }
+
+        setWorker(empleadoRecibido as Empleado);
 
         const respuestaCategorias = await fetch(
           `http://localhost:3000/api/empleados/${id}/categorias`
         );
 
         if (respuestaCategorias.ok) {
-          const datosCategorias = await respuestaCategorias.json();
+          const datosCategorias = await parsearJsonSeguro(respuestaCategorias);
 
           setCategorias(
             Array.isArray(datosCategorias)
               ? datosCategorias
-              : datosCategorias.categorias ?? []
+              : datosCategorias?.categorias ?? []
           );
         } else {
           setCategorias(
-            Array.isArray(empleadoRecibido.categorias)
-              ? empleadoRecibido.categorias
+            Array.isArray((empleadoRecibido as Empleado).categorias)
+              ? (empleadoRecibido as Empleado).categorias!
               : []
           );
         }

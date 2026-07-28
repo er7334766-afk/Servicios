@@ -8,13 +8,13 @@ import {
   ChevronRight,
   LogOut,
   Edit2,
+  X,
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { StarRating } from '../shared/StarRating';
 import { ReviewCard } from '../shared/ReviewCard';
 import { useApp } from '../../context/AppContext';
-import { MOCK_WORKERS, MOCK_REVIEWS } from '../../data/mockData';
 
 import EditProfileScreen from './EditProfileScreen';
 import EditServiceScreen from './EditServiceScreen';
@@ -32,6 +32,10 @@ export default function WorkerOwnProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingServices, setIsEditingServices] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
 
  const idEmpleado = Number(currentUser?.id);
  
@@ -39,22 +43,21 @@ export default function WorkerOwnProfileScreen() {
   console.log("idEmpleado:", currentUser?.idEmpleado);
   console.log("id:", currentUser?.id);
 
-  const worker = {
-    ...MOCK_WORKERS[0],
-    id: currentUser?.id ?? MOCK_WORKERS[0].id,
-    name: currentUser?.name ?? MOCK_WORKERS[0].name,
-    avatarUrl:
-      currentUser?.avatarUrl || MOCK_WORKERS[0].avatarUrl,
+   const worker = {
+    id: currentUser?.id ?? '',
+    name: currentUser?.name ?? 'Trabajador',
+    avatarUrl: currentUser?.avatarUrl || '',
     location:
-      currentUser?.location &&
-      currentUser.location !== 'No especificada'
+      currentUser?.location && currentUser.location !== 'No especificada'
         ? currentUser.location
-        : MOCK_WORKERS[0].location,
+        : 'Ubicación no especificada',
+    rating: 0,
+    reviewCount: 0,
+    jobCount: Number(currentUser?.numeroTrabajos ?? 0),
+    pricePerHour: 0,
   };
 
-  const reviews = MOCK_REVIEWS.filter(
-    (review) => review.targetId === MOCK_WORKERS[0].id
-  );
+  const reviews: Array<any> = [];
 
   const cargarCategorias = async () => {
     if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
@@ -89,9 +92,71 @@ export default function WorkerOwnProfileScreen() {
     cargarCategorias();
   }, [idEmpleado]);
 
+  useEffect(() => {
+    const urls = Array.isArray((currentUser as any)?.galleryUrls)
+      ? ((currentUser as any).galleryUrls as string[]) ?? []
+      : [];
+
+    setGalleryUrls(urls);
+  }, [currentUser]);
+
   const handleLogout = () => {
     setCurrentUser(null);
     navigate('/');
+  };
+
+  const handleSubirEvidencia = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+
+    try {
+      setSubiendoEvidencia(true);
+      setErrorMessage('');
+
+      const reader = new FileReader();
+      const contenido = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(String(reader.result ?? ''));
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+        reader.readAsDataURL(archivo);
+      });
+
+      const base64 = contenido.split(',')[1];
+      const respuesta = await fetch('http://localhost:3000/api/upload-evidencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64,
+          fileName: archivo.name,
+          contentType: archivo.type,
+        }),
+      });
+
+      const datos = await respuesta.json().catch(() => null);
+
+      if (!respuesta.ok) {
+        throw new Error(datos?.mensaje || 'No se pudo subir la evidencia');
+      }
+
+      const nuevaUrl = datos?.url as string | undefined;
+      if (nuevaUrl) {
+        setGalleryUrls((actuales) => [...actuales, nuevaUrl]);
+
+        if (currentUser) {
+          setCurrentUser({
+            ...currentUser,
+            role: currentUser.role ?? 'worker',
+            galleryUrls: [...(Array.isArray((currentUser as any)?.galleryUrls) ? (currentUser as any).galleryUrls : []), nuevaUrl],
+          } as any);
+        }
+      }
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : 'Error al subir la evidencia';
+      setErrorMessage(mensaje);
+      window.setTimeout(() => setErrorMessage(''), 4000);
+    } finally {
+      setSubiendoEvidencia(false);
+      event.target.value = '';
+    }
   };
 
   if (isEditing) {
@@ -246,13 +311,9 @@ export default function WorkerOwnProfileScreen() {
           <button
             type="button"
             onClick={() => {
-              if (
-                !Number.isInteger(idEmpleado) ||
-                idEmpleado <= 0
-              ) {
-                alert(
-                  'No se encontró el ID del trabajador. Cierra sesión y vuelve a entrar.'
-                );
+              if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+                setErrorMessage('No se encontró el ID del trabajador. Cierra sesión y vuelve a entrar.');
+                window.setTimeout(() => setErrorMessage(''), 4000);
                 return;
               }
 
@@ -289,29 +350,58 @@ export default function WorkerOwnProfileScreen() {
             Galería
           </h2>
 
-          <button
-            type="button"
-            className="text-xs text-[#1A56DB]"
-          >
-            Agregar foto
-          </button>
+          <label className="cursor-pointer text-xs text-[#1A56DB]">
+            {subiendoEvidencia ? 'Subiendo...' : 'Agregar foto'}
+            <input type="file" accept=".jpg,.jpeg,.png" className="hidden" onChange={handleSubirEvidencia} />
+          </label>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          {worker.galleryUrls.map((url, index) => (
-            <div
-              key={index}
-              className="aspect-square rounded-xl overflow-hidden"
-            >
-              <ImageWithFallback
-                src={url}
-                alt={`Trabajo ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ))}
+          {galleryUrls.length > 0 ? (
+            galleryUrls.map((url, index) => (
+              <button
+                key={`${url}-${index}`}
+                type="button"
+                onClick={() => setSelectedImageUrl(url)}
+                className="aspect-square rounded-xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+              >
+                <ImageWithFallback
+                  src={url}
+                  alt={`Trabajo ${index + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground col-span-3">
+              Aún no tienes fotos en la galería.
+            </p>
+          )}
         </div>
       </div>
+
+      {selectedImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-3 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setSelectedImageUrl(null)}
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white"
+              aria-label="Cerrar imagen"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="overflow-hidden rounded-xl">
+              <img
+                src={selectedImageUrl}
+                alt="Vista previa de la galería"
+                className="max-h-[80vh] w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reviews */}
       <div className="px-5 mt-5">

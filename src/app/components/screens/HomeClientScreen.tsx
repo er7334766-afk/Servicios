@@ -18,10 +18,10 @@ import { WorkerCard } from '../shared/WorkerCard';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
 import { useApp } from '../../context/AppContext';
 
-import {
-  MOCK_WORKERS,
-  SERVICE_CATEGORIES,
-} from '../../data/mockData';
+// Categories will be loaded from backend; using empty list for now
+const SERVICE_CATEGORIES_RUNTIME: any[] = [];
+import { obtenerCategoriasDB } from '../../services/solicitudesApi';
+import { obtenerEmpleados } from '../../services/empleadosApi';
 
 import type {
   ServiceCategory,
@@ -153,17 +153,87 @@ export default function HomeClientScreen() {
     setErrorSolicitudes,
   ] = useState('');
 
-  const idCliente = Number(
-    currentUser?.id
-  );
+  const idCliente = Number(currentUser?.id);
 
-  const featured = [
-    ...MOCK_WORKERS,
-  ]
-    .sort(
-      (a, b) => b.rating - a.rating
-    )
-    .slice(0, 5);
+  const [categories, setCategories] = useState<ServiceCategoryItem[]>([]);
+  const [featured, setFeatured] = useState<Worker[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const cats = await obtenerCategoriasDB();
+
+        const mapped: ServiceCategoryItem[] = (cats || []).map((c: any) => {
+          const idLabel = String(c.id ?? c.nombre ?? c.label ?? '').toLowerCase();
+
+          let fallbackIcon: string | undefined;
+
+          if (/plom/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/plomeria.ico';
+          } else if (/carp/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/carpinteria.ico';
+          } else if (/electrodomest/.test(idLabel) || /electro\b/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/electrodomestico.ico';
+          } else if (/\belectricidad\b/.test(idLabel) || /\belectr/i.test(idLabel) || /electric/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/electricidad.ico';
+          } else if (/constr|constru/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/construccion.ico';
+          } else if (/jard/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/jardineria.ico';
+          } else if (/limp/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/limpieza.ico';
+          } else if (/pint/.test(idLabel)) {
+            fallbackIcon = 'https://serviapp.blob.core.windows.net/img/pintura.ico';
+          }
+
+          return {
+            id: String(c.id) as any,
+            label: c.nombre ?? c.label ?? 'Categoría',
+            icon: 'Wrench',
+            color: c.color ?? '#1A56DB',
+            bgColor: c.bgColor ?? '#EFF4FF',
+            iconUrl: c.iconUrl ?? fallbackIcon,
+          };
+        });
+
+        console.log('DEBUG: categorías mapeadas =>', mapped);
+
+        if (mapped.length > 0) setCategories(mapped);
+      } catch (err) {
+        console.error('No se pudieron cargar categorías:', err);
+      }
+    })();
+
+    (async () => {
+      try {
+        const empleados = await obtenerEmpleados();
+
+        const mapped: Worker[] = (empleados || []).slice(0, 8).map((e: any) => ({
+          id: String(e.id_empleado ?? e.id ?? e._id),
+          name: e.nombre_E || e.nombre || 'Trabajador',
+          email: e.correo ?? '',
+          phone: e.celular ?? '',
+          avatarUrl: e.foto ?? e.avatarUrl ?? '',
+          role: 'worker',
+          location: e.direccion ?? 'No especificada',
+          joinedDate: e.fechaCreacion ?? '',
+          categories: e.id_categoria ? [String(e.id_categoria) as any] : [],
+          rating: Number(e.rating ?? 0),
+          reviewCount: Number(e.reviews ?? 0),
+          jobCount: Number(e.N_trabajos ?? e.numeroTrabajos ?? 0),
+          bio: e.descripcion ?? '',
+          distanceKm: 0,
+          pricePerHour: Number(e.precio ?? 0),
+          isAvailable: String(e.estado ?? '').toLowerCase() === 'disponible',
+          galleryUrls: [],
+          services: [e.titulo?.trim() || e.categoria || 'Servicios generales'],
+        }));
+
+        setFeatured(mapped);
+      } catch (err) {
+        console.error('No se pudieron cargar empleados destacados:', err);
+      }
+    })();
+  }, []);
 
   const cargarSolicitudes = async (
     cargaInicial = false
@@ -313,12 +383,8 @@ export default function HomeClientScreen() {
         </div>
 
         <ServiceCategoryGrid
-          onSelect={
-            handleCategorySelect
-          }
-          categories={
-            SERVICE_CATEGORIES
-          }
+          onSelect={handleCategorySelect}
+          categories={categories.length ? categories : undefined}
         />
       </div>
 
@@ -343,13 +409,19 @@ export default function HomeClientScreen() {
         </div>
 
         <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-none">
-          {featured.map((trabajador) => (
-            <WorkerCard
-              key={trabajador.id}
-              worker={trabajador}
-              variant="compact"
-            />
-          ))}
+          {featured.length === 0 ? (
+            <div className="w-full rounded-2xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+              Los trabajadores aparecerán aquí cuando estén disponibles.
+            </div>
+          ) : (
+            featured.map((trabajador) => (
+              <WorkerCard
+                key={trabajador.id}
+                worker={trabajador as any}
+                variant="compact"
+              />
+            ))
+          )}
         </div>
       </div>
 
@@ -543,18 +615,19 @@ export default function HomeClientScreen() {
         </h2>
 
         <div className="flex flex-col gap-3">
-          {MOCK_WORKERS.filter(
-            (trabajador) =>
-              trabajador.isAvailable
-          )
-            .slice(0, 3)
-            .map((trabajador) => (
+          {featured.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+              No hay trabajadores disponibles en este momento.
+            </div>
+          ) : (
+            featured.slice(0, 3).map((trabajador) => (
               <WorkerCard
                 key={trabajador.id}
-                worker={trabajador}
+                worker={trabajador as any}
                 variant="full"
               />
-            ))}
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -1,39 +1,57 @@
 //para cuando exista el panel de administrador, este es el componente que se mostrará, con la opción de bloquear y desbloquear cuentas de usuarios y trabajadores, así como eliminar cuentas definitivamente. También se muestran métricas y reportes generales del sistema.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, BarChart3, ShieldAlert, UserX, UserCheck, 
   Trash2, FileText, ArrowLeft, Download, Eye 
 } from 'lucide-react';
-import { MOCK_WORKERS } from '../../data/mockData';
+import { obtenerEmpleados } from '../../services/empleadosApi';
+import { obtenerClientes } from '../../services/clientesApi';
 
-// Datos simulados extras para complementar el panel
-const MOCK_CLIENTS = [
-  { id: 'c1', name: 'Carlos Mendoza', email: 'carlos@mail.com', status: 'active', registered: '2026-03-15', rol: 'Cliente' },
-  { id: 'c2', name: 'Ana Gómez', email: 'ana@mail.com', status: 'blocked', registered: '2026-05-20', rol: 'Cliente' },
-];
+// Datos runtime para el panel admin
 
-const MOCK_STATS = {
-  totalServicios: 142,
-  serviciosCompletados: 118,
-  ingresosTotales: 3450,
-  nuevosClientes: 12
+const STATS = {
+  totalServicios: 0,
+  serviciosCompletados: 0,
+  ingresosTotales: 0,
+  nuevosClientes: 0,
 };
 
 export default function AdminDashboardScreen({ onBack }: { onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<'users' | 'reports'>('users');
   
   // Unificamos trabajadores y clientes en una lista común controlable
-  const [usuarios, setUsuarios] = useState([
-    ...MOCK_CLIENTS,
-    ...MOCK_WORKERS.map(w => ({ 
-      id: w.id, 
-      name: w.name, 
-      email: `${w.name.toLowerCase().replace(/\s+/g, '')}@mail.com`, 
-      status: w.isAvailable ? 'active' : 'blocked', 
-      rol: 'Trabajador' 
-    }))
-  ]);
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+
+  const cargarUsuarios = async () => {
+    try {
+      const [clientes, empleados] = await Promise.all([
+        obtenerClientes().catch(() => []),
+        obtenerEmpleados().catch(() => []),
+      ]);
+
+      const mappedClientes = (clientes || []).map((c: any) => ({
+        id: String(c.id || c.id_cliente || c._id),
+        name: c.nombre_C || c.nombre || 'Cliente',
+        email: c.correo || '',
+        status: c.estado || 'active',
+        rol: 'Cliente',
+      }));
+
+      const mappedEmpleados = (empleados || []).map((e: any) => ({
+        id: String(e.id_empleado || e.id || e._id),
+        name: e.nombre_E || e.nombre || 'Trabajador',
+        email: e.correo || '',
+        status: String(e.estado || '').toLowerCase() === 'disponible' ? 'active' : 'blocked',
+        rol: 'Trabajador',
+      }));
+
+      setUsuarios([...mappedClientes, ...mappedEmpleados]);
+    } catch (err) {
+      console.error('Error cargando usuarios admin:', err);
+      setUsuarios([]);
+    }
+  };
 
   // Función para bloquear o desbloquear cuentas de usuario
   const toggleBloquearUsuario = (id: string) => {
@@ -54,6 +72,28 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
       alert('Usuario eliminado correctamente');
     }
   };
+
+  // Descargar CSV desde backend
+  const downloadCsv = async (url: string, filename: string) => {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('No se pudo descargar el archivo');
+      const blob = await resp.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Error descargando CSV:', err);
+      alert('No se pudo descargar el archivo. Intenta de nuevo más tarde.');
+    }
+  };
+
+  useEffect(() => {
+    cargarUsuarios();
+  }, []);
 
     return (
     <div className="flex flex-col min-h-full bg-[#f8fafc] text-[#0f172a]">
@@ -161,19 +201,19 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400 uppercase">Servicios Solicitados</p>
-                <p className="text-xl font-black text-foreground mt-1">{MOCK_STATS.totalServicios}</p>
+                <p className="text-xl font-black text-foreground mt-1">{STATS.totalServicios}</p>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400 uppercase">Completados</p>
-                <p className="text-xl font-black text-green-600 mt-1">{MOCK_STATS.serviciosCompletados}</p>
+                <p className="text-xl font-black text-green-600 mt-1">{STATS.serviciosCompletados}</p>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400 uppercase">Volumen Cobros</p>
-                <p className="text-xl font-black text-[#1A56DB] mt-1">${MOCK_STATS.ingresosTotales}</p>
+                <p className="text-xl font-black text-[#1A56DB] mt-1">${STATS.ingresosTotales}</p>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400 uppercase">Nuevos Clientes</p>
-                <p className="text-xl font-black text-purple-600 mt-1">+{MOCK_STATS.nuevosClientes}</p>
+                <p className="text-xl font-black text-purple-600 mt-1">+{STATS.nuevosClientes}</p>
               </div>
             </div>
 
@@ -192,7 +232,7 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
                   </div>
                 </div>
                 <button 
-                  onClick={() => alert('Descargando archivo PDF de servicios realizados...')}
+                  onClick={() => downloadCsv('http://localhost:3000/api/admin/export/services', 'services.csv')}
                   className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors"
                 >
                   <Download className="w-4 h-4" />
@@ -210,7 +250,7 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
                   </div>
                 </div>
                 <button 
-                  onClick={() => alert('Descargando archivo PDF de clientes registrados...')}
+                  onClick={() => downloadCsv('http://localhost:3000/api/admin/export/clients', 'clients.csv')}
                   className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors"
                 >
                   <Download className="w-4 h-4" />
