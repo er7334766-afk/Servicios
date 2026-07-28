@@ -3,12 +3,34 @@ import cors from "cors";
 import "dotenv/config";
 
 import { database } from "./config/database.js";
+import { getClientIp, initAuditTables, logAudit, logSecurity } from "./audit.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 app.use(cors());
 app.use(express.json());
+
+app.use(async (req, _res, next) => {
+  const ip = getClientIp(req);
+  try {
+    await logSecurity({
+      event: "request_received",
+      level: "info",
+      ip,
+      path: req.path,
+      method: req.method,
+      details: JSON.stringify({ query: req.query }),
+    });
+  } catch (error) {
+    console.error("Security log middleware error:", error);
+  }
+  next();
+});
+
+initAuditTables().catch((error) => {
+  console.error("Error inicializando tablas de auditoria:", error);
+});
 
 app.get("/", (_req, res) => {
   res.json({
@@ -34,9 +56,31 @@ app.get("/api/test", async (_req, res) => {
   }
 });
 
-// ==========================================
-// RUTAS DE EMPLEADOS
-// ==========================================
+app.get("/api/logs/audit", async (_req, res) => {
+  try {
+    const [logs] = await database.query(
+      "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200"
+    );
+    res.json(logs);
+  } catch (error) {
+    console.error("Error al consultar audit logs:", error);
+    res.status(500).json({ mensaje: "Error al consultar audit logs" });
+  }
+});
+
+app.get("/api/logs/security", async (_req, res) => {
+  try {
+    const [logs] = await database.query(
+      "SELECT * FROM security_log ORDER BY created_at DESC LIMIT 200"
+    );
+    res.json(logs);
+  } catch (error) {
+    console.error("Error al consultar security logs:", error);
+    res.status(500).json({ mensaje: "Error al consultar security logs" });
+  }
+});
+
+
 app.post('/api/empleados', async (req, res) => {
   try {
     const { nombre_E, password_E, correo, celular } = req.body;
@@ -77,12 +121,31 @@ app.post('/api/empleados', async (req, res) => {
       ],
     );
 
+    const insertId = (resultado as any).insertId;
+    await logAudit({
+      action: "create_empleado",
+      entity: "empleados",
+      entityId: String(insertId),
+      userRole: "system",
+      details: JSON.stringify({ correo, celular }),
+      ip: getClientIp(req),
+      path: req.path,
+      method: req.method,
+    });
+
     res.status(201).json({
       mensaje: 'Empleado registrado correctamente',
       resultado,
     });
   } catch (error) {
     console.error('Error al registrar empleado:', error);
+    await logSecurity({
+      event: "empleado_create_error",
+      level: "error",
+      ip: getClientIp(req),
+      path: req.path,
+      details: String(error),
+    });
 
     res.status(500).json({
       mensaje: 'Error al registrar el empleado',
@@ -156,8 +219,27 @@ app.post("/api/clientes", async (req, res) => {
       mensaje: "Cliente registrado correctamente",
       resultado
     });
+
+    const insertId = (resultado as any).insertId;
+    await logAudit({
+      action: "create_cliente",
+      entity: "clientes",
+      entityId: String(insertId),
+      userRole: "system",
+      details: JSON.stringify({ correo, celular }),
+      ip: getClientIp(req),
+      path: req.path,
+      method: req.method,
+    });
   } catch (error) {
     console.error("Error al registrar cliente:", error);
+    await logSecurity({
+      event: "cliente_create_error",
+      level: "error",
+      ip: getClientIp(req),
+      path: req.path,
+      details: String(error),
+    });
 
     res.status(500).json({
       mensaje: "Error al registrar el cliente"
@@ -214,8 +296,25 @@ app.post("/api/login", async (req, res) => {
     }
 
     if (!usuario) {
+      await logSecurity({
+        event: "login_fail",
+        level: "warning",
+        ip: getClientIp(req),
+        path: req.path,
+        details: JSON.stringify({ correo, rol }),
+      });
       return res.status(401).json({ mensaje: "Correo o contraseña incorrectos" });
     }
+
+    await logSecurity({
+      event: "login_success",
+      level: "info",
+      userId: usuario.id,
+      userRole: rol,
+      ip: getClientIp(req),
+      path: req.path,
+      details: JSON.stringify({ correo }),
+    });
 
     res.json({
       mensaje: "Inicio de sesión exitoso",
@@ -223,6 +322,13 @@ app.post("/api/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Error al iniciar sesión:", error);
+    await logSecurity({
+      event: "login_error",
+      level: "error",
+      ip: getClientIp(req),
+      path: req.path,
+      details: String(error),
+    });
     res.status(500).json({
       mensaje: "Error interno del servidor al iniciar sesión",
     });
@@ -271,8 +377,27 @@ app.post("/api/servicios", async (req, res) => {
       mensaje: "Solicitud publicada correctamente",
       resultado
     });
+
+    const insertId = (resultado as any).insertId;
+    await logAudit({
+      action: "create_servicio",
+      entity: "servicios",
+      entityId: String(insertId),
+      userRole: "client",
+      details: JSON.stringify({ fk_cliente, fk_categoria, direccion }),
+      ip: getClientIp(req),
+      path: req.path,
+      method: req.method,
+    });
   } catch (error) {
     console.error("Error al registrar servicio:", error);
+    await logSecurity({
+      event: "servicio_create_error",
+      level: "error",
+      ip: getClientIp(req),
+      path: req.path,
+      details: String(error),
+    });
     res.status(500).json({
       mensaje: "Error al publicar la solicitud"
     });
