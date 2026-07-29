@@ -83,3 +83,4 @@ export function ServiceCategoryGrid({ onSelect, selected, categories = DEFAULT_C
     </div>
   );
 }
+
