@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { BlobServiceClient } from "@azure/storage-blob";
 
 import { database } from "./config/database.js";
@@ -18,6 +19,7 @@ const AZURE_EVIDENCIAS_CONTAINER = process.env.AZURE_EVIDENCIAS_CONTAINER ?? "ev
 const blobServiceClient: BlobServiceClient | null = AZURE_STORAGE_CONNECTION_STRING
   ? BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING)
   : null;
+const SALT_ROUNDS = 10;
 
 async function subirArchivoAzure(base64: string, fileName: string, contentType: string, containerName: string) {
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
@@ -152,6 +154,8 @@ app.post('/api/empleados', async (req, res) => {
       });
     }
 
+    const passwordHash = await bcrypt.hash(password_E, SALT_ROUNDS);
+
     const [resultado] = await database.execute(
       `
       INSERT INTO empleados
@@ -175,7 +179,7 @@ app.post('/api/empleados', async (req, res) => {
       `,
       [
         nombre_E,
-        password_E,
+        passwordHash,
         correo,
         celular,
         'Pendiente',
@@ -448,6 +452,8 @@ app.post("/api/clientes", async (req, res) => {
       });
     }
 
+    const passwordHash = await bcrypt.hash(password_C, SALT_ROUNDS);
+
     const [resultado] = await database.execute(
       `
       INSERT INTO clientes
@@ -457,7 +463,7 @@ app.post("/api/clientes", async (req, res) => {
       `,
       [
         nombre_C,
-        password_C,
+        passwordHash,
         correo,
         celular
       ]
@@ -601,6 +607,10 @@ app.put("/api/clientes/:id", async (req, res) => {
       });
     }
 
+    const passwordHash = password_C
+      ? await bcrypt.hash(password_C, SALT_ROUNDS)
+      : null;
+
     const [resultado]: any = await database.execute(
       `
       UPDATE clientes
@@ -609,7 +619,7 @@ app.put("/api/clientes/:id", async (req, res) => {
         correo = ?,
         telefono = ?,
         dni = ?,
-        password_hash = ?,
+        password_hash = COALESCE(?, password_hash),
         foto_url = ?
       WHERE id_cliente = ?
       `,
@@ -618,7 +628,7 @@ app.put("/api/clientes/:id", async (req, res) => {
         correo,
         celular || null,
         dni || null,
-        password_C || null,
+        passwordHash,
         foto || null,
         idCliente,
       ]
@@ -752,10 +762,17 @@ app.post("/api/login", async (req, res) => {
     // Usamos alias (AS id, AS nombre) para estandarizar la respuesta sin importar si es cliente o empleado
     if (rol === 'client') {
       const [rows]: any = await database.execute(
-        "SELECT id_cliente AS id, nombre AS nombre, correo, telefono AS celular, NULL AS estado, foto_url AS foto FROM clientes WHERE correo = ? AND password_hash = ?",
-        [correo, password]
+        "SELECT id_cliente AS id, nombre AS nombre, correo, telefono AS celular, NULL AS estado, foto_url AS foto, password_hash FROM clientes WHERE correo = ?",
+        [correo]
       );
-      if (rows.length > 0) usuario = rows[0];
+      if (rows.length > 0) {
+        const cliente = rows[0];
+        const valid = await bcrypt.compare(password, cliente.password_hash);
+        if (valid) {
+          const { password_hash, ...usuarioSinPassword } = cliente;
+          usuario = usuarioSinPassword;
+        }
+      }
     } else if (rol === 'worker') {
       const [rows]: any = await database.execute(
         `
@@ -767,14 +784,21 @@ app.post("/api/login", async (req, res) => {
           correo,
           telefono AS celular,
           estado,
-          foto_url AS foto
+          foto_url AS foto,
+          password_hash
         FROM empleados
         WHERE correo = ?
-          AND password_hash = ?
         `,
-        [correo, password]
+        [correo]
       );
-      if (rows.length > 0) usuario = rows[0];
+      if (rows.length > 0) {
+        const empleado = rows[0];
+        const valid = await bcrypt.compare(password, empleado.password_hash);
+        if (valid) {
+          const { password_hash, ...usuarioSinPassword } = empleado;
+          usuario = usuarioSinPassword;
+        }
+      }
     } else {
       return res.status(400).json({ mensaje: "Rol no válido" });
     }
