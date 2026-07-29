@@ -6,6 +6,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
+  ArrowLeft,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -299,9 +301,22 @@ export default function AgendaScreen() {
     <div className="flex min-h-full flex-col">
       <div className="border-b border-border bg-card px-4 pb-4 pt-10">
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-foreground">
-            {role === 'worker' ? 'Mi Agenda' : 'Mis Reservas'}
-          </h1>
+
+           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate("/home")}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
+              title="Regresar"
+            >
+              <ArrowLeft className="h-5 w-5 text-[#1A56DB]" />
+            </button>
+
+            <h1 className="text-lg font-bold text-foreground">
+              {role === 'worker' ? 'Mi Agenda' : 'Mis Reservas'}
+            </h1>
+          </div>
+
 
           <div className="flex rounded-xl bg-muted p-1">
             {(['week', 'month'] as const).map((vista) => (

@@ -1,11 +1,5 @@
-import {
-  useEffect,
-  useState,
-} from 'react';
-import {
-  useNavigate,
-  useParams,
-} from 'react-router';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 
 import {
   ArrowLeft,
@@ -22,8 +16,8 @@ import {
   aceptarPostulante,
   obtenerPostulacionesServicio,
   rechazarPostulante,
-  type SolicitudCliente,
   type PostulanteServicio,
+  type SolicitudCliente,
 } from '../../services/SolicitudesClienteApi';
 
 function formatearPresupuesto(
@@ -52,56 +46,59 @@ function convertirEstado(
   switch (valor) {
     case 'pendiente':
       return 'Pendiente';
-
     case 'aceptada':
       return 'Aceptada';
-
     case 'rechazada':
       return 'Rechazada';
-
     case 'asignado':
       return 'Asignado';
-
+    case 'en proceso':
+    case 'en_proceso':
+      return 'En proceso';
+    case 'completado':
+      return 'Completado';
+    case 'cancelado':
+      return 'Cancelado';
     default:
       return estado || 'Sin estado';
   }
 }
 
+function normalizarEstado(
+  estado?: string | null
+): string {
+  return String(estado ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 export default function ClientServiceDetailScreen() {
   const navigate = useNavigate();
   const { idServicio } = useParams();
+  const servicioId = Number(idServicio);
 
-  const servicioId = Number(
-    idServicio
-  );
+  const [servicio, setServicio] =
+    useState<SolicitudCliente | null>(null);
 
-  const [
-    servicio,
-    setServicio,
-  ] = useState<SolicitudCliente | null>(
-    null
-  );
+  const [postulaciones, setPostulaciones] =
+    useState<PostulanteServicio[]>([]);
 
-  const [
-    postulaciones,
-    setPostulaciones,
-  ] = useState<PostulanteServicio[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] =
+    useState(false);
 
-  const [cargando, setCargando] =
-    useState(true);
+  const [aceptandoId, setAceptandoId] =
+    useState<number | null>(null);
 
-  const [
-    aceptandoId,
-    setAceptandoId,
-  ] = useState<number | null>(null);
+  const [rechazandoId, setRechazandoId] =
+    useState<number | null>(null);
 
-  const [error, setError] =
-    useState('');
+  const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
 
-  const [mensaje, setMensaje] =
-    useState('');
-
-  const cargarDetalle = async () => {
+  const cargarDetalle = async (
+    cargaInicial = false
+  ) => {
     if (
       !Number.isInteger(servicioId) ||
       servicioId <= 0
@@ -114,7 +111,12 @@ export default function ClientServiceDetailScreen() {
     }
 
     try {
-      setCargando(true);
+      if (cargaInicial) {
+        setCargando(true);
+      } else {
+        setActualizando(true);
+      }
+
       setError('');
 
       const datos =
@@ -122,9 +124,11 @@ export default function ClientServiceDetailScreen() {
           servicioId
         );
 
-      setServicio(datos.servicio);
+      setServicio(datos.servicio ?? null);
       setPostulaciones(
-        datos.postulaciones
+        Array.isArray(datos.postulaciones)
+          ? datos.postulaciones
+          : []
       );
     } catch (error) {
       setError(
@@ -134,16 +138,25 @@ export default function ClientServiceDetailScreen() {
       );
     } finally {
       setCargando(false);
+      setActualizando(false);
     }
   };
 
   useEffect(() => {
-    cargarDetalle();
+    void cargarDetalle(true);
   }, [servicioId]);
 
   const manejarAceptar = async (
     idEmpleado: number
   ) => {
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setError('ID de empleado inválido');
+      return;
+    }
+
     const confirmado = window.confirm(
       '¿Deseas seleccionar a este trabajador? Las demás postulaciones serán rechazadas.'
     );
@@ -155,18 +168,17 @@ export default function ClientServiceDetailScreen() {
       setError('');
       setMensaje('');
 
-      const respuesta =
-        await aceptarPostulante(
-          servicioId,
-          idEmpleado
-        );
+      const respuesta = await aceptarPostulante(
+        servicioId,
+        idEmpleado
+      );
 
       setMensaje(
-        respuesta.mensaje ||
+        respuesta?.mensaje ||
           'Trabajador seleccionado correctamente'
       );
 
-      await cargarDetalle();
+      await cargarDetalle(false);
     } catch (error) {
       setError(
         error instanceof Error
@@ -181,19 +193,44 @@ export default function ClientServiceDetailScreen() {
   const manejarRechazar = async (
     idPostulacion: number
   ) => {
-    const confirmado = window.confirm('¿Deseas rechazar esta postulación?');
+    if (
+      !Number.isInteger(idPostulacion) ||
+      idPostulacion <= 0
+    ) {
+      setError('ID de postulación inválido');
+      return;
+    }
+
+    const confirmado = window.confirm(
+      '¿Deseas rechazar esta postulación?'
+    );
+
     if (!confirmado) return;
 
     try {
+      setRechazandoId(idPostulacion);
       setError('');
       setMensaje('');
 
-      await rechazarPostulante(idPostulacion);
+      const respuesta =
+        await rechazarPostulante(
+          idPostulacion
+        );
 
-      setMensaje('Postulación rechazada correctamente');
-      await cargarDetalle();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo rechazar');
+      setMensaje(
+        respuesta?.mensaje ||
+          'Postulación rechazada correctamente'
+      );
+
+      await cargarDetalle(false);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo rechazar la postulación'
+      );
+    } finally {
+      setRechazandoId(null);
     }
   };
 
@@ -210,9 +247,7 @@ export default function ClientServiceDetailScreen() {
       <div className="min-h-full bg-gray-50 px-5 py-6">
         <button
           type="button"
-          onClick={() =>
-            navigate(-1)
-          }
+          onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-[#1A56DB] font-semibold"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -230,10 +265,13 @@ export default function ClientServiceDetailScreen() {
   }
 
   const servicioAsignado =
-    String(servicio.estado)
-      .trim()
-      .toLowerCase() !==
+    normalizarEstado(servicio.estado) !==
     'pendiente';
+
+  const hayOperacion =
+    aceptandoId !== null ||
+    rechazandoId !== null ||
+    actualizando;
 
   return (
     <div className="min-h-full bg-gray-50 pb-24">
@@ -241,20 +279,19 @@ export default function ClientServiceDetailScreen() {
         <div className="flex items-center gap-4">
           <button
             type="button"
-            onClick={() =>
-              navigate(-1)
-            }
+            onClick={() => navigate(-1)}
             className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center"
+            aria-label="Volver"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-gray-500">
               Mi solicitud
             </p>
 
-            <h1 className="text-lg font-bold text-gray-900">
+            <h1 className="text-lg font-bold text-gray-900 truncate">
               {servicio.titulo ||
                 servicio.nombre_categoria ||
                 'Solicitud de servicio'}
@@ -291,7 +328,8 @@ export default function ClientServiceDetailScreen() {
           </p>
 
           <p className="text-sm text-blue-100 mt-1">
-            {servicio.descripcion}
+            {servicio.descripcion ||
+              'Sin descripción'}
           </p>
         </section>
 
@@ -309,7 +347,8 @@ export default function ClientServiceDetailScreen() {
               </p>
 
               <p className="text-sm text-gray-700 mt-1">
-                {servicio.direccion}
+                {servicio.direccion ||
+                  'Sin dirección'}
               </p>
             </div>
           </div>
@@ -324,16 +363,28 @@ export default function ClientServiceDetailScreen() {
 
               <p className="text-sm text-gray-500 mt-1">
                 {postulaciones.length}{' '}
-                postulaciones
+                {postulaciones.length === 1
+                  ? 'postulación'
+                  : 'postulaciones'}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={cargarDetalle}
-              className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center"
+              onClick={() =>
+                void cargarDetalle(false)
+              }
+              disabled={hayOperacion}
+              className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center disabled:opacity-50"
+              aria-label="Actualizar postulaciones"
             >
-              <RefreshCw className="w-4 h-4 text-[#1A56DB]" />
+              <RefreshCw
+                className={`w-4 h-4 text-[#1A56DB] ${
+                  actualizando
+                    ? 'animate-spin'
+                    : ''
+                }`}
+              />
             </button>
           </div>
         </section>
@@ -370,40 +421,58 @@ export default function ClientServiceDetailScreen() {
           <div className="space-y-4">
             {postulaciones.map(
               (postulacion) => {
+                const estadoPostulacion =
+                  normalizarEstado(
+                    postulacion.estado_postulacion
+                  );
+
                 const aceptada =
-                  postulacion.estado_postulacion
-                    .trim()
-                    .toLowerCase() ===
-                  'aceptada';
+                  estadoPostulacion === 'aceptada';
 
                 const rechazada =
-                  postulacion.estado_postulacion
-                    .trim()
-                    .toLowerCase() ===
-                  'rechazada';
+                  estadoPostulacion === 'rechazada';
+
+                const pendiente =
+                  estadoPostulacion === 'pendiente';
+
+                const idEmpleado = Number(
+                  postulacion.id_empleado
+                );
+
+                const idPostulacion = Number(
+                  postulacion.id_postulacion
+                );
+
+                const aceptandoEsta =
+                  aceptandoId === idEmpleado;
+
+                const rechazandoEsta =
+                  rechazandoId ===
+                  idPostulacion;
+
+                const botonesDeshabilitados =
+                  servicioAsignado ||
+                  !pendiente ||
+                  hayOperacion;
 
                 return (
                   <article
-                    key={
-                      postulacion.id_postulacion
-                    }
+                    key={idPostulacion}
                     className="bg-white rounded-3xl p-5 shadow-sm"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-14 h-14 rounded-full bg-blue-100 text-[#1A56DB] flex items-center justify-center text-xl font-bold flex-shrink-0">
                         {postulacion.nombre_E
                           ?.charAt(0)
-                          .toUpperCase() ||
-                          'T'}
+                          .toUpperCase() || 'T'}
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-bold text-gray-900">
-                              {
-                                postulacion.nombre_E
-                              }
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-gray-900 truncate">
+                              {postulacion.nombre_E ||
+                                'Trabajador'}
                             </h3>
 
                             <p className="text-sm text-[#1A56DB] mt-1">
@@ -413,7 +482,7 @@ export default function ClientServiceDetailScreen() {
                           </div>
 
                           <span
-                            className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                            className={`text-xs px-3 py-1 rounded-full font-semibold flex-shrink-0 ${
                               aceptada
                                 ? 'bg-green-100 text-green-700'
                                 : rechazada
@@ -430,43 +499,33 @@ export default function ClientServiceDetailScreen() {
                         <div className="space-y-2 mt-4">
                           {postulacion.correo && (
                             <div className="flex items-center gap-2">
-                              <Mail className="w-4 h-4 text-gray-400" />
-
-                              <p className="text-xs text-gray-600">
-                                {
-                                  postulacion.correo
-                                }
+                              <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              <p className="text-xs text-gray-600 break-all">
+                                {postulacion.correo}
                               </p>
                             </div>
                           )}
 
                           {postulacion.celular && (
                             <div className="flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-gray-400" />
-
+                              <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <p className="text-xs text-gray-600">
-                                {
-                                  postulacion.celular
-                                }
+                                {postulacion.celular}
                               </p>
                             </div>
                           )}
 
                           {postulacion.direccion && (
                             <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-gray-400" />
-
+                              <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                               <p className="text-xs text-gray-600">
-                                {
-                                  postulacion.direccion
-                                }
+                                {postulacion.direccion}
                               </p>
                             </div>
                           )}
 
                           <div className="flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-gray-400" />
-
+                            <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <p className="text-xs text-gray-600">
                               {Number(
                                 postulacion.N_trabajos ??
@@ -477,55 +536,67 @@ export default function ClientServiceDetailScreen() {
                           </div>
                         </div>
 
-                          <div className="flex gap-2 mt-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5">
                           <button
                             type="button"
                             onClick={() =>
                               navigate(
-                                `/home/worker/${postulacion.id_empleado}`
+                                `/home/worker/${idEmpleado}`
                               )
                             }
-                            className="flex-1 rounded-xl border border-[#1A56DB] text-[#1A56DB] px-3 py-2.5 text-xs font-semibold"
+                            className="rounded-xl border border-[#1A56DB] text-[#1A56DB] px-3 py-2.5 text-xs font-semibold"
                           >
                             Ver perfil
                           </button>
-                          <div className="flex gap-2 w-full">
-                            <button
-                              type="button"
-                              disabled={
-                                servicioAsignado || aceptandoId !== null || aceptada || rechazada
-                              }
-                              onClick={() =>
-                                manejarAceptar(Number(postulacion.id_empleado))
-                              }
-                              className="flex-1 rounded-xl bg-[#1A56DB] text-white px-3 py-2.5 text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                            >
-                              {aceptandoId === postulacion.id_empleado ? (
-                                <>
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                  Aceptando
-                                </>
-                              ) : aceptada ? (
-                                <>
-                                  <Check className="w-4 h-4" />
-                                  Aceptado
-                                </>
-                              ) : (
-                                'Aceptar'
-                              )}
-                            </button>
 
-                            <button
-                              type="button"
-                              disabled={aceptada || rechazada}
-                              onClick={() =>
-                                manejarRechazar(Number(postulacion.id_postulacion))
-                              }
-                              className="flex-1 rounded-xl border border-red-200 bg-red-50 text-red-600 px-3 py-2.5 text-xs font-semibold disabled:bg-gray-200 disabled:cursor-not-allowed"
-                            >
-                              Rechazar
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            disabled={
+                              botonesDeshabilitados
+                            }
+                            onClick={() =>
+                              void manejarAceptar(
+                                idEmpleado
+                              )
+                            }
+                            className="rounded-xl bg-[#1A56DB] text-white px-3 py-2.5 text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                          >
+                            {aceptandoEsta ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Aceptando
+                              </>
+                            ) : aceptada ? (
+                              <>
+                                <Check className="w-4 h-4" />
+                                Aceptado
+                              </>
+                            ) : (
+                              'Aceptar'
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              botonesDeshabilitados
+                            }
+                            onClick={() =>
+                              void manejarRechazar(
+                                idPostulacion
+                              )
+                            }
+                            className="rounded-xl border border-red-200 bg-red-50 text-red-600 px-3 py-2.5 text-xs font-semibold disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                          >
+                            {rechazandoEsta ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Rechazando
+                              </>
+                            ) : (
+                              'Rechazar'
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>

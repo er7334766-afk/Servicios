@@ -10,6 +10,7 @@ import {
   Search,
   Edit,
   RefreshCw,
+  ArrowLeft,
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -23,6 +24,14 @@ interface Conversacion {
   lastMessageTime: string;
   unreadCount: number;
   participantOnline: boolean | number;
+}
+
+interface Contacto {
+  id: number;
+  nombre: string;
+  foto: string | null;
+  descripcion: string | null;
+  estado: string | null;
 }
 
 interface UsuarioGuardado {
@@ -83,6 +92,17 @@ export default function ChatListScreen() {
     useState(false);
   const [error, setError] = useState('');
 
+  const [mostrarContactos, setMostrarContactos] =
+    useState(false);
+  const [contactos, setContactos] =
+    useState<Contacto[]>([]);
+  const [busquedaContacto, setBusquedaContacto] =
+    useState('');
+  const [cargandoContactos, setCargandoContactos] =
+    useState(false);
+  const [errorContactos, setErrorContactos] =
+    useState('');
+
   const usuarioLocal = leerUsuarioLocal();
 
   const rolActual =
@@ -133,12 +153,26 @@ export default function ChatListScreen() {
         }
 
         const url = esEmpleado
-          ? `http://localhost:3000/api/chat/empleado/${idUsuario}/conversaciones`
-          : `http://localhost:3000/api/chat/cliente/${idUsuario}/conversaciones`;
+          ? `/api/chat/empleado/${idUsuario}/conversaciones`
+          : `/api/chat/cliente/${idUsuario}/conversaciones`;
 
-        const respuesta = await fetch(url);
+        const respuesta = await fetch(url, {
+          cache: 'no-store',
+        });
+
         const texto = await respuesta.text();
-        const datos = texto ? JSON.parse(texto) : null;
+
+        let datos: any = [];
+
+        if (texto) {
+          try {
+            datos = JSON.parse(texto);
+          } catch {
+            throw new Error(
+              'El servidor devolvió una respuesta inválida'
+            );
+          }
+        }
 
         if (!respuesta.ok) {
           throw new Error(
@@ -233,6 +267,39 @@ export default function ChatListScreen() {
     conversaciones,
   ]);
 
+  const contactosFiltrados = useMemo(() => {
+    const texto = busquedaContacto
+      .trim()
+      .toLowerCase();
+
+    if (!texto) {
+      return contactos;
+    }
+
+    return contactos.filter((contacto) => {
+      const nombre = String(
+        contacto.nombre ?? ''
+      ).toLowerCase();
+
+      const descripcion = String(
+        contacto.descripcion ?? ''
+      ).toLowerCase();
+
+      const estado = String(
+        contacto.estado ?? ''
+      ).toLowerCase();
+
+      return (
+        nombre.includes(texto) ||
+        descripcion.includes(texto) ||
+        estado.includes(texto)
+      );
+    });
+  }, [
+    contactos,
+    busquedaContacto,
+  ]);
+
   const formatearFecha = (fecha: string) => {
     if (!fecha) {
       return '';
@@ -275,14 +342,124 @@ export default function ChatListScreen() {
     );
   };
 
+  const abrirContactos = async () => {
+    try {
+      setMostrarContactos(true);
+      setCargandoContactos(true);
+      setErrorContactos('');
+      setBusquedaContacto('');
+
+      if (
+        rolActual !== 'client' &&
+        rolActual !== 'worker'
+      ) {
+        throw new Error(
+          'No se pudo identificar el rol del usuario'
+        );
+      }
+
+      if (
+        !Number.isInteger(idUsuario) ||
+        idUsuario <= 0
+      ) {
+        throw new Error(
+          'No se encontró el ID del usuario'
+        );
+      }
+
+      const respuesta = await fetch(
+        `/api/chat/contactos/${rolActual}/${idUsuario}`,
+        {
+          cache: 'no-store',
+        }
+      );
+
+      const texto = await respuesta.text();
+
+      let datos: any = [];
+
+      if (texto) {
+        try {
+          datos = JSON.parse(texto);
+        } catch {
+          throw new Error(
+            'El servidor devolvió una respuesta inválida'
+          );
+        }
+      }
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.detalle ||
+            datos?.mensaje ||
+            'No se pudieron cargar los contactos'
+        );
+      }
+
+      setContactos(
+        Array.isArray(datos) ? datos : []
+      );
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : 'Error al cargar los contactos';
+
+      console.error(
+        'Error al cargar contactos:',
+        error
+      );
+
+      setErrorContactos(mensaje);
+      setContactos([]);
+    } finally {
+      setCargandoContactos(false);
+    }
+  };
+
+  const cerrarContactos = () => {
+    setMostrarContactos(false);
+    setBusquedaContacto('');
+    setErrorContactos('');
+  };
+
+  const abrirChatContacto = (
+    contacto: Contacto
+  ) => {
+    navigate(`/home/chat/${contacto.id}`, {
+      state: esEmpleado
+        ? {
+            idCliente: contacto.id,
+            idEmpleado: idUsuario,
+            participantId: contacto.id,
+          }
+        : {
+            idCliente: idUsuario,
+            idEmpleado: contacto.id,
+            participantId: contacto.id,
+          },
+    });
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Encabezado */}
-      <div className="bg-card px-5 pt-10 pb-4 border-b border-border">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-border bg-card px-5 pb-4 pt-10">
+       <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/home")}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
+            title="Regresar"
+          >
+            <ArrowLeft className="h-5 w-5 text-[#1A56DB]" />
+          </button>
+
           <h1 className="text-xl font-bold text-foreground">
             Mensajes
           </h1>
+        </div>
 
           <div className="flex items-center gap-2">
             <button
@@ -293,11 +470,11 @@ export default function ChatListScreen() {
               disabled={
                 cargando || actualizando
               }
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-secondary disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary disabled:opacity-50"
               title="Actualizar conversaciones"
             >
               <RefreshCw
-                className={`w-4 h-4 text-[#1A56DB] ${
+                className={`h-4 w-4 text-[#1A56DB] ${
                   actualizando
                     ? 'animate-spin'
                     : ''
@@ -307,24 +484,26 @@ export default function ChatListScreen() {
 
             <button
               type="button"
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-secondary"
+              onClick={abrirContactos}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
+              title="Nuevo mensaje"
             >
-              <Edit className="w-4 h-4 text-[#1A56DB]" />
+              <Edit className="h-4 w-4 text-[#1A56DB]" />
             </button>
           </div>
         </div>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
           <input
             type="text"
             value={busqueda}
-            onChange={(e) =>
-              setBusqueda(e.target.value)
+            onChange={(event) =>
+              setBusqueda(event.target.value)
             }
             placeholder="Buscar conversaciones..."
-            className="w-full bg-input-background rounded-xl pl-9 pr-4 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+            className="w-full rounded-xl bg-input-background py-2.5 pl-9 pr-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
           />
         </div>
       </div>
@@ -332,15 +511,15 @@ export default function ChatListScreen() {
       {/* Contenido */}
       <div className="flex-1 overflow-y-auto">
         {cargando ? (
-          <div className="flex flex-col items-center justify-center py-16 px-5">
-            <RefreshCw className="w-7 h-7 text-[#1A56DB] animate-spin mb-3" />
+          <div className="flex flex-col items-center justify-center px-5 py-16">
+            <RefreshCw className="mb-3 h-7 w-7 animate-spin text-[#1A56DB]" />
 
             <p className="text-sm text-muted-foreground">
               Cargando conversaciones...
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-16 px-5 text-center">
+          <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
             <p className="text-sm font-semibold text-red-600">
               {error}
             </p>
@@ -350,7 +529,7 @@ export default function ChatListScreen() {
               onClick={() =>
                 cargarConversaciones(true)
               }
-              className="mt-4 px-4 py-2 rounded-xl bg-[#1A56DB] text-white text-sm"
+              className="mt-4 rounded-xl bg-[#1A56DB] px-4 py-2 text-sm text-white"
             >
               Intentar nuevamente
             </button>
@@ -379,7 +558,7 @@ export default function ChatListScreen() {
                     `/home/chat/${conversacion.id}`
                   )
                 }
-                className="flex items-center gap-3 px-5 py-3.5 border-b border-border cursor-pointer"
+                className="flex cursor-pointer items-center gap-3 border-b border-border px-5 py-3.5"
               >
                 <div className="relative flex-shrink-0">
                   <ImageWithFallback
@@ -390,11 +569,11 @@ export default function ChatListScreen() {
                     alt={
                       conversacion.participantName
                     }
-                    className="w-12 h-12 rounded-full object-cover"
+                    className="h-12 w-12 rounded-full object-cover"
                   />
 
                   <span
-                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
                       Boolean(
                         conversacion.participantOnline
                       )
@@ -404,22 +583,22 @@ export default function ChatListScreen() {
                   />
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-foreground truncate">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {
                         conversacion.participantName
                       }
                     </p>
 
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                    <span className="flex-shrink-0 text-xs text-muted-foreground">
                       {formatearFecha(
                         conversacion.lastMessageTime
                       )}
                     </span>
                   </div>
 
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {
                       conversacion.lastMessage
                     }
@@ -429,7 +608,7 @@ export default function ChatListScreen() {
                 {Number(
                   conversacion.unreadCount
                 ) > 0 && (
-                  <span className="w-5 h-5 bg-[#1A56DB] text-white rounded-full text-[10px] flex items-center justify-center font-bold flex-shrink-0">
+                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#1A56DB] text-[10px] font-bold text-white">
                     {
                       conversacion.unreadCount
                     }
@@ -439,19 +618,129 @@ export default function ChatListScreen() {
             )
           )
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 px-5">
-            <Search className="w-8 h-8 text-slate-300 mb-3" />
+          <div className="flex flex-col items-center justify-center px-5 py-16">
+            <Search className="mb-3 h-8 w-8 text-slate-300" />
 
             <p className="text-sm font-semibold text-slate-600">
               No se encontraron conversaciones
             </p>
 
-            <p className="text-xs text-slate-400 mt-1 text-center">
+            <p className="mt-1 text-center text-xs text-slate-400">
               Todavía no tienes mensajes.
             </p>
           </div>
         )}
       </div>
+
+      {/* Selector de contactos */}
+      {mostrarContactos && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={cerrarContactos}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-3xl bg-card p-5"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground">
+                Nuevo mensaje
+              </h2>
+
+              <button
+                type="button"
+                onClick={cerrarContactos}
+                className="rounded-full px-3 py-1 text-sm text-muted-foreground"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+              <input
+                type="text"
+                value={busquedaContacto}
+                onChange={(event) =>
+                  setBusquedaContacto(
+                    event.target.value
+                  )
+                }
+                placeholder={
+                  esEmpleado
+                    ? 'Buscar clientes...'
+                    : 'Buscar empleados...'
+                }
+                className="w-full rounded-xl bg-input-background py-2.5 pl-9 pr-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {cargandoContactos ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Cargando contactos...
+                </div>
+              ) : errorContactos ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm font-semibold text-red-600">
+                    {errorContactos}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={abrirContactos}
+                    className="mt-4 rounded-xl bg-[#1A56DB] px-4 py-2 text-sm text-white"
+                  >
+                    Intentar nuevamente
+                  </button>
+                </div>
+              ) : contactosFiltrados.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  No se encontraron contactos
+                </div>
+              ) : (
+                contactosFiltrados.map(
+                  (contacto) => (
+                    <button
+                      key={contacto.id}
+                      type="button"
+                      onClick={() =>
+                        abrirChatContacto(
+                          contacto
+                        )
+                      }
+                      className="flex w-full items-center gap-3 border-b border-border px-2 py-3 text-left"
+                    >
+                      <ImageWithFallback
+                        src={contacto.foto ?? ''}
+                        alt={contacto.nombre}
+                        className="h-11 w-11 rounded-full object-cover"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {contacto.nombre}
+                        </p>
+
+                        <p className="truncate text-xs text-muted-foreground">
+                          {contacto.descripcion ||
+                            contacto.estado ||
+                            ''}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

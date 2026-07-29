@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = '/api';
 
 export interface SolicitudCliente {
   id_servicio: number;
@@ -121,12 +121,18 @@ export async function obtenerSolicitudesCliente(
               cantidad_postulaciones:
                 detalle.postulaciones.length,
             };
-          } catch {
-            return {
-              ...servicio,
-              cantidad_postulaciones: 0,
-            };
-          }
+                  } catch (error) {
+          console.error(
+            `Error al obtener postulaciones del servicio ${servicio.id_servicio}:`,
+            error
+          );
+
+          return {
+            ...servicio,
+            cantidad_postulaciones: 0,
+          };
+        }
+
         }
       )
     );
