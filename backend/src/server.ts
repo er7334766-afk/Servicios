@@ -521,17 +521,19 @@ app.get(
 
       const respuesta: any =
         await database.query(`
+          
           SELECT TOP 1
-            id_cliente,
-            nombre AS nombre_C,
-            correo,
-            telefono AS celular,
-            dni,
-            foto_url AS foto,
-            fecha_creacion AS fechaCreacion
-          FROM clientes
-          WHERE id_cliente = ${idCliente}
-        `);
+          id_cliente,
+          nombre AS nombre_C,
+          correo,
+          telefono AS celular,
+          dni,
+          direccion,
+          foto_url AS foto,
+          fecha_creacion AS fechaCreacion
+        FROM clientes
+        WHERE id_cliente = ${idCliente}
+                `);
 
       const clientes: any[] =
         Array.isArray(
@@ -582,7 +584,7 @@ app.get(
 // ==========================================
 // ACTUALIZAR CLIENTE
 // ==========================================
-app.put("/api/clientes/:id", async (req, res) => {
+/*app.put("/api/clientes/:id", async (req, res) => {
   try {
     const idCliente = Number(req.params.id);
 
@@ -650,7 +652,160 @@ app.put("/api/clientes/:id", async (req, res) => {
       mensaje: "Error al actualizar el cliente",
     });
   }
+});*/
+
+
+// ==========================================
+// ACTUALIZAR CLIENTE SIN MODIFICAR CONTRASEÑA
+// ==========================================
+app.put("/api/clientes/:id", async (req, res) => {
+  try {
+    const idCliente = Number(req.params.id);
+
+    const {
+      nombre_C,
+      correo,
+      celular,
+      dni,
+      direccion,
+      foto,
+    } = req.body;
+
+    if (!Number.isInteger(idCliente) || idCliente <= 0) {
+      return res.status(400).json({
+        mensaje: "ID de cliente inválido",
+      });
+    }
+
+    const nombreLimpio = String(nombre_C ?? "").trim();
+    const correoLimpio = String(correo ?? "")
+      .trim()
+      .toLowerCase();
+
+    const celularLimpio = String(celular ?? "").trim();
+    const dniLimpio = String(dni ?? "").trim();
+    const direccionLimpia = String(direccion ?? "").trim();
+    const fotoLimpia = String(foto ?? "").trim();
+
+    if (!nombreLimpio || !correoLimpio) {
+      return res.status(400).json({
+        mensaje: "Nombre y correo son obligatorios",
+      });
+    }
+
+    const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!correoRegex.test(correoLimpio)) {
+      return res.status(400).json({
+        mensaje: "El correo electrónico no es válido",
+      });
+    }
+
+    if (
+      celularLimpio &&
+      !/^\d{8}$/.test(celularLimpio)
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "El celular debe contener exactamente 8 números",
+      });
+    }
+
+    if (
+      dniLimpio &&
+      !/^\d+$/.test(dniLimpio)
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "El DNI solo puede contener números",
+      });
+    }
+
+    const escaparSql = (valor: string) =>
+      valor.replace(/'/g, "''");
+
+    const respuesta: any = await database.query(`
+      UPDATE clientes
+      SET
+        nombre = '${escaparSql(nombreLimpio)}',
+        correo = '${escaparSql(correoLimpio)}',
+
+        telefono = ${
+          celularLimpio
+            ? `'${escaparSql(celularLimpio)}'`
+            : "NULL"
+        },
+
+        dni = ${
+          dniLimpio
+            ? `'${escaparSql(dniLimpio)}'`
+            : "NULL"
+        },
+
+        direccion = ${
+          direccionLimpia
+            ? `'${escaparSql(direccionLimpia)}'`
+            : "NULL"
+        },
+
+        foto_url = ${
+          fotoLimpia
+            ? `'${escaparSql(fotoLimpia)}'`
+            : "NULL"
+        }
+
+      WHERE id_cliente = ${idCliente};
+
+      SELECT @@ROWCOUNT AS filasActualizadas;
+    `);
+
+    const resultado =
+      respuesta?.recordset?.[0] ??
+      respuesta?.recordsets?.[0]?.[0] ??
+      respuesta?.[0]?.[0] ??
+      null;
+
+    const filasActualizadas = Number(
+      resultado?.filasActualizadas ?? 0
+    );
+
+    if (filasActualizadas === 0) {
+      return res.status(404).json({
+        mensaje: "Cliente no encontrado",
+      });
+    }
+
+    return res.status(200).json({
+      mensaje:
+        "Perfil del cliente actualizado correctamente",
+
+      cliente: {
+        id_cliente: idCliente,
+        nombre_C: nombreLimpio,
+        correo: correoLimpio,
+        celular: celularLimpio,
+        dni: dniLimpio,
+        direccion: direccionLimpia,
+        foto: fotoLimpia,
+      },
+    });
+  } catch (error: any) {
+    console.error(
+      "Error al actualizar cliente:",
+      error
+    );
+
+    return res.status(500).json({
+      mensaje:
+        "Error al actualizar el cliente",
+
+      detalle:
+        error?.message ||
+        String(error),
+    });
+  }
 });
+
 // ==========================================
 // OBTENER CLIENTE POR ID
 // ==========================================

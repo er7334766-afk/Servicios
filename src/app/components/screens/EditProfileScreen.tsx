@@ -30,12 +30,14 @@ export default function EditProfileScreen({
   const { currentUser, setCurrentUser } = useApp();
   const esEmpleado = rol === 'worker' || currentUser?.role === 'worker';
 
+  const usuarioBase = (usuarioActual ?? currentUser ?? {}) as any;
+
   const idUsuario = Number(
-    usuarioActual?.idEmpleado ??
-      usuarioActual?.id_empleado ??
-      usuarioActual?.idCliente ??
-      usuarioActual?.id_cliente ??
-      usuarioActual?.id
+    usuarioBase?.idEmpleado ??
+      usuarioBase?.id_empleado ??
+      usuarioBase?.idCliente ??
+      usuarioBase?.id_cliente ??
+      usuarioBase?.id
   );
 
   const [nombre, setNombre] = useState(
@@ -74,9 +76,6 @@ export default function EditProfileScreen({
     String(usuarioActual?.sobre_mi ?? usuarioActual?.sobreMi ?? '')
   );
 
-  const [password, setPassword] = useState(
-    String(usuarioActual?.password_C ?? '')
-  );
 
   const [foto, setFoto] = useState(String(usuarioActual?.foto ?? ''));
   const [subiendoFoto, setSubiendoFoto] = useState(false);
@@ -88,53 +87,65 @@ export default function EditProfileScreen({
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    const cargarPerfilEmpleado = async () => {
-      if (
-        !esEmpleado ||
-        !Number.isInteger(idUsuario) ||
-        idUsuario <= 0
-      ) {
+    const cargarPerfil = async () => {
+      if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
         return;
       }
 
       try {
         setCargandoPerfil(true);
+        setErrorMessage('');
 
-        const respuesta = await fetch(
-          `http://localhost:3000/api/empleados/${idUsuario}`
-        );
+        const endpoint = esEmpleado
+          ? `http://localhost:3000/api/empleados/${idUsuario}`
+          : `http://localhost:3000/api/clientes/${idUsuario}`;
 
+        const respuesta = await fetch(endpoint);
         const datos = await leerRespuestaJson(respuesta);
 
         if (!respuesta.ok) {
-          throw new Error(
-            datos?.mensaje || 'No se pudo cargar el perfil'
-          );
+          throw new Error(datos?.mensaje || 'No se pudo cargar el perfil');
         }
 
-        setNombre(String(datos?.nombre_E ?? ''));
-        setCorreo(String(datos?.correo ?? ''));
-        setCelular(String(datos?.celular ?? ''));
-        setDni(String(datos?.dni ?? ''));
-        setTitulo(String(datos?.titulo ?? ''));
-        setDireccion(String(datos?.direccion ?? ''));
-        setAntecedente(String(datos?.antecedente ?? ''));
-        setFoto(String(datos?.foto ?? ''));
-        setSobreMi(String(datos?.sobre_mi ?? datos?.sobreMi ?? ''));
+        const perfil =
+          datos?.cliente ??
+          datos?.empleado ??
+          datos?.recordset?.[0] ??
+          datos?.recordsets?.[0]?.[0] ??
+          datos;
+
+        if (esEmpleado) {
+          setNombre(String(perfil?.nombre_E ?? perfil?.nombre ?? ''));
+          setCorreo(String(perfil?.correo ?? ''));
+          setCelular(String(perfil?.celular ?? perfil?.telefono ?? ''));
+          setDni(String(perfil?.dni ?? ''));
+          setTitulo(String(perfil?.titulo ?? ''));
+          setDireccion(String(perfil?.direccion ?? ''));
+          setAntecedente(String(perfil?.antecedente ?? ''));
+          setFoto(String(perfil?.foto ?? perfil?.foto_url ?? ''));
+          setSobreMi(String(perfil?.sobre_mi ?? perfil?.sobreMi ?? ''));
+        } else {
+          setNombre(String(perfil?.nombre_C ?? perfil?.nombre ?? ''));
+          setCorreo(String(perfil?.correo ?? ''));
+          setCelular(String(perfil?.celular ?? perfil?.telefono ?? ''));
+          setDni(String(perfil?.dni ?? ''));
+          setDireccion(String(perfil?.direccion ?? ""));
+          setFoto(String(perfil?.foto ?? perfil?.foto_url ?? ''));
+        }
       } catch (error) {
         const mensaje =
           error instanceof Error
             ? error.message
             : 'Error al cargar el perfil';
 
-        console.error('Error al cargar perfil:', mensaje);
-        alert(mensaje);
+        console.error('Error al cargar perfil:', error);
+        setErrorMessage(mensaje);
       } finally {
         setCargandoPerfil(false);
       }
     };
 
-    cargarPerfilEmpleado();
+    cargarPerfil();
   }, [esEmpleado, idUsuario]);
 
   const subirArchivo = async (archivo: File, endpoint: string) => {
@@ -236,6 +247,40 @@ export default function EditProfileScreen({
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setErrorMessage("");
+setSuccessMessage("");
+
+if (!nombre.trim()) {
+  setErrorMessage("Ingrese un nombre.");
+  return;
+}
+
+if (!correo.trim()) {
+  setErrorMessage("Ingrese un correo electrónico.");
+  return;
+}
+
+const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+if (!correoRegex.test(correo.trim())) {
+  setErrorMessage("Ingrese un correo electrónico válido.");
+  return;
+}
+
+if (celular && !/^\d{8}$/.test(celular.trim())) {
+  setErrorMessage(
+    "El celular debe contener exactamente 8 números."
+  );
+  return;
+}
+
+if (dni && !/^\d+$/.test(dni.trim())) {
+  setErrorMessage(
+    "El DNI solo puede contener números."
+  );
+  return;
+}
+
     if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
       alert('No se encontró el ID del usuario');
       return;
@@ -265,9 +310,9 @@ export default function EditProfileScreen({
             correo: String(correo).trim().toLowerCase(),
             celular: String(celular).trim(),
             dni: String(dni).trim(),
-            password_C: String(password),
+            direccion: String(direccion).trim(),
             foto: String(foto).trim(),
-          };
+          }
 
       const respuesta = await fetch(url, {
         method: 'PUT',
@@ -285,25 +330,28 @@ export default function EditProfileScreen({
 
       setSuccessMessage(datos.mensaje || 'Cambios guardados correctamente');
 
-      // Actualizar contexto si el usuario actual fue modificado
-      try {
-        const nuevoUsuario = {
-          ...(currentUser ?? usuarioActual ?? {}),
-          id: String(idUsuario),
-          name: nombre,
-          email: correo,
-          phone: celular,
-          avatarUrl: foto || currentUser?.avatarUrl || usuarioActual?.avatarUrl || usuarioActual?.foto,
-foto:     foto || currentUser?.avatarUrl || usuarioActual?.foto || usuarioActual?.avatarUrl,
-          role: currentUser?.role ?? rol ?? 'client',
-          location: direccion || currentUser?.location || usuarioActual?.location || 'No especificada',
-          estado: currentUser?.estado ?? usuarioActual?.estado,
-        };
+      // Actualizar el usuario en memoria para reflejar el cambio de inmediato.
+      const base = (currentUser ?? usuarioActual ?? {}) as any;
 
-        setCurrentUser(nuevoUsuario);
-      } catch (e) {
-        // noop
-      }
+      const nuevoUsuario = {
+        ...base,
+        id: String(idUsuario),
+        name: String(nombre).trim(),
+        email: String(correo).trim().toLowerCase(),
+        phone: String(celular).trim(),
+        avatarUrl:
+          String(foto).trim() || base?.avatarUrl || base?.foto || '',
+        foto:
+          String(foto).trim() || base?.foto || base?.avatarUrl || '',
+        role: base?.role ?? rol,
+        location:
+          String(direccion).trim() ||
+          base?.location ||
+          'No especificada',
+        estado: base?.estado,
+      };
+
+      setCurrentUser(nuevoUsuario);
 
       window.setTimeout(() => {
         setSuccessMessage('');
@@ -368,22 +416,7 @@ foto:     foto || currentUser?.avatarUrl || usuarioActual?.foto || usuarioActual
           />
         </div>
 
-        {!esEmpleado && (
-          <div className="flex flex-col gap-1.5">
-            <label className="px-1 text-xs font-bold uppercase text-slate-500">
-              Contraseña
-            </label>
-
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nueva contraseña"
-              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
-              required
-            />
-          </div>
-        )}
+        
 
         <div className="flex flex-col gap-1.5">
           <label className="px-1 text-xs font-bold uppercase text-slate-500">
@@ -406,12 +439,18 @@ foto:     foto || currentUser?.avatarUrl || usuarioActual?.foto || usuarioActual
           </label>
 
           <input
-            type="text"
-            value={celular}
-            onChange={(e) => setCelular(e.target.value)}
-            placeholder="Número de teléfono"
-            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
-          />
+          type="text"
+          inputMode="numeric"
+          maxLength={8}
+          value={celular}
+          onChange={(e) =>
+            setCelular(
+              e.target.value.replace(/\D/g, "")
+            )
+          }
+          placeholder="Número de teléfono"
+          className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
+        />
         </div>
 
         {esEmpleado && (
@@ -437,28 +476,32 @@ foto:     foto || currentUser?.avatarUrl || usuarioActual?.foto || usuarioActual
 
           <input
             type="text"
+            inputMode="numeric"
+            maxLength={15}
             value={dni}
-            onChange={(e) => setDni(e.target.value)}
+            onChange={(e) =>
+              setDni(
+                e.target.value.replace(/\D/g, "")
+              )
+            }
             placeholder="Número de documento"
             className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
           />
         </div>
-
-        {esEmpleado && (
           <div className="flex flex-col gap-1.5">
-            <label className="px-1 text-xs font-bold uppercase text-slate-500">
-              Dirección
-            </label>
+          <label className="px-1 text-xs font-bold uppercase text-slate-500">
+            Dirección
+          </label>
 
-            <input
-              type="text"
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              placeholder="Dirección de residencia"
-              className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-        )}
+          <input
+            type="text"
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
+            placeholder="Ej. Colonia, calle, número de casa..."
+            maxLength={200}
+            className="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm transition-colors focus:border-blue-500 focus:outline-none"
+          />
+        </div>
 
         {esEmpleado && (
           <div className="flex flex-col gap-1.5">
@@ -523,6 +566,18 @@ foto:     foto || currentUser?.avatarUrl || usuarioActual?.foto || usuarioActual
             </p>
           )}
         </div>
+
+        {errorMessage && (
+          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+            {successMessage}
+          </div>
+        )}
 
         <button
           type="submit"
