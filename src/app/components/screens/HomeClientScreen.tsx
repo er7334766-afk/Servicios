@@ -209,14 +209,65 @@ export default function HomeClientScreen() {
             fallbackIcon = 'https://serviapp.blob.core.windows.net/img/pintura.ico';
           }
 
+          const nombreNormalizado = String(c.nombre ?? c.label ?? '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+
+          const estilosPorCategoria: Record<
+            string,
+            { color: string; bgColor: string }
+          > = {
+            plomeria: {
+              color: '#2563EB',
+              bgColor: '#DBEAFE',
+            },
+            electricidad: {
+              color: '#F59E0B',
+              bgColor: '#FEF3C7',
+            },
+            limpieza: {
+              color: '#10B981',
+              bgColor: '#D1FAE5',
+            },
+            construccion: {
+              color: '#64748B',
+              bgColor: '#E2E8F0',
+            },
+            pintura: {
+              color: '#EC4899',
+              bgColor: '#FCE7F3',
+            },
+            carpinteria: {
+              color: '#EA580C',
+              bgColor: '#FED7AA',
+            },
+            jardineria: {
+              color: '#22C55E',
+              bgColor: '#DCFCE7',
+            },
+            electrodomesticos: {
+              color: '#7C3AED',
+              bgColor: '#E9D5FF',
+            },
+          };
+
+        const estilo =
+          estilosPorCategoria[nombreNormalizado] ?? {
+            color: '#1A56DB',
+            bgColor: '#EFF4FF',
+          };
+
           return {
             id: String(c.id) as any,
             label: c.nombre ?? c.label ?? 'Categoría',
             icon: 'Wrench',
-            color: c.color ?? '#1A56DB',
-            bgColor: c.bgColor ?? '#EFF4FF',
+            color: estilo.color,
+            bgColor: estilo.bgColor,
             iconUrl: c.iconUrl ?? fallbackIcon,
           };
+
+         
         });
 
         console.log('DEBUG: categorías mapeadas =>', mapped);
@@ -345,7 +396,7 @@ export default function HomeClientScreen() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-white/70 text-sm">
-              Buenos días,
+              Hola bienvenido(a),
             </p>
 
             <p className="text-white font-bold text-lg">

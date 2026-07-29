@@ -161,6 +161,7 @@ export default function SearchScreen() {
   const { currentUser, role } = useApp();
   const esCliente = role === 'client';
   const esTrabajador = role === 'worker';
+  const [mostrarFiltros, setMostrarFiltros] = useState(false); //agregado
 
   
   const [tab, setTab] =
@@ -462,12 +463,12 @@ export default function SearchScreen() {
         return 0;
       });
 
-  // ==========================================
-  // PUBLICAR SOLICITUD
-  // ==========================================
-  const onSubmit = async (
-    data: PostJobForm
-  ) => {
+    // ==========================================
+    // PUBLICAR SOLICITUD
+    // ==========================================
+    const onSubmit = async (
+      data: PostJobForm
+    ) => {
     if (!postCat) {
       toast.error(
         'Completa la categoría del servicio'
@@ -536,6 +537,24 @@ export default function SearchScreen() {
     }
   };
 
+  const trabajadoresOrdenados =
+  sortBy === 'rating'
+    ? [...filteredWorkers].sort((a, b) => {
+        const diferenciaRating =
+          Number(b.rating ?? 0) -
+          Number(a.rating ?? 0);
+
+        if (diferenciaRating !== 0) {
+          return diferenciaRating;
+        }
+
+        return (
+          Number(b.reviewCount ?? 0) -
+          Number(a.reviewCount ?? 0)
+        );
+      })
+    : filteredWorkers;
+
   return (
     <div className="flex flex-col h-full">
       {/* Encabezado */}
@@ -600,51 +619,35 @@ export default function SearchScreen() {
 
               <button
                 type="button"
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
                 className="w-10 h-10 bg-[#1A56DB] rounded-xl flex items-center justify-center flex-shrink-0"
               >
                 <SlidersHorizontal className="w-4 h-4 text-white" />
               </button>
             </div>
 
-            {esCliente && (
-              <>
-            {/* Ordenamiento */}
-            <div className="flex gap-2 mt-3 overflow-x-auto">
-              {(
-                [
-                  [
-                    'rating',
-                    'Mejor valorados',
-                  ],
-                  [
-                    'distance',
-                    'Más cercanos',
-                  ],
-                  [
-                    'price',
-                    'Menor precio',
-                  ],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  type="button"
-                  key={key}
-                  onClick={() =>
-                    setSortBy(key)
-                  }
-                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all whitespace-nowrap ${
-                    sortBy === key
-                      ? 'bg-[#1A56DB] text-white border-[#1A56DB]'
-                      : 'bg-card text-muted-foreground border-border'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {mostrarFiltros && esCliente && (
+              <div className="mt-2 flex justify-end">
+                <div className="w-44 rounded-xl border border-border bg-card p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortBy('rating');
+                      setMostrarFiltros(false);
+                    }}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                      sortBy === 'rating'
+                        ? 'bg-[#EFF4FF] text-[#1A56DB] font-semibold'
+                        : 'text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    ⭐ Mejor valorados
+                  </button>
+                </div>
+              </div>
+            )}
 
-              </>
-            )}          </div>
+          </div>
 
           {/* Categorías desde MySQL */}
           <div className="px-5 pb-3">
@@ -656,9 +659,7 @@ export default function SearchScreen() {
               {selectedCat !== null && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setSelectedCat(null)
-                  }
+                  onClick={() => setSelectedCat(null)}
                   className="flex items-center gap-1 text-xs text-[#1A56DB]"
                 >
                   <X className="w-3 h-3" />
@@ -672,57 +673,70 @@ export default function SearchScreen() {
                 Cargando categorías...
               </p>
             ) : categoriasDb.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {categoriasDb.map(
-                  (categoria) => {
-                    const seleccionada =
-                      selectedCat ===
-                      Number(
-                        categoria.id_categoria
-                      );
+              <div className="grid grid-cols-2 gap-3">
+                {categoriasDb.map((categoria) => {
+                  const idCategoria = Number(categoria.id_categoria);
 
-                    return (
-                      <button
-                        type="button"
-                        key={
-                          categoria.id_categoria
-                        }
-                        onClick={() =>
-                          setSelectedCat(
-                            seleccionada
-                              ? null
-                              : Number(
-                                  categoria.id_categoria
-                                )
-                          )
-                        }
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                  const seleccionada =
+                    selectedCat === idCategoria;
+
+                  const nombre = categoria.nombre
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '');
+
+                  const colores: Record<string, string> = {
+                    carpinteria:
+                      'border-orange-300 text-orange-600',
+                    construccion:
+                      'border-slate-300 text-slate-600',
+                    electricidad:
+                      'border-orange-200 text-orange-500',
+                    electrodomesticos:
+                      'border-violet-300 text-violet-600',
+                    jardineria:
+                      'border-emerald-200 text-emerald-600',
+                    limpieza:
+                      'border-teal-300 text-teal-600',
+                    pintura:
+                      'border-pink-200 text-pink-500',
+                    plomeria:
+                      'border-blue-300 text-blue-600',
+                  };
+
+                  const color =
+                    colores[nombre] ??
+                    'border-slate-300 text-slate-600';
+
+                  return (
+                    <button
+                      type="button"
+                      key={categoria.id_categoria}
+                      onClick={() =>
+                        setSelectedCat(
                           seleccionada
-                            ? 'border-[#1A56DB] bg-[#EFF4FF]'
-                            : 'border-border bg-card'
+                            ? null
+                            : idCategoria
+                        )
+                      }
+                      className={`rounded-2xl border bg-white py-4 px-3 transition-all ${
+                        seleccionada
+                          ? 'border-[#1A56DB] bg-[#EFF4FF] ring-1 ring-[#1A56DB]'
+                          : color
+                      }`}
+                    >
+                      <span
+                        className={`block text-sm font-semibold ${
+                          seleccionada
+                            ? 'text-[#1A56DB]'
+                            : ''
                         }`}
                       >
-                        <span
-                          className={`block text-sm font-semibold ${
-                            seleccionada
-                              ? 'text-[#1A56DB]'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {categoria.nombre}
-                        </span>
-
-                        {categoria.subCatgeoria && (
-                          <span className="block text-[10px] text-muted-foreground mt-1">
-                            {
-                              categoria.subCatgeoria
-                            }
-                          </span>
-                        )}
-                      </button>
-                    );
-                  }
-                )}
+                        {categoria.nombre.charAt(0).toUpperCase() + categoria.nombre.slice(1)}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -730,6 +744,8 @@ export default function SearchScreen() {
               </p>
             )}
           </div>
+
+          
 
           {/* Resultados para clientes */}
           {esCliente && (
@@ -749,7 +765,7 @@ export default function SearchScreen() {
                   </div>
                 ) : (
                   <>
-                    {filteredWorkers.map((worker) => (
+                    {trabajadoresOrdenados.map((worker) => (
                       <div
                         key={worker.id}
                         role="button"
@@ -912,20 +928,75 @@ export default function SearchScreen() {
                       electrodomesticos: '🔌',
                     };
 
+                    const coloresCategorias: Record<
+                      string,
+                      {
+                        borde: string;
+                        texto: string;
+                      }
+                    > = {
+                      plomeria: {
+                        borde: 'border-blue-300',
+                        texto: 'text-blue-700',
+                      },
+                      electricidad: {
+                        borde: 'border-orange-300',
+                        texto: 'text-orange-700',
+                      },
+                      limpieza: {
+                        borde: 'border-emerald-300',
+                        texto: 'text-emerald-700',
+                      },
+                      construccion: {
+                        borde: 'border-slate-300',
+                        texto: 'text-slate-700',
+                      },
+                      pintura: {
+                        borde: 'border-pink-300',
+                        texto: 'text-pink-700',
+                      },
+                      carpinteria: {
+                        borde: 'border-amber-300',
+                        texto: 'text-amber-700',
+                      },
+                      jardineria: {
+                        borde: 'border-green-300',
+                        texto: 'text-green-700',
+                      },
+                      electrodomesticos: {
+                        borde: 'border-violet-300',
+                        texto: 'text-violet-700',
+                      },
+                    };
+
                     const nombreNormalizado = categoria.nombre
                       .toLowerCase()
                       .trim()
                       .normalize('NFD')
                       .replace(/[\u0300-\u036f]/g, '');
 
-                    const icono =
-                      iconosCategorias[nombreNormalizado] || '🛠️';
+                    const icono = iconosCategorias[nombreNormalizado] || '🛠️';
+
+                    const estilo =
+                      coloresCategorias[nombreNormalizado] ?? {
+                        borde: 'border-gray-300',
+                        texto: 'text-gray-700',
+                      };
 
                     return (
                       <motion.button
                         type="button"
                         key={categoria.id_categoria}
+                        whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.97 }}
+                        animate={{
+                          scale: seleccionada ? 1.02 : 1,
+                        }}
+                        transition={{
+                          duration: 0.18,
+                          ease: 'easeOut',
+                        }}
+
                         onClick={() =>
                           setPostCat(
                             seleccionada
@@ -933,10 +1004,10 @@ export default function SearchScreen() {
                               : Number(categoria.id_categoria)
                           )
                         }
-                        className={`relative rounded-2xl border p-4 text-left transition-all ${
+                        className={`relative rounded-2xl border-2 p-4 text-left bg-white transition-all ${
                           seleccionada
                             ? 'border-[#1A56DB] bg-[#EFF4FF] shadow-md shadow-[#1A56DB]/10'
-                            : 'border-border bg-card hover:border-[#1A56DB]/40'
+                            : `${estilo.borde} hover:shadow-sm`
                         }`}
                       >
                         {seleccionada && (
@@ -945,18 +1016,21 @@ export default function SearchScreen() {
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex justify-center gap-2 mb-2">
                           <span
                             className={`text-sm font-semibold ${
                               seleccionada
                                 ? 'text-[#1A56DB]'
-                                : 'text-foreground'
+                                : estilo.texto
                             }`}
                           >
-                            {categoria.nombre}
+                            {categoria.nombre.charAt(0).toUpperCase() +
+                              categoria.nombre.slice(1)}
                           </span>
 
-                          <span className="text-base">{icono}</span>
+                          <span className="text-base leading-none">
+                            {icono}
+                          </span>
                         </div>
 
                         {categoria.subCatgeoria && (

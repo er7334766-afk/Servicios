@@ -207,13 +207,15 @@ export default function WorkerOwnProfileScreen() {
           <h1 className="text-lg font-bold text-white">
             Mi Perfil
           </h1>
-
-          <button
-            type="button"
-            className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center"
-          >
-            <Settings className="w-4 h-4 text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center"
+            >
+              <Settings className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -286,17 +288,9 @@ export default function WorkerOwnProfileScreen() {
               </p>
             </div>
 
-            <div className="w-px bg-border" />
+            
 
-            <div className="flex-1 text-center">
-              <p className="font-bold text-foreground text-base">
-                ${worker.pricePerHour}
-              </p>
-
-              <p className="text-[11px] text-muted-foreground">
-                Por hora
-              </p>
-            </div>
+            
           </div>
         </div>
       </div>

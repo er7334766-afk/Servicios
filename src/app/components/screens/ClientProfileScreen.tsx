@@ -104,7 +104,11 @@ export default function ClientProfileScreen() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-white">Mi Perfil</h1>
           <div className="flex items-center gap-2">
-            <button className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center"
+            >
               <Settings className="w-4 h-4 text-white" />
             </button>
           </div>
@@ -147,11 +151,7 @@ export default function ClientProfileScreen() {
               <p className="font-bold text-foreground text-base">{myReviews.length}</p>
               <p className="text-[11px] text-muted-foreground">Reseñas</p>
             </div>
-            <div className="w-px bg-border" />
-            <div className="flex-1 text-center">
-              <p className="font-bold text-foreground text-base">0</p>
-              <p className="text-[11px] text-muted-foreground">Favoritos</p>
-            </div>
+              
           </div>
         </div>
       </div>
@@ -250,7 +250,7 @@ export default function ClientProfileScreen() {
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           {[
             { label: 'Editar perfil', icon: Settings, action: () => setIsEditing(true) }, //agregue
-            { label: 'Mis favoritos', icon: Star },
+
             { label: 'Reportar un problema', icon: Briefcase, action: () => navigate('/home/report') },
           ].map(({ label, icon: Icon, action }) => (
             <button
