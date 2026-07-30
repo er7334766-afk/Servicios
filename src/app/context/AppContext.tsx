@@ -14,6 +14,11 @@ import type {
   AgendaSlot,
 } from '../types';
 
+import {
+  obtenerNotificacionesEmpleado,
+  marcarNotificacionLeida,
+} from '../services/notificacionesApi';
+
 interface AppContextType {
   role: Role;
   setRole: (role: Role) => void;
@@ -40,9 +45,9 @@ interface AppContextType {
 
   markNotificationRead: (
     id: string
-  ) => void;
+  ) => Promise<void>;
 
-  markAllNotificationsRead: () => void;
+  markAllNotificationsRead: () => Promise<void>;
 
   workerAvailability: boolean;
 
@@ -149,6 +154,81 @@ export function AppProvider({
     notifications,
     setNotifications,
   ] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    const rolUsuario = currentUser?.role ?? role;
+
+    if (!currentUser?.id || rolUsuario !== 'worker') {
+      setNotifications([]);
+      return;
+    }
+
+    const idEmpleado = Number(currentUser.id);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      console.error(
+        'ID de empleado inválido para cargar notificaciones:',
+        currentUser.id
+      );
+      setNotifications([]);
+      return;
+    }
+
+    let activo = true;
+
+    const cargarNotificaciones = async () => {
+      try {
+        const datos = await obtenerNotificacionesEmpleado(idEmpleado);
+
+        if (!activo) {
+          return;
+        }
+
+        const notificacionesAdaptadas: Notification[] = datos.map(
+          (notificacion) => ({
+            id: String(notificacion.id_notificacion),
+            title: notificacion.titulo,
+            body: notificacion.descripcion,
+            type:
+              notificacion.tipo === 'nuevo_servicio'
+                ? 'job_request'
+                : notificacion.tipo,
+            read: Boolean(notificacion.leida),
+            timestamp: notificacion.fecha,
+            linkTo: notificacion.fk_servicio
+            ? `/home/solicitud/${notificacion.fk_servicio}`
+            : undefined,
+             
+          }) as Notification
+        );
+
+        setNotifications(notificacionesAdaptadas);
+      } catch (error) {
+        console.error(
+          'No se pudieron cargar las notificaciones:',
+          error
+        );
+
+        if (activo) {
+          setNotifications([]);
+        }
+      }
+    };
+
+    void cargarNotificaciones();
+
+    const manejarFocus = () => {
+      void cargarNotificaciones();
+    };
+
+    window.addEventListener('focus', manejarFocus);
+
+    return () => {
+      activo = false;
+      window.removeEventListener('focus', manejarFocus);
+    };
+  }, [currentUser?.id, currentUser?.role, role]);
+
 
   const [
     workerAvailability,
@@ -453,35 +533,74 @@ export function AppProvider({
     );
   };
 
-  const markNotificationRead = (
+  const markNotificationRead = async (
     id: string
-  ) => {
-    setNotifications(
-      (previous) =>
-        previous.map(
-          (notification) =>
-            notification.id === id
-              ? {
-                  ...notification,
-                  read: true,
-                }
-              : notification
+  ): Promise<void> => {
+    const idNotificacion = Number(id);
+
+    if (!Number.isInteger(idNotificacion) || idNotificacion <= 0) {
+      console.error('ID de notificación inválido:', id);
+      return;
+    }
+
+    try {
+      await marcarNotificacionLeida(idNotificacion);
+
+      setNotifications((previous) =>
+        previous.map((notification) =>
+          notification.id === id
+            ? {
+                ...notification,
+                read: true,
+              }
+            : notification
         )
-    );
+      );
+    } catch (error) {
+      console.error(
+        'No se pudo marcar la notificación como leída:',
+        error
+      );
+    }
   };
 
-  const markAllNotificationsRead =
-    () => {
-      setNotifications(
-        (previous) =>
-          previous.map(
-            (notification) => ({
-              ...notification,
-              read: true,
-            })
-          )
+  const markAllNotificationsRead = async (): Promise<void> => {
+    const noLeidas = notifications.filter(
+      (notification) => !notification.read
+    );
+
+    if (noLeidas.length === 0) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        noLeidas.map((notification) => {
+          const idNotificacion = Number(notification.id);
+
+          if (!Number.isInteger(idNotificacion) || idNotificacion <= 0) {
+            throw new Error(
+              `ID de notificación inválido: ${notification.id}`
+            );
+          }
+
+          return marcarNotificacionLeida(idNotificacion);
+        })
       );
-    };
+
+      setNotifications((previous) =>
+        previous.map((notification) => ({
+          ...notification,
+          read: true,
+        }))
+      );
+    } catch (error) {
+      console.error(
+        'No se pudieron marcar todas las notificaciones como leídas:',
+        error
+      );
+    }
+  };
 
   const toggleSlotAvailability = (
     slotId: string

@@ -251,7 +251,16 @@ export default function ClientProfileScreen() {
           {[
             { label: 'Editar perfil', icon: Settings, action: () => setIsEditing(true) }, //agregue
 
-            { label: 'Reportar un problema', icon: Briefcase, action: () => navigate('/home/report') },
+            {
+              label: 'Reportar problema de la aplicación',
+              icon: Briefcase,
+              action: () =>
+                navigate('/home/report', {
+                  state: {
+                    tipoReporte: 'aplicacion',
+                  },
+                }),
+            },
           ].map(({ label, icon: Icon, action }) => (
             <button
               key={label}

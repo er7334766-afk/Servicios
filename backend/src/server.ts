@@ -923,6 +923,181 @@ app.get("/api/categorias/:id/empleados", async (req, res) => {
 });
 
 // ==========================================
+// RUTAS DE REPORTES
+// ==========================================
+app.post('/api/reportes', async (req, res) => {
+  try {
+    const {
+      tipoReporte,
+      idReportante,
+      tipoReportante,
+      idServicio = null,
+      idReportado = null,
+      tipoReportado = null,
+      categoria,
+      descripcion,
+      fotos = [],
+    } = req.body;
+
+    const idReportanteNumero = Number(idReportante);
+
+    if (
+      !Number.isInteger(idReportanteNumero) ||
+      idReportanteNumero <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: 'El usuario que realiza el reporte no es válido',
+      });
+    }
+
+    if (
+      tipoReporte !== 'aplicacion' &&
+      tipoReporte !== 'usuario'
+    ) {
+      return res.status(400).json({
+        mensaje: 'El tipo de reporte no es válido',
+      });
+    }
+
+    if (!tipoReportante) {
+      return res.status(400).json({
+        mensaje: 'El tipo de usuario que reporta es obligatorio',
+      });
+    }
+
+    if (!categoria || typeof categoria !== 'string') {
+      return res.status(400).json({
+        mensaje: 'La categoría es obligatoria',
+      });
+    }
+
+    if (
+      !descripcion ||
+      typeof descripcion !== 'string' ||
+      descripcion.trim().length < 20
+    ) {
+      return res.status(400).json({
+        mensaje:
+          'La descripción debe tener al menos 20 caracteres',
+      });
+    }
+
+    if (!Array.isArray(fotos)) {
+      return res.status(400).json({
+        mensaje: 'El formato de las fotos no es válido',
+      });
+    }
+
+    if (fotos.length > 4) {
+      return res.status(400).json({
+        mensaje: 'Solo se permiten un máximo de 4 fotos',
+      });
+    }
+
+    if (tipoReporte === 'usuario') {
+      const idReportadoNumero = Number(idReportado);
+      const idServicioNumero = Number(idServicio);
+
+      if (
+        !Number.isInteger(idReportadoNumero) ||
+        idReportadoNumero <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'El usuario reportado no es válido',
+        });
+      }
+
+      if (!tipoReportado) {
+        return res.status(400).json({
+          mensaje: 'El tipo de usuario reportado es obligatorio',
+        });
+      }
+
+      if (
+        !Number.isInteger(idServicioNumero) ||
+        idServicioNumero <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El servicio relacionado con el reporte no es válido',
+        });
+      }
+
+      if (
+        idReportanteNumero === idReportadoNumero &&
+        tipoReportante === tipoReportado
+      ) {
+        return res.status(400).json({
+          mensaje: 'No puedes reportarte a ti mismo',
+        });
+      }
+    }
+
+    const fotosJson = JSON.stringify(fotos);
+
+    const idServicioFinal =
+      tipoReporte === 'usuario'
+        ? Number(idServicio)
+        : null;
+
+    const idReportadoFinal =
+      tipoReporte === 'usuario'
+        ? Number(idReportado)
+        : null;
+
+    const tipoReportadoFinal =
+      tipoReporte === 'usuario'
+        ? tipoReportado
+        : null;
+
+    const [resultado] = await database.execute(
+      `
+      INSERT INTO reportes
+      (
+        fk_usuario,
+        tipo_reportante,
+        fk_usuario_reportado,
+        tipo_reportado,
+        fk_servicio,
+        tipo_reporte,
+        categoria,
+        descripcion,
+        fotos,
+        fecha,
+        estado
+      )
+      VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?);
+
+      SELECT SCOPE_IDENTITY() AS insertId;
+      `,
+      [
+        idReportanteNumero,
+        tipoReportante,
+        idReportadoFinal,
+        tipoReportadoFinal,
+        idServicioFinal,
+        tipoReporte,
+        categoria.trim(),
+        descripcion.trim(),
+        fotosJson,
+        'pendiente',
+      ],
+    );
+
+    return res.status(201).json({
+      mensaje: 'Reporte enviado correctamente',
+      resultado,
+    });
+  } catch (error) {
+    console.error('Error al guardar el reporte:', error);
+
+    return res.status(500).json({
+      mensaje: 'Error interno al guardar el reporte',
+    });
+  }
+});
+// ==========================================
 // RUTA DE LOGIN (NUEVA)
 // ==========================================
 /*app.post("/api/login", async (req, res) => {
@@ -1146,9 +1321,9 @@ app.post("/api/login", async (req, res) => {
 });
 
 // ==========================================
-// RUTAS DE SERVICIOS / SOLICITUDES (NUEVAS)
+// CREAR SERVICIO Y NOTIFICAR EMPLEADOS
 // ==========================================
-app.post("/api/servicios", async (req, res) => {
+app.post('/api/servicios', async (req, res) => {
   try {
     const {
       fk_cliente,
@@ -1162,126 +1337,406 @@ app.post("/api/servicios", async (req, res) => {
       hora_fin,
     } = req.body;
 
+    const idCliente = Number(fk_cliente);
+    const idCategoria = Number(fk_categoria);
+    const presupuestoNumero = Number(presupuesto);
+
     if (
-      !fk_cliente ||
-      !fk_categoria ||
-      !descripcion ||
-      !direccion ||
-      !presupuesto ||
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0 ||
+      !Number.isInteger(idCategoria) ||
+      idCategoria <= 0 ||
+      typeof descripcion !== 'string' ||
+      !descripcion.trim() ||
+      typeof direccion !== 'string' ||
+      !direccion.trim() ||
+      !Number.isFinite(presupuestoNumero) ||
+      presupuestoNumero <= 0 ||
       !fecha ||
       !hora_inicio ||
       !hora_fin
     ) {
       return res.status(400).json({
         mensaje:
-          "Faltan datos obligatorios para crear la solicitud",
+          'Faltan datos obligatorios o existen datos inválidos',
       });
     }
 
     if (String(hora_fin) <= String(hora_inicio)) {
       return res.status(400).json({
         mensaje:
-          "La hora final debe ser posterior a la hora inicial",
+          'La hora final debe ser posterior a la hora inicial',
       });
     }
 
-    // Insert into both id_* (non-null legacy columns) and fk_* (newer columns)
-    // so the row satisfies schemas that have duplicate naming.
-    const [resultado] = await database.execute(
-      `
-      INSERT INTO servicios
-      (
-        id_cliente,
-        id_categoria,
-        fk_cliente,
-        fk_categoria,
-        fk_evidencia,
-        descripcion,
-        direccion,
-        presupuesto,
-        fecha,
-        hora_inicio,
-        hora_fin
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        fk_cliente, // id_cliente
-        fk_categoria, // id_categoria
-        fk_cliente, // fk_cliente
-        fk_categoria, // fk_categoria
-        fk_evidencia || null,
-        descripcion,
-        direccion,
-        presupuesto,
-        fecha,
-        hora_inicio,
-        hora_fin,
-      ]
+    // Crear servicio y recuperar su ID
+    const [resultadoServicio]: any =
+      await database.execute(
+        `
+        INSERT INTO servicios
+        (
+          id_cliente,
+          id_categoria,
+          fk_cliente,
+          fk_categoria,
+          fk_evidencia,
+          descripcion,
+          direccion,
+          presupuesto,
+          fecha,
+          hora_inicio,
+          hora_fin
+        )
+        OUTPUT INSERTED.id_servicio
+        VALUES
+        (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        );
+        `,
+        [
+          idCliente,
+          idCategoria,
+          idCliente,
+          idCategoria,
+          fk_evidencia || null,
+          descripcion.trim(),
+          direccion.trim(),
+          presupuestoNumero,
+          fecha,
+          hora_inicio,
+          hora_fin,
+        ]
+      );
+
+    const filasServicio =
+      resultadoServicio.recordset ??
+      resultadoServicio.recordsets?.[0] ??
+      [];
+
+    const idServicio = Number(
+      filasServicio[0]?.id_servicio
     );
 
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      throw new Error(
+        'No se pudo obtener el ID del servicio creado'
+      );
+    }
+
+    /*
+      Ajusta únicamente esta consulta si tu tabla puente
+      tiene nombres diferentes.
+
+      Según tu explorador parece existir una tabla parecida a:
+      empleado_categoria
+      o empleado_categorias.
+    */
+    const [resultadoEmpleados]: any =
+      await database.execute(
+        `
+        SELECT DISTINCT
+          ec.id_empleado
+        FROM empleado_categorias ec
+        WHERE ec.id_categoria = ?;
+        `,
+        [idCategoria]
+      );
+      
+
+    const empleados =
+      resultadoEmpleados.recordset ??
+      resultadoEmpleados.recordsets?.[0] ??
+      [];
+
+    let notificacionesCreadas = 0;
+
+    for (const empleado of empleados) {
+      const idEmpleado = Number(
+        empleado.id_empleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        continue;
+      }
+
+      await database.execute(
+        `
+        INSERT INTO notificaciones
+        (
+          id_cliente,
+          id_empleado,
+          titulo,
+          descripcion,
+          tipo,
+          leida,
+          fecha,
+          fk_servicio
+        )
+        VALUES
+        (
+          NULL,
+          ?,
+          ?,
+          ?,
+          ?,
+          0,
+          SYSDATETIME(),
+          ?
+        );
+        `,
+        [
+          idEmpleado,
+          'Nuevo trabajo disponible',
+          'Se publicó un trabajo relacionado con una de tus categorías.',
+          'nuevo_servicio',
+          idServicio,
+        ]
+      );
+
+      notificacionesCreadas += 1;
+    }
+
     return res.status(201).json({
-      mensaje: "Solicitud publicada correctamente",
-      resultado,
+      mensaje:
+        'Solicitud publicada correctamente',
+      idServicio,
+      notificacionesCreadas,
     });
   } catch (error) {
     console.error(
-      "Error al registrar servicio:",
+      'Error al registrar servicio:',
       error
     );
 
     return res.status(500).json({
-      mensaje: "Error al publicar la solicitud",
+      mensaje:
+        error instanceof Error
+          ? error.message
+          : 'Error al publicar la solicitud',
     });
   }
 });
 
-
-
-app.get("/api/servicios", async (_req, res) => {
+// ==========================================
+// OBTENER TODOS LOS SERVICIOS
+// ==========================================
+app.get('/api/servicios', async (_req, res) => {
   try {
-    const [servicios] = await database.query(
-  `
-  SELECT
-    s.id_servicio,
-    s.fk_cliente,
-    s.fk_categoria,
-    s.fk_empleado,
-    s.fk_evidencia,
-    s.titulo,
-    s.descripcion,
-    s.direccion,
-    s.presupuesto,
-    s.fecha,
-    s.hora_inicio,
-    s.hora_fin,
-    s.estado,
+    const [resultado]: any =
+      await database.execute(
+        `
+        SELECT
+          s.id_servicio,
 
-    c.nombre AS nombre_cliente,
-    c.foto_url AS foto_cliente,
+          COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) AS fk_cliente,
 
-    cat.nombre AS nombre_categoria
+          COALESCE(
+            s.fk_categoria,
+            s.id_categoria
+          ) AS fk_categoria,
 
-  FROM servicios s
+          s.fk_empleado,
+          s.fk_evidencia,
+          s.titulo,
+          s.descripcion,
+          s.direccion,
+          s.presupuesto,
+          s.fecha,
+          s.hora_inicio,
+          s.hora_fin,
+          s.estado,
 
-  LEFT JOIN clientes c
-    ON c.id_cliente = s.fk_cliente
+          c.nombre AS nombre_cliente,
+          c.foto_url AS foto_cliente,
 
-  LEFT JOIN categorias cat
-    ON cat.id_categoria = s.fk_categoria
+          cat.nombre AS nombre_categoria
 
-  ORDER BY s.fecha DESC
-  `
-);
+        FROM servicios AS s
 
-    res.json(servicios);
-  } catch (error) {
-    console.error("Error al consultar servicios:", error);
-    res.status(500).json({
-      mensaje: "Error al consultar los servicios",
+        LEFT JOIN clientes AS c
+          ON c.id_cliente = COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          )
+
+        LEFT JOIN categorias AS cat
+          ON cat.id_categoria = COALESCE(
+            s.fk_categoria,
+            s.id_categoria
+          )
+
+        ORDER BY
+          s.fecha DESC,
+          s.hora_inicio DESC;
+        `
+      );
+
+    const servicios =
+      resultado?.recordset ??
+      resultado?.recordsets?.[0] ??
+      (Array.isArray(resultado)
+        ? resultado
+        : []);
+
+    return res.status(200).json(servicios);
+  } catch (error: any) {
+    console.error(
+      'Error al consultar servicios:',
+      error
+    );
+
+    return res.status(500).json({
+      mensaje:
+        'Error al consultar los servicios',
+      detalle:
+        error?.message ??
+        String(error),
     });
   }
 });
+// ==========================================
+// OBTENER NOTIFICACIONES DEL EMPLEADO
+// ==========================================
+app.get(
+  '/api/notificaciones/empleado/:idEmpleado',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'Empleado inválido',
+        });
+      }
+
+      const [resultado]: any =
+        await database.execute(
+          `
+          SELECT
+            n.id_notificacion,
+            n.id_cliente,
+            n.id_empleado,
+            n.titulo,
+            n.descripcion,
+            n.tipo,
+            n.leida,
+            n.fecha,
+            n.fk_servicio,
+
+            s.descripcion AS descripcion_servicio,
+            s.direccion,
+            s.presupuesto,
+            s.fecha AS fecha_servicio,
+            s.hora_inicio,
+            s.hora_fin,
+
+            cat.nombre AS nombre_categoria
+
+          FROM notificaciones n
+
+          LEFT JOIN servicios s
+            ON s.id_servicio = n.fk_servicio
+
+          LEFT JOIN categorias cat
+            ON cat.id_categoria = s.fk_categoria
+
+          WHERE n.id_empleado = ?
+
+          ORDER BY n.fecha DESC;
+          `,
+          [idEmpleado]
+        );
+
+      const notificaciones =
+        resultado.recordset ??
+        resultado.recordsets?.[0] ??
+        [];
+
+      return res.json(notificaciones);
+    } catch (error) {
+      console.error(
+        'Error al obtener notificaciones:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las notificaciones',
+      });
+    }
+  }
+);
+// ==========================================
+// MARCAR NOTIFICACIÓN COMO LEÍDA
+// ==========================================
+app.patch(
+  '/api/notificaciones/:idNotificacion/leida',
+  async (req, res) => {
+    try {
+      const idNotificacion = Number(
+        req.params.idNotificacion
+      );
+
+      if (
+        !Number.isInteger(idNotificacion) ||
+        idNotificacion <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'Notificación inválida',
+        });
+      }
+
+      const [resultado]: any =
+        await database.execute(
+          `
+          UPDATE notificaciones
+          SET leida = 1
+          WHERE id_notificacion = ?;
+          `,
+          [idNotificacion]
+        );
+
+      const filasAfectadas =
+        resultado.rowsAffected?.[0] ?? 0;
+
+      if (filasAfectadas === 0) {
+        return res.status(404).json({
+          mensaje:
+            'No se encontró la notificación',
+        });
+      }
+
+      return res.json({
+        mensaje:
+          'Notificación marcada como leída',
+      });
+    } catch (error) {
+      console.error(
+        'Error al actualizar notificación:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al actualizar la notificación',
+      });
+    }
+  }
+);
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES lectura id 
 // ==========================================
