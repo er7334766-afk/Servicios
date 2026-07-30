@@ -164,6 +164,10 @@ export default function AuthScreen() {
 
       setCurrentUser({
         id: String(respuesta.resultado.insertId),
+        idEmpleado:
+          role === 'worker'
+            ? respuesta.resultado.insertId
+            : undefined,
         name: data.name.trim(),
         email: data.email.trim().toLowerCase(),
         phone: data.phone.trim(),

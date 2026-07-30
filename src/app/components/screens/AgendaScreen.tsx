@@ -126,19 +126,49 @@ function crearFechaLocal(fecha: string): Date {
 function formatearHora(hora?: string | null): string {
   if (!hora) return 'Sin hora';
 
-  const [horas, minutos] = hora.split(':').map(Number);
+  const valor = hora.trim();
 
-  if (Number.isNaN(horas) || Number.isNaN(minutos)) {
-    return hora;
+  const obtenerPartesDesdeTimeString = (timeString: string) => {
+    const partes = timeString.split(':');
+    if (partes.length < 2) return null;
+
+    const horas = Number(partes[0]);
+    const minutos = Number(partes[1].split('.')[0]);
+
+    if (Number.isNaN(horas) || Number.isNaN(minutos)) {
+      return null;
+    }
+
+    return { horas, minutos };
+  };
+
+  let partes = obtenerPartesDesdeTimeString(valor);
+
+  if (!partes && valor.includes('T')) {
+    const fecha = new Date(valor);
+    if (!Number.isNaN(fecha.getTime())) {
+      partes = {
+        horas: fecha.getHours(),
+        minutos: fecha.getMinutes(),
+      };
+    }
+  }
+
+  if (!partes && valor.includes(' ')) {
+    partes = obtenerPartesDesdeTimeString(valor.split(' ')[0]);
+  }
+
+  if (!partes) {
+    return valor;
   }
 
   const fecha = new Date();
-  fecha.setHours(horas, minutos, 0, 0);
+  fecha.setHours(partes.horas, partes.minutos, 0, 0);
 
   return new Intl.DateTimeFormat('es-HN', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: true,
+    hour12: false,
   }).format(fecha);
 }
 
@@ -250,11 +280,30 @@ export default function AgendaScreen() {
     'id_reserva' in servicio;
 
   const obtenerHora = (servicio: AgendaItem) => {
+    const horaRaw = isAgendaReserva(servicio)
+      ? servicio.hora
+      : servicio.hora_inicio;
+
+    return formatearHora(horaRaw);
+  };
+
+  const obtenerHoraFin = (servicio: AgendaItem) => {
     if (isAgendaReserva(servicio)) {
-      return String(servicio.hora ?? '');
+      return '';
     }
 
-    return String(servicio.hora_inicio ?? '');
+    return formatearHora(servicio.hora_fin);
+  };
+
+  const obtenerRangoHorario = (servicio: AgendaItem) => {
+    const inicio = obtenerHora(servicio);
+    const fin = obtenerHoraFin(servicio);
+
+    if (!inicio && !fin) {
+      return 'Horario no definido';
+    }
+
+    return fin ? `${inicio} - ${fin}` : inicio;
   };
 
   const obtenerDescripcion = (servicio: AgendaItem) => {
@@ -262,11 +311,7 @@ export default function AgendaScreen() {
       return servicio.descripcion || 'Trabajo';
     }
 
-    return (
-      servicio.titulo ||
-      servicio.descripcion ||
-      'Trabajo'
-    );
+    return servicio.titulo || servicio.descripcion || 'Trabajo';
   };
 
   const obtenerEstado = (servicio: AgendaItem) => {
@@ -477,15 +522,39 @@ export default function AgendaScreen() {
                 <div className="flex flex-col gap-2">
                   {selectedDayBookings.map((servicio) => (
                     <div
-                      key={servicio.id_servicio}
-                      className="rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-3"
+                      key={isAgendaReserva(servicio) ? servicio.id_reserva : servicio.id_servicio}
+                      className="rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-4"
                     >
-                      <p className="text-xs font-semibold text-foreground">
-                        {formatearHora(obtenerHora(servicio))}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {obtenerDescripcion(servicio)}
-                      </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {obtenerDescripcion(servicio)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {obtenerClienteLabel(servicio)} • {obtenerCategoriaLabel(servicio)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[#E0E7FF] px-3 py-1 text-xs font-semibold text-[#1A56DB]">
+                          {STATUS_LABELS[String(obtenerEstado(servicio)).trim().toLowerCase()] ?? obtenerEstado(servicio)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {crearFechaLocal(servicio.fecha).toLocaleDateString('es-HN')}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5" />
+                          {obtenerRangoHorario(servicio)}
+                        </div>
+                        {!isAgendaReserva(servicio) && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {servicio.direccion}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -608,41 +677,34 @@ export default function AgendaScreen() {
                       </span>
                     </div>
 
-                    <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                    <p className="mb-3 text-sm font-medium text-foreground">
                       {obtenerDescripcion(servicio)}
                     </p>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {crearFechaLocal(servicio.fecha).toLocaleDateString(
-                            'es-HN'
-                          )}
-                        </span>
+                    <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-xs text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-[#64748B]" />
+                        <span>{crearFechaLocal(servicio.fecha).toLocaleDateString('es-HN')}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {formatearHora(obtenerHora(servicio))}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-[#64748B]" />
+                        <span>{obtenerRangoHorario(servicio)}</span>
                       </div>
 
                       {!isAgendaReserva(servicio) && (
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="line-clamp-1 text-xs text-muted-foreground">
-                            {servicio.direccion}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-[#64748B]" />
+                          <span>{servicio.direccion}</span>
                         </div>
                       )}
                     </div>
 
                     {!isAgendaReserva(servicio) && (
-                      <p className="mt-3 text-right text-sm font-bold text-[#1A56DB]">
-                        {formatearPrecio(servicio.presupuesto)}
-                      </p>
+                      <div className="mt-3 flex items-center justify-between rounded-2xl bg-[#EFF4FF] p-3 text-sm font-semibold text-[#1A56DB]">
+                        <span>Presupuesto</span>
+                        <span>{formatearPrecio(servicio.presupuesto)}</span>
+                      </div>
                     )}
                   </motion.div>
                 );
