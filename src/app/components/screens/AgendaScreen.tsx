@@ -19,6 +19,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { obtenerReservasEmpleado, type AgendaReserva as BackendAgendaReserva } from '../../services/agenda';
 
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS = [
@@ -52,6 +53,8 @@ interface ServicioAgenda {
   nombre_cliente?: string | null;
   nombre_categoria?: string | null;
 }
+
+type AgendaItem = ServicioAgenda | BackendAgendaReserva;
 
 const STATUS_COLORS: Record<
   string,
@@ -163,7 +166,7 @@ export default function AgendaScreen() {
   const [viewMode, setViewMode] =
     useState<'week' | 'month'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [servicios, setServicios] = useState<ServicioAgenda[]>([]);
+  const [servicios, setServicios] = useState<AgendaItem[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
@@ -182,18 +185,8 @@ export default function AgendaScreen() {
             throw new Error('No se encontró el ID del trabajador.');
           }
 
-          const respuesta = await fetch(
-            `http://localhost:3000/api/empleados/${idEmpleado}/servicios`
-          );
-          const datos = await respuesta.json();
-
-          if (!respuesta.ok) {
-            throw new Error(
-              datos.mensaje ?? 'No se pudo cargar la agenda.'
-            );
-          }
-
-          setServicios(Array.isArray(datos) ? datos : []);
+          const reservas = await obtenerReservasEmpleado(idEmpleado);
+          setServicios(reservas);
           return;
         }
 
@@ -251,6 +244,58 @@ export default function AgendaScreen() {
     return week;
   };
 
+  const isAgendaReserva = (
+    servicio: AgendaItem
+  ): servicio is BackendAgendaReserva =>
+    'id_reserva' in servicio;
+
+  const obtenerHora = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return String(servicio.hora ?? '');
+    }
+
+    return String(servicio.hora_inicio ?? '');
+  };
+
+  const obtenerDescripcion = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return servicio.descripcion || 'Trabajo';
+    }
+
+    return (
+      servicio.titulo ||
+      servicio.descripcion ||
+      'Trabajo'
+    );
+  };
+
+  const obtenerEstado = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return 'asignado';
+    }
+
+    return String(servicio.estado ?? 'Pendiente')
+      .trim()
+      .toLowerCase()
+      .replace('_', ' ');
+  };
+
+  const obtenerClienteLabel = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return `Servicio #${servicio.id_servicio}`;
+    }
+
+    return servicio.nombre_cliente || 'Cliente';
+  };
+
+  const obtenerCategoriaLabel = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return 'Reserva';
+    }
+
+    return servicio.nombre_categoria || 'Sin categoría';
+  };
+
   const weekDays = getWeekDays(currentDate);
   const today = new Date();
 
@@ -274,9 +319,7 @@ export default function AgendaScreen() {
         (servicio) => normalizarFecha(servicio.fecha) === fecha
       )
       .sort((a, b) =>
-        String(a.hora_inicio ?? '').localeCompare(
-          String(b.hora_inicio ?? '')
-        )
+        obtenerHora(a).localeCompare(obtenerHora(b))
       );
   }, [servicios, currentDate]);
 
@@ -438,13 +481,10 @@ export default function AgendaScreen() {
                       className="rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-3"
                     >
                       <p className="text-xs font-semibold text-foreground">
-                        {formatearHora(servicio.hora_inicio)} –{' '}
-                        {formatearHora(servicio.hora_fin)}
+                        {formatearHora(obtenerHora(servicio))}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {servicio.titulo ||
-                          servicio.nombre_categoria ||
-                          'Servicio'}
+                        {obtenerDescripcion(servicio)}
                       </p>
                     </div>
                   ))}
@@ -530,15 +570,16 @@ export default function AgendaScreen() {
           ) : servicios.length > 0 ? (
             <div className="flex flex-col gap-3">
               {servicios.map((servicio) => {
-                const status = obtenerEstadoVisual(servicio.estado);
+                const estado = obtenerEstado(servicio);
+                const status = obtenerEstadoVisual(estado);
                 const StatusIcon = status.icon;
-                const estadoClave = String(servicio.estado)
+                const estadoClave = String(estado)
                   .trim()
                   .toLowerCase();
 
                 return (
                   <motion.div
-                    key={servicio.id_servicio}
+                    key={isAgendaReserva(servicio) ? servicio.id_reserva : servicio.id_servicio}
                     whileTap={{ scale: 0.98 }}
                    onClick={() => {
                     if (role === 'worker') {
@@ -552,14 +593,10 @@ export default function AgendaScreen() {
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {role === 'worker'
-                            ? servicio.nombre_cliente || 'Cliente'
-                            : servicio.titulo ||
-                              servicio.nombre_categoria ||
-                              'Solicitud'}
+                          {obtenerClienteLabel(servicio)}
                         </p>
                         <span className="mt-1 inline-flex rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                          {servicio.nombre_categoria || 'Sin categoría'}
+                          {obtenerCategoriaLabel(servicio)}
                         </span>
                       </div>
 
@@ -567,12 +604,12 @@ export default function AgendaScreen() {
                         className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.bg} ${status.text}`}
                       >
                         <StatusIcon className="h-3 w-3" />
-                        {STATUS_LABELS[estadoClave] ?? servicio.estado}
+                        {STATUS_LABELS[estadoClave] ?? obtenerEstado(servicio)}
                       </span>
                     </div>
 
                     <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-                      {servicio.descripcion}
+                      {obtenerDescripcion(servicio)}
                     </p>
 
                     <div className="space-y-2">
@@ -588,22 +625,25 @@ export default function AgendaScreen() {
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">
-                          {formatearHora(servicio.hora_inicio)} –{' '}
-                          {formatearHora(servicio.hora_fin)}
+                          {formatearHora(obtenerHora(servicio))}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="line-clamp-1 text-xs text-muted-foreground">
-                          {servicio.direccion}
-                        </span>
-                      </div>
+                      {!isAgendaReserva(servicio) && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="line-clamp-1 text-xs text-muted-foreground">
+                            {servicio.direccion}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <p className="mt-3 text-right text-sm font-bold text-[#1A56DB]">
-                      {formatearPrecio(servicio.presupuesto)}
-                    </p>
+                    {!isAgendaReserva(servicio) && (
+                      <p className="mt-3 text-right text-sm font-bold text-[#1A56DB]">
+                        {formatearPrecio(servicio.presupuesto)}
+                      </p>
+                    )}
                   </motion.div>
                 );
               })}

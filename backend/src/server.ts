@@ -4406,6 +4406,24 @@ app.put(
             SET estado = 'Ocupado'
             WHERE id_empleado = ${idEmpleado};
 
+            INSERT INTO reservas (
+              id_servicio,
+              id_empleado,
+              descripcion,
+              fecha,
+              hora,
+              fecha_creacion
+            )
+            SELECT
+              id_servicio,
+              fk_empleado,
+              COALESCE(titulo, descripcion, 'Trabajo aceptado'),
+              fecha,
+              hora_inicio,
+              GETDATE()
+            FROM servicios
+            WHERE id_servicio = ${idServicio};
+
             COMMIT TRANSACTION;
 
             SELECT
@@ -4961,8 +4979,40 @@ app.listen(port, () => {
 });
 
 // ==========================================
-// RESERVAS Y RESEÑAS
+// AGENDA / RESERVAS
 // ==========================================
+app.get('/api/agenda/empleados/:idEmpleado', async (req, res) => {
+  try {
+    const idEmpleado = Number(req.params.idEmpleado);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({ mensaje: 'ID de empleado inválido' });
+    }
+
+    const [reservas] = await database.query(
+      `
+      SELECT
+        r.id_reserva,
+        r.id_servicio,
+        r.id_empleado,
+        r.descripcion,
+        r.fecha,
+        r.hora,
+        r.fecha_creacion
+      FROM reservas r
+      WHERE r.id_empleado = ?
+      ORDER BY r.fecha ASC, r.hora ASC, r.id_reserva ASC
+      `,
+      [idEmpleado]
+    );
+
+    return res.status(200).json(Array.isArray(reservas) ? reservas : []);
+  } catch (error: any) {
+    console.error('Error al consultar reservas de agenda:', error);
+    return res.status(500).json({ mensaje: 'Error al consultar la agenda', detalle: error.message });
+  }
+});
+
 app.get('/api/reservas/:id', async (req, res) => {
   try {
     const idReserva = Number(req.params.id);
