@@ -325,12 +325,20 @@ export default function AgendaScreen() {
       .replace('_', ' ');
   };
 
-  const obtenerClienteLabel = (servicio: AgendaItem) => {
+  const obtenerTitulo = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      return servicio.descripcion || 'Trabajo';
+    }
+
+    return servicio.titulo || servicio.descripcion || 'Trabajo';
+  };
+
+  const obtenerSubtitulo = (servicio: AgendaItem) => {
     if (isAgendaReserva(servicio)) {
       return `Servicio #${servicio.id_servicio}`;
     }
 
-    return servicio.nombre_cliente || 'Cliente';
+    return `${servicio.nombre_cliente || 'Cliente'} • ${servicio.nombre_categoria || 'Sin categoría'}`;
   };
 
   const obtenerCategoriaLabel = (servicio: AgendaItem) => {
@@ -645,6 +653,10 @@ export default function AgendaScreen() {
                 const estadoClave = String(estado)
                   .trim()
                   .toLowerCase();
+                const titulo = obtenerTitulo(servicio);
+                const descripcion = obtenerDescripcion(servicio);
+                const mostrarDescripcion =
+                  descripcion && descripcion !== titulo;
 
                 return (
                   <motion.div
@@ -662,11 +674,11 @@ export default function AgendaScreen() {
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {obtenerClienteLabel(servicio)}
+                          {titulo}
                         </p>
-                        <span className="mt-1 inline-flex rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                          {obtenerCategoriaLabel(servicio)}
-                        </span>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {obtenerSubtitulo(servicio)}
+                        </p>
                       </div>
 
                       <span
@@ -677,9 +689,11 @@ export default function AgendaScreen() {
                       </span>
                     </div>
 
-                    <p className="mb-3 text-sm font-medium text-foreground">
-                      {obtenerDescripcion(servicio)}
-                    </p>
+                    {mostrarDescripcion && (
+                      <p className="mb-3 text-sm font-medium text-foreground">
+                        {descripcion}
+                      </p>
+                    )}
 
                     <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-xs text-slate-600">
                       <div className="flex items-center gap-2">
