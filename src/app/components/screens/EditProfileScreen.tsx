@@ -233,6 +233,14 @@ export default function EditProfileScreen({
 
       const url = await subirArchivo(archivo, '/api/upload-antecedente');
       setAntecedente(url);
+      // Reflect upload immediately in current user for visibility
+      if (currentUser) {
+        const actualizado = {
+          ...currentUser,
+          antecedente: url,
+        } as any;
+        setCurrentUser(actualizado);
+      }
       setSuccessMessage('Documento subido correctamente');
       window.setTimeout(() => setSuccessMessage(''), 4000);
     } catch (error) {
@@ -537,14 +545,16 @@ if (dni && !/^\d+$/.test(dni.trim())) {
             </label>
 
             {antecedente && (
-              <a
-                href={antecedente}
-                target="_blank"
-                rel="noreferrer"
-                className="break-all text-xs text-blue-600 underline"
-              >
-                Ver documento cargado
-              </a>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Documento cargado</span>
+                <button
+                  type="button"
+                  onClick={() => window.open(antecedente, '_blank')}
+                  className="text-xs text-blue-600 underline"
+                >
+                  Ver
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -561,9 +571,16 @@ if (dni && !/^\d+$/.test(dni.trim())) {
           </label>
 
           {foto && (
-            <p className="break-all text-xs text-slate-500">
-              {foto}
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Foto cargada</span>
+              <button
+                type="button"
+                onClick={() => window.open(foto, '_blank')}
+                className="text-xs text-blue-600 underline"
+              >
+                Ver
+              </button>
+            </div>
           )}
         </div>
 

@@ -326,11 +326,8 @@ export default function AgendaScreen() {
   };
 
   const obtenerTitulo = (servicio: AgendaItem) => {
-    if (isAgendaReserva(servicio)) {
-      return servicio.descripcion || 'Trabajo';
-    }
-
-    return servicio.titulo || servicio.descripcion || 'Trabajo';
+    // Azure table only exposes `descripcion`, so always use it as the title.
+    return servicio.descripcion || 'Trabajo';
   };
 
   const obtenerSubtitulo = (servicio: AgendaItem) => {
@@ -347,6 +344,15 @@ export default function AgendaScreen() {
     }
 
     return servicio.nombre_categoria || 'Sin categoría';
+  };
+
+  const obtenerClienteLabel = (servicio: AgendaItem) => {
+    if (isAgendaReserva(servicio)) {
+      // If the reservation references a servicio, show its id, otherwise generic label
+      return servicio.id_servicio ? `Servicio #${servicio.id_servicio}` : 'Reserva';
+    }
+
+    return servicio.nombre_cliente || 'Cliente';
   };
 
   const weekDays = getWeekDays(currentDate);
