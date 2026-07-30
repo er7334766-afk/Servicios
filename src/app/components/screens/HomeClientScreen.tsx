@@ -781,10 +781,21 @@ export default function HomeClientScreen() {
       </div>
 
       {/* Disponibles ahora */}
-     <div className="mt-6 px-5 pb-4">
-        <h2 className="text-base font-bold text-foreground mb-3">
-          Disponibles ahora
-        </h2>
+          <div className="mt-6 px-5 pb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold text-foreground">
+                Disponibles ahora
+              </h2>
+
+              <button
+                type="button"
+                className="text-xs text-[#1A56DB] flex items-center gap-1"
+                onClick={() => navigate('/home/search')}
+              >
+                Ver todos
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
         {cargandoEmpleados ? (
           <div className="bg-card rounded-2xl border border-border p-5 text-center">
