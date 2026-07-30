@@ -1573,7 +1573,10 @@ app.get('/api/servicios', async (_req, res) => {
           s.fecha,
           s.hora_inicio,
           s.hora_fin,
-          s.estado,
+          COALESCE(
+            NULLIF(LTRIM(RTRIM(s.estado)), ''),
+            'Pendiente'
+          ) AS estado,
 
           c.nombre AS nombre_cliente,
           c.foto_url AS foto_cliente,
@@ -1809,7 +1812,10 @@ app.get('/api/servicios/:id', async (req, res) => {
           s.fecha,
           s.hora_inicio,
           s.hora_fin,
-          s.estado,
+          COALESCE(
+            NULLIF(LTRIM(RTRIM(s.estado)), ''),
+            'Pendiente'
+          ) AS estado,
 
           COALESCE(
             NULLIF(c.nombre, ''),
@@ -2259,7 +2265,7 @@ app.get(
 // GUARDAR CATEGORÍAS Y SUBCATEGORÍAS
 // ==========================================
 app.put(
-  "/api/empleados/:idEmpleado/servicios",
+  "/api/empleados/:idEmpleado/categorias",
   async (req, res) => {
     try {
       const idEmpleado = Number(req.params.idEmpleado);
@@ -5257,199 +5263,59 @@ app.put(
   '/api/servicios/:idServicio/estado',
   async (req, res) => {
     try {
-      const idServicio = Number(
-        req.params.idServicio
-      );
+      const idServicio = Number(req.params.idServicio);
+      let estadoNuevo = String(req.body.estado ?? '').trim();
 
-      const estadoNuevo = String(
-        req.body.estado ?? ''
-      ).trim();
-
-      const motivoCancelacion = String(
-        req.body.motivo_cancelacion ?? ''
-      ).trim();
-
-      const canceladoPor = String(
-        req.body.cancelado_por ?? ''
-      ).trim();
-
-      if (
-        !Number.isInteger(idServicio) ||
-        idServicio <= 0
-      ) {
+      if (!Number.isInteger(idServicio) || idServicio <= 0) {
         return res.status(400).json({
           mensaje: 'ID de servicio inválido',
         });
       }
 
-      const estadosPermitidos = [
-        'Asignado',
-        'En proceso',
-        'Completado',
-        'Cancelado',
-      ];
+      // Mapeo de posibles valores de entrada a valores del constraint
+      const estadoMap: Record<string, string> = {
+        'pendiente': 'Pendiente',
+        'asignado': 'Asignado',
+        'en proceso': 'En proceso',
+        'en_proceso': 'En proceso',
+        'completado': 'Completado',
+        'cancelado': 'Cancelado',
+      };
 
-      if (
-        !estadosPermitidos.includes(
-          estadoNuevo
-        )
-      ) {
+      const estadoNormalizado = estadoMap[estadoNuevo.toLowerCase()] || estadoNuevo;
+
+      const estadosPermitidos = ['Pendiente', 'Asignado', 'En proceso', 'Completado', 'Cancelado'];
+
+      if (!estadosPermitidos.includes(estadoNormalizado)) {
         return res.status(400).json({
-          mensaje:
-            'El estado indicado no es válido',
+          mensaje: `El estado indicado no es válido: ${estadoNuevo}`,
         });
       }
 
-      if (
-        estadoNuevo === 'Cancelado' &&
-        motivoCancelacion.length < 5
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'Debes indicar el motivo de la cancelación',
-        });
-      }
+      const [resultado]: any = await database.execute(
+        `
+        UPDATE servicios
+        SET estado = ?
+        WHERE id_servicio = ?
+        `,
+        [estadoNormalizado, idServicio]
+      );
 
-      if (
-        estadoNuevo === 'Cancelado' &&
-        canceladoPor !== 'cliente' &&
-        canceladoPor !== 'empleado'
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'No se pudo identificar quién canceló el servicio',
-        });
-      }
-
-      const [servicios]: any =
-        await database.execute(
-          `
-          SELECT
-            id_servicio,
-            estado,
-            fk_empleado
-          FROM servicios
-          WHERE id_servicio = ?
-          LIMIT 1
-          `,
-          [idServicio]
-        );
-
-      if (servicios.length === 0) {
+      if (resultado.affectedRows === 0) {
         return res.status(404).json({
           mensaje: 'Servicio no encontrado',
         });
       }
 
-      const estadoActual = String(
-        servicios[0].estado ?? ''
-      )
-        .trim()
-        .toLowerCase()
-        .replace('_', ' ');
-
-      const nuevoNormalizado =
-        estadoNuevo
-          .trim()
-          .toLowerCase()
-          .replace('_', ' ');
-
-      const transicionesPermitidas: Record<
-        string,
-        string[]
-      > = {
-        asignado: [
-          'en proceso',
-          'cancelado',
-        ],
-        'en proceso': [
-          'completado',
-          'cancelado',
-        ],
-        completado: [],
-        cancelado: [],
-      };
-
-      const siguientes =
-        transicionesPermitidas[
-          estadoActual
-        ];
-
-      if (
-        !siguientes ||
-        !siguientes.includes(
-          nuevoNormalizado
-        )
-      ) {
-        return res.status(409).json({
-          mensaje: `No se puede cambiar el servicio de "${servicios[0].estado}" a "${estadoNuevo}"`,
-        });
-      }
-
-      if (
-        estadoNuevo !== 'Cancelado'
-      ) {
-        const [resultado]: any =
-          await database.execute(
-            `
-            UPDATE servicios
-            SET
-              estado = ?,
-              motivo_cancelacion = NULL,
-              cancelado_por = NULL
-            WHERE id_servicio = ?
-            `,
-            [
-              estadoNuevo,
-              idServicio,
-            ]
-          );
-
-        return res.status(200).json({
-          mensaje:
-            'Estado actualizado correctamente',
-          estado: estadoNuevo,
-          actualizados:
-            resultado.affectedRows,
-        });
-      }
-
-      const [resultado]: any =
-        await database.execute(
-          `
-          UPDATE servicios
-          SET
-            estado = 'Cancelado',
-            motivo_cancelacion = ?,
-            cancelado_por = ?
-          WHERE id_servicio = ?
-          `,
-          [
-            motivoCancelacion,
-            canceladoPor,
-            idServicio,
-          ]
-        );
-
       return res.status(200).json({
-        mensaje:
-          'Servicio cancelado correctamente',
-        estado: 'Cancelado',
-        motivo_cancelacion:
-          motivoCancelacion,
-        cancelado_por: canceladoPor,
-        actualizados:
-          resultado.affectedRows,
+        mensaje: 'Estado actualizado correctamente',
+        estado: estadoNormalizado,
       });
     } catch (error: any) {
-      console.error(
-        'Error al actualizar estado:',
-        error
-      );
+      console.error('Error al actualizar estado:', error);
 
       return res.status(500).json({
-        mensaje:
-          'Error al actualizar el estado del servicio',
+        mensaje: 'Error al actualizar el estado del servicio',
         detalle: error.message,
       });
     }
@@ -5471,7 +5337,7 @@ app.get(
         });
       }
 
-      const [empleados]: any = await database.execute(
+      const [empleados]: any = await database.query(
         `
         SELECT id_empleado
         FROM empleados
@@ -5487,7 +5353,7 @@ app.get(
         });
       }
 
-      const [servicios] = await database.execute(
+      const [servicios] = await database.query(
         `
         SELECT
           s.id_servicio,
@@ -5502,7 +5368,10 @@ app.get(
           s.fecha,
           s.hora_inicio,
           s.hora_fin,
-          s.estado,
+          COALESCE(
+            NULLIF(LTRIM(RTRIM(s.estado)), ''),
+            'Pendiente'
+          ) AS estado,
 
           c.nombre_C AS nombre_cliente,
           c.foto AS foto_cliente,
@@ -5518,12 +5387,6 @@ app.get(
           ON cat.id_categoria = s.fk_categoria
 
         WHERE s.fk_empleado = ?
-          AND LOWER(TRIM(s.estado)) IN (
-            'asignado',
-            'en proceso',
-            'en_proceso',
-            'completado'
-          )
 
         ORDER BY
           s.fecha ASC,
@@ -5546,77 +5409,6 @@ app.get(
     }
   }
 );
-
-/*app.get(
-  "/api/empleados/:idEmpleado/servicios",
-  async (req, res) => {
-    try {
-      const idEmpleado = Number(
-        req.params.idEmpleado
-      );
-
-      if (
-        !Number.isInteger(idEmpleado) ||
-        idEmpleado <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: "ID de empleado inválido",
-        });
-      }
-
-      const [servicios] =
-        await database.execute(
-          `
-          SELECT
-            s.id_servicio,
-            s.fk_cliente,
-            s.fk_categoria,
-            s.fk_empleado,
-            s.titulo,
-            s.descripcion,
-            s.direccion,
-            s.presupuesto,
-            s.fecha,
-            s.hora_inicio,
-            s.hora_fin,
-            s.estado,
-            c.nombre_C AS nombre_cliente,
-            c.foto AS foto_cliente,
-            cat.nombre AS nombre_categoria
-          FROM servicios s
-          LEFT JOIN clientes c
-            ON c.id_cliente = s.fk_cliente
-          LEFT JOIN categorias cat
-            ON cat.id_categoria = s.fk_categoria
-          WHERE s.fk_empleado = ?
-            AND LOWER(s.estado) IN (
-              'asignado',
-              'en proceso',
-              'en_proceso',
-              'completado'
-            )
-          ORDER BY
-            s.fecha ASC,
-            s.hora_inicio ASC
-          `,
-          [idEmpleado]
-        );
-
-      return res.status(200).json(servicios);
-    } catch (error) {
-      console.error(
-        "Error al consultar agenda:",
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          "Error al consultar la agenda",
-      });
-    }
-  }
-);*/
-
 // ==========================================
 // INICIO DEL SERVIDOR
 // ==========================================

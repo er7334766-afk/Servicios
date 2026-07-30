@@ -215,8 +215,18 @@ export default function AgendaScreen() {
             throw new Error('No se encontró el ID del trabajador.');
           }
 
-          const reservas = await obtenerReservasEmpleado(idEmpleado);
-          setServicios(reservas);
+          const respuesta = await fetch(
+            `http://localhost:3000/api/empleados/${idEmpleado}/servicios`
+          );
+          const datos = await respuesta.json();
+
+          if (!respuesta.ok) {
+            throw new Error(
+              datos.mensaje ?? 'No se pudieron cargar los servicios.'
+            );
+          }
+
+          setServicios(Array.isArray(datos) ? datos : []);
           return;
         }
 

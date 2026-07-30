@@ -120,7 +120,13 @@ export async function obtenerServiciosDisponibles(): Promise<
         .trim()
         .toLowerCase();
 
-      return estado === 'pendiente';
+      const tieneEmpleadoAsignado =
+        Number(servicio.fk_empleado ?? 0) > 0;
+
+      return (
+        !tieneEmpleadoAsignado &&
+        (estado === 'pendiente' || estado === 'pending' || estado === '')
+      );
     }
   );
 }
