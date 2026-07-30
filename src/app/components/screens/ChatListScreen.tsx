@@ -31,7 +31,7 @@ interface Contacto {
   nombre: string;
   foto: string | null;
   descripcion: string | null;
-  estado: string | null;
+  conectado: boolean | number | string | null;
 }
 
 interface UsuarioGuardado {
@@ -43,6 +43,12 @@ interface UsuarioGuardado {
   role?: string;
   rol?: string;
   usuario?: UsuarioGuardado;
+}
+
+function estaConectado(
+  valor: boolean | number | string | null | undefined
+): boolean {
+  return valor === true || Number(valor) === 1;
 }
 
 function leerUsuarioLocal(): UsuarioGuardado | null {
@@ -152,9 +158,9 @@ export default function ChatListScreen() {
           );
         }
 
-        const url = esEmpleado
-          ? `/api/chat/empleado/${idUsuario}/conversaciones`
-          : `/api/chat/cliente/${idUsuario}/conversaciones`;
+       const url = esEmpleado
+        ? `http://localhost:3000/api/chat/empleado/${idUsuario}/conversaciones`
+        : `http://localhost:3000/api/chat/cliente/${idUsuario}/conversaciones`;
 
         const respuesta = await fetch(url, {
           cache: 'no-store',
@@ -182,9 +188,23 @@ export default function ChatListScreen() {
           );
         }
 
-        setConversaciones(
-          Array.isArray(datos) ? datos : []
-        );
+        const listaConversaciones =
+        Array.isArray(datos)
+          ? datos
+          : Array.isArray(
+                datos?.conversaciones
+              )
+            ? datos.conversaciones
+            : [];
+
+      console.log(
+        "Conversaciones recibidas:",
+        listaConversaciones
+      );
+
+      setConversaciones(
+        listaConversaciones
+      );
       } catch (error) {
         const mensaje =
           error instanceof Error
@@ -285,14 +305,16 @@ export default function ChatListScreen() {
         contacto.descripcion ?? ''
       ).toLowerCase();
 
-      const estado = String(
-        contacto.estado ?? ''
-      ).toLowerCase();
+      const presencia = estaConectado(
+        contacto.conectado
+      )
+        ? 'conectado'
+        : 'desconectado';
 
       return (
         nombre.includes(texto) ||
         descripcion.includes(texto) ||
-        estado.includes(texto)
+        presencia.includes(texto)
       );
     });
   }, [
@@ -342,80 +364,121 @@ export default function ChatListScreen() {
     );
   };
 
-  const abrirContactos = async () => {
-    try {
-      setMostrarContactos(true);
-      setCargandoContactos(true);
-      setErrorContactos('');
-      setBusquedaContacto('');
-
-      if (
-        rolActual !== 'client' &&
-        rolActual !== 'worker'
-      ) {
-        throw new Error(
-          'No se pudo identificar el rol del usuario'
-        );
-      }
-
-      if (
-        !Number.isInteger(idUsuario) ||
-        idUsuario <= 0
-      ) {
-        throw new Error(
-          'No se encontró el ID del usuario'
-        );
-      }
-
-      const respuesta = await fetch(
-        `/api/chat/contactos/${rolActual}/${idUsuario}`,
-        {
-          cache: 'no-store',
+  const cargarContactos = useCallback(
+    async (mostrarCarga = false) => {
+      try {
+        if (mostrarCarga) {
+          setCargandoContactos(true);
         }
-      );
 
-      const texto = await respuesta.text();
+        setErrorContactos('');
 
-      let datos: any = [];
-
-      if (texto) {
-        try {
-          datos = JSON.parse(texto);
-        } catch {
+        if (
+          rolActual !== 'client' &&
+          rolActual !== 'worker'
+        ) {
           throw new Error(
-            'El servidor devolvió una respuesta inválida'
+            'No se pudo identificar el rol del usuario'
           );
         }
-      }
 
-      if (!respuesta.ok) {
-        throw new Error(
-          datos?.detalle ||
-            datos?.mensaje ||
-            'No se pudieron cargar los contactos'
+        if (
+          !Number.isInteger(idUsuario) ||
+          idUsuario <= 0
+        ) {
+          throw new Error(
+            'No se encontró el ID del usuario'
+          );
+        }
+
+        const respuesta = await fetch(
+          `http://localhost:3000/api/chat/contactos/${rolActual}/${idUsuario}?t=${Date.now()}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+          }
         );
+
+        const texto = await respuesta.text();
+        let datos: any = [];
+
+        if (texto) {
+          try {
+            datos = JSON.parse(texto);
+          } catch {
+            throw new Error(
+              'El servidor devolvió una respuesta inválida'
+            );
+          }
+        }
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos?.detalle ||
+              datos?.mensaje ||
+              'No se pudieron cargar los contactos'
+          );
+        }
+
+        const lista = Array.isArray(datos)
+          ? datos
+          : [];
+
+        setContactos(
+          lista.map((contacto: any) => ({
+            id: Number(contacto.id),
+            nombre: String(contacto.nombre ?? ''),
+            foto: contacto.foto ?? null,
+            descripcion: contacto.descripcion ?? null,
+            conectado: estaConectado(
+              contacto.conectado
+            ),
+          }))
+        );
+      } catch (error) {
+        const mensaje =
+          error instanceof Error
+            ? error.message
+            : 'Error al cargar los contactos';
+
+        console.error(
+          'Error al cargar contactos:',
+          error
+        );
+
+        setErrorContactos(mensaje);
+
+        if (mostrarCarga) {
+          setContactos([]);
+        }
+      } finally {
+        if (mostrarCarga) {
+          setCargandoContactos(false);
+        }
       }
+    },
+    [idUsuario, rolActual]
+  );
 
-      setContactos(
-        Array.isArray(datos) ? datos : []
-      );
-    } catch (error) {
-      const mensaje =
-        error instanceof Error
-          ? error.message
-          : 'Error al cargar los contactos';
-
-      console.error(
-        'Error al cargar contactos:',
-        error
-      );
-
-      setErrorContactos(mensaje);
-      setContactos([]);
-    } finally {
-      setCargandoContactos(false);
-    }
+  const abrirContactos = () => {
+    setMostrarContactos(true);
+    setBusquedaContacto('');
+    void cargarContactos(true);
   };
+
+  useEffect(() => {
+    if (!mostrarContactos) {
+      return;
+    }
+
+    const intervalo = window.setInterval(() => {
+      void cargarContactos(false);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalo);
+    };
+  }, [mostrarContactos, cargarContactos]);
 
   const cerrarContactos = () => {
     setMostrarContactos(false);
@@ -533,88 +596,91 @@ export default function ChatListScreen() {
             >
               Intentar nuevamente
             </button>
-          </div>
-        ) : conversacionesFiltradas.length > 0 ? (
-          conversacionesFiltradas.map(
-            (conversacion, indice) => (
-              <motion.div
-                key={conversacion.id}
-                initial={{
-                  opacity: 0,
-                  x: -10,
-                }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                }}
-                transition={{
-                  delay: indice * 0.04,
-                }}
-                whileTap={{
-                  backgroundColor: '#F1F5F9',
-                }}
-                onClick={() =>
-                  navigate(
-                    `/home/chat/${conversacion.id}`
-                  )
-                }
-                className="flex cursor-pointer items-center gap-3 border-b border-border px-5 py-3.5"
-              >
-                <div className="relative flex-shrink-0">
-                  <ImageWithFallback
-                    src={
-                      conversacion.participantAvatar ??
-                      ''
-                    }
-                    alt={
-                      conversacion.participantName
-                    }
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
-
-                  <span
-                    className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${
-                      Boolean(
-                        conversacion.participantOnline
-                      )
-                        ? 'bg-green-500'
-                        : 'bg-slate-300'
-                    }`}
-                  />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {
-                        conversacion.participantName
-                      }
-                    </p>
-
-                    <span className="flex-shrink-0 text-xs text-muted-foreground">
-                      {formatearFecha(
-                        conversacion.lastMessageTime
-                      )}
-                    </span>
                   </div>
+                ) : conversacionesFiltradas.length > 0 ? (
+                  conversacionesFiltradas.map(
+                    (conversacion, indice) => (
+                      <motion.div
+              key={conversacion.id}
+              initial={{
+                opacity: 0,
+                x: -10,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+              }}
+              transition={{
+                delay: indice * 0.04,
+              }}
+              onClick={() =>
+                navigate(
+                  `/home/chat/${conversacion.id}`
+                )
+              }
+              className="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-3.5 hover:bg-muted/50"
+            >
+          {/* Foto */}
+          <div className="relative flex-shrink-0">
+            <ImageWithFallback
+              src={
+                conversacion.participantAvatar ??
+                ''
+              }
+              alt={
+                conversacion.participantName
+              }
+              className="h-14 w-14 rounded-full object-cover"
+            />
 
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {
-                      conversacion.lastMessage
-                    }
-                  </p>
-                </div>
+            {estaConectado(
+              conversacion.participantOnline
+            ) && (
+              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card bg-green-500" />
+            )}
+          </div>
 
-                {Number(
-                  conversacion.unreadCount
-                ) > 0 && (
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#1A56DB] text-[10px] font-bold text-white">
-                    {
-                      conversacion.unreadCount
-                    }
-                  </span>
-                )}
-              </motion.div>
+  {/* Nombre y último mensaje */}
+  <div className="min-w-0 flex-1">
+    <p className="truncate text-base font-semibold text-foreground">
+      {conversacion.participantName}
+    </p>
+
+    <p className="mt-0.5 truncate text-sm text-muted-foreground">
+      {conversacion.lastMessage ||
+        'Sin mensajes'}
+    </p>
+  </div>
+
+  {/* Hora y contador */}
+  <div className="flex flex-shrink-0 flex-col items-end gap-2">
+    <span
+      className={`text-xs font-medium ${
+        Number(
+          conversacion.unreadCount
+        ) > 0
+          ? 'text-green-500'
+          : 'text-muted-foreground'
+      }`}
+    >
+      {formatearFecha(
+        conversacion.lastMessageTime
+      )}
+    </span>
+
+    {Number(
+      conversacion.unreadCount
+    ) > 0 && (
+      <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-green-500 px-1.5 text-xs font-bold text-white">
+        {conversacion.unreadCount}
+      </span>
+    )}
+  </div>
+
+                
+
+</motion.div>
+              
             )
           )
         ) : (
@@ -716,22 +782,44 @@ export default function ChatListScreen() {
                       }
                       className="flex w-full items-center gap-3 border-b border-border px-2 py-3 text-left"
                     >
-                      <ImageWithFallback
-                        src={contacto.foto ?? ''}
-                        alt={contacto.nombre}
-                        className="h-11 w-11 rounded-full object-cover"
-                      />
+                      <div className="relative flex-shrink-0">
+                        <ImageWithFallback
+                          src={contacto.foto ?? ''}
+                          alt={contacto.nombre}
+                          className="h-11 w-11 rounded-full object-cover"
+                        />
+                      </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {contacto.nombre}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
+                              estaConectado(
+                                contacto.conectado
+                              )
+                                ? 'bg-green-500'
+                                : 'bg-gray-400'
+                            }`}
+                            aria-label={
+                              estaConectado(
+                                contacto.conectado
+                              )
+                                ? 'Conectado'
+                                : 'Desconectado'
+                            }
+                            title={
+                              estaConectado(
+                                contacto.conectado
+                              )
+                                ? 'Conectado'
+                                : 'Desconectado'
+                            }
+                          />
 
-                        <p className="truncate text-xs text-muted-foreground">
-                          {contacto.descripcion ||
-                            contacto.estado ||
-                            ''}
-                        </p>
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {contacto.nombre}
+                          </p>
+                        </div>
                       </div>
                     </button>
                   )
@@ -744,3 +832,4 @@ export default function ChatListScreen() {
     </div>
   );
 }
+

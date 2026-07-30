@@ -2512,29 +2512,39 @@ app.post("/api/chat", async (req, res) => {
         ? "EMPLEADO"
         : "CLIENTE";
 
-    const mensajeSeguro =
-      textoMensaje.replace(/'/g, "''");
-
     const respuestaMensaje: any =
-      await database.query(`
-        INSERT INTO chat_mensajes
-        (
-          id_conversacion,
-          remitente,
-          mensaje,
-          fecha
-        )
-        OUTPUT
-          INSERTED.id_mensaje,
-          INSERTED.fecha
-        VALUES
-        (
-          ${idConversacion},
-          '${remitenteBD}',
-          N'${mensajeSeguro}',
-          GETDATE()
-        )
-      `);
+      await database.execute(
+        `
+          INSERT INTO chat_mensajes
+          (
+            id_conversacion,
+            remitente,
+            mensaje,
+            fecha,
+            entregado,
+            leido
+          )
+          OUTPUT
+            INSERTED.id_mensaje,
+            INSERTED.fecha,
+            INSERTED.entregado,
+            INSERTED.leido
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            GETDATE(),
+            0,
+            0
+          )
+        `,
+        [
+          idConversacion,
+          remitenteBD,
+          textoMensaje,
+        ]
+      );
 
     let mensajesInsertados: any[] = [];
 
@@ -2560,6 +2570,13 @@ app.post("/api/chat", async (req, res) => {
     ) {
       mensajesInsertados =
         respuestaMensaje[0];
+    } else if (
+      Array.isArray(
+        respuestaMensaje?.rows
+      )
+    ) {
+      mensajesInsertados =
+        respuestaMensaje.rows;
     }
 
     const mensajeInsertado =
@@ -2576,6 +2593,12 @@ app.post("/api/chat", async (req, res) => {
         fk_empleado: idEmpleado,
         remitente,
         mensaje: textoMensaje,
+        entregado:
+          mensajeInsertado.entregado ??
+          false,
+        leido:
+          mensajeInsertado.leido ??
+          false,
         fecha:
           mensajeInsertado.fecha ??
           new Date().toISOString(),
@@ -2747,26 +2770,27 @@ app.get(
       );
 
       const respuestaMensajes: any =
-        await database.query(`
-          SELECT
-            id_mensaje AS id_chat,
-            ${idCliente} AS fk_cliente,
-            ${idEmpleado} AS fk_empleado,
-            CASE remitente
-              WHEN 'EMPLEADO'
-                THEN 'empleado'
-              ELSE 'cliente'
-            END AS remitente,
-            mensaje,
-            0 AS leido,
-            fecha
-          FROM chat_mensajes
-          WHERE id_conversacion =
-            ${idConversacion}
-          ORDER BY
-            fecha ASC,
-            id_mensaje ASC
-        `);
+      await database.query(`
+        SELECT
+          m.id_mensaje AS id_chat,
+          ${idCliente} AS fk_cliente,
+          ${idEmpleado} AS fk_empleado,
+          CASE m.remitente
+            WHEN 'EMPLEADO'
+              THEN 'empleado'
+            ELSE 'cliente'
+          END AS remitente,
+          m.mensaje,
+          m.entregado,
+          m.leido,
+          m.fecha
+        FROM chat_mensajes AS m
+        WHERE m.id_conversacion =
+          ${idConversacion}
+        ORDER BY
+          m.fecha ASC,
+          m.id_mensaje ASC
+      `);
 
       let mensajes: any[] = [];
 
@@ -2834,55 +2858,116 @@ app.get(
 // ==========================================
 // CONVERSACIONES DE UN EMPLEADO
 // ==========================================
+// ==========================================
+// CONVERSACIONES DE UN EMPLEADO
+// ==========================================
 app.get(
   "/api/chat/empleado/:idEmpleado/conversaciones",
   async (req, res) => {
     try {
-      const idEmpleado = Number(req.params.idEmpleado);
+      const idEmpleado = Number(
+        req.params.idEmpleado
+      );
 
-      if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
         return res.status(400).json({
           mensaje: "ID de empleado inválido",
         });
       }
 
-      const [conversaciones]: any = await database.execute(
-        `
-        SELECT
-          cc.id_cliente AS id,
-          cl.nombre_C AS participantName,
-          cl.foto AS participantAvatar,
-          (
-            SELECT TOP 1 cm.mensaje
-            FROM chat_mensajes cm
-            WHERE cm.id_conversacion = cc.id_conversacion
-            ORDER BY cm.fecha DESC, cm.id_mensaje DESC
-          ) AS lastMessage,
-          (
-            SELECT TOP 1 cm.fecha
-            FROM chat_mensajes cm
-            WHERE cm.id_conversacion = cc.id_conversacion
-            ORDER BY cm.fecha DESC, cm.id_mensaje DESC
-          ) AS lastMessageTime,
-          0 AS unreadCount,
-          0 AS participantOnline
-        FROM chat_conversaciones cc
-        LEFT JOIN clientes cl ON cl.id_cliente = cc.id_cliente
-        WHERE cc.id_empleado = ?
-        ORDER BY lastMessageTime DESC, cc.id_conversacion DESC
-        `,
-        [idEmpleado]
-      );
+      const respuesta: any =
+        await database.query(`
+          SELECT
+            cc.id_cliente AS id,
 
-      return res.status(200).json(conversaciones);
-    } catch (error) {
+            cl.nombre AS participantName,
+
+            cl.foto_url AS participantAvatar,
+
+            COALESCE(
+              (
+                SELECT TOP 1
+                  cm.mensaje
+                FROM chat_mensajes AS cm
+                WHERE cm.id_conversacion =
+                  cc.id_conversacion
+                ORDER BY
+                  cm.fecha DESC,
+                  cm.id_mensaje DESC
+              ),
+              ''
+            ) AS lastMessage,
+
+            (
+              SELECT TOP 1
+                cm.fecha
+              FROM chat_mensajes AS cm
+              WHERE cm.id_conversacion =
+                cc.id_conversacion
+              ORDER BY
+                cm.fecha DESC,
+                cm.id_mensaje DESC
+            ) AS lastMessageTime,
+
+            (
+              SELECT COUNT(*)
+              FROM chat_mensajes AS cm
+              WHERE cm.id_conversacion =
+                cc.id_conversacion
+                AND cm.remitente = 'CLIENTE'
+                AND cm.leido = 0
+            ) AS unreadCount,
+
+            0 AS participantOnline
+
+          FROM chat_conversaciones AS cc
+
+          INNER JOIN clientes AS cl
+            ON cl.id_cliente =
+              cc.id_cliente
+
+          WHERE cc.id_empleado =
+            ${idEmpleado}
+
+          ORDER BY
+            lastMessageTime DESC,
+            cc.id_conversacion DESC
+        `);
+
+      const conversaciones =
+        Array.isArray(respuesta?.recordset)
+          ? respuesta.recordset
+          : Array.isArray(
+                respuesta?.recordsets?.[0]
+              )
+            ? respuesta.recordsets[0]
+            : Array.isArray(respuesta?.[0])
+              ? respuesta[0]
+              : Array.isArray(
+                    respuesta?.rows
+                  )
+                ? respuesta.rows
+                : Array.isArray(respuesta)
+                  ? respuesta
+                  : [];
+
+      return res.status(200).json(
+        conversaciones
+      );
+    } catch (error: any) {
       console.error(
         "Error al consultar conversaciones del empleado:",
         error
       );
 
       return res.status(500).json({
-        mensaje: "Error al consultar las conversaciones",
+        mensaje:
+          "Error al consultar las conversaciones",
+        detalle:
+          error?.message || String(error),
       });
     }
   }
@@ -2891,50 +2976,109 @@ app.get(
 // ==========================================
 // CONVERSACIONES DE UN CLIENTE
 // ==========================================
+// ==========================================
+// CONVERSACIONES DE UN CLIENTE
+// ==========================================
 app.get(
   "/api/chat/cliente/:idCliente/conversaciones",
   async (req, res) => {
     try {
-      const idCliente = Number(req.params.idCliente);
+      const idCliente = Number(
+        req.params.idCliente
+      );
 
-      if (!Number.isInteger(idCliente) || idCliente <= 0) {
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
         return res.status(400).json({
           mensaje: "ID de cliente inválido",
         });
       }
 
-      const [conversaciones]: any = await database.execute(
-        `
-        SELECT
-          cc.id_empleado AS id,
-          e.nombre AS participantName,
-          NULL AS participantAvatar,
-          (
-            SELECT TOP 1 cm.mensaje
-            FROM chat_mensajes cm
-            WHERE cm.id_conversacion = cc.id_conversacion
-            ORDER BY cm.fecha DESC, cm.id_mensaje DESC
-          ) AS lastMessage,
-          (
-            SELECT TOP 1 cm.fecha
-            FROM chat_mensajes cm
-            WHERE cm.id_conversacion = cc.id_conversacion
-            ORDER BY cm.fecha DESC, cm.id_mensaje DESC
-          ) AS lastMessageTime,
-          0 AS unreadCount,
-          CASE
-            WHEN e.estado = 'Disponible' THEN 1
-            ELSE 0
-          END AS participantOnline
-        FROM chat_conversaciones cc
-        LEFT JOIN empleados e ON e.id_empleado = cc.id_empleado
-        WHERE cc.id_cliente = ?
-        ORDER BY lastMessageTime DESC, cc.id_conversacion DESC
-        `,
-        [idCliente]
-      );
+      const respuesta: any =
+        await database.query(`
+          SELECT
+            cc.id_empleado AS id,
 
-      return res.status(200).json(conversaciones);
+            e.nombre AS participantName,
+
+            e.foto_url AS participantAvatar,
+
+            COALESCE(
+              (
+                SELECT TOP 1
+                  cm.mensaje
+                FROM chat_mensajes AS cm
+                WHERE cm.id_conversacion =
+                  cc.id_conversacion
+                ORDER BY
+                  cm.fecha DESC,
+                  cm.id_mensaje DESC
+              ),
+              ''
+            ) AS lastMessage,
+
+            (
+              SELECT TOP 1
+                cm.fecha
+              FROM chat_mensajes AS cm
+              WHERE cm.id_conversacion =
+                cc.id_conversacion
+              ORDER BY
+                cm.fecha DESC,
+                cm.id_mensaje DESC
+            ) AS lastMessageTime,
+
+            (
+              SELECT COUNT(*)
+              FROM chat_mensajes AS cm
+              WHERE cm.id_conversacion =
+                cc.id_conversacion
+                AND cm.remitente = 'EMPLEADO'
+                AND cm.leido = 0
+            ) AS unreadCount,
+
+            CASE
+              WHEN e.estado = 'Disponible'
+                THEN 1
+              ELSE 0
+            END AS participantOnline
+
+          FROM chat_conversaciones AS cc
+
+          INNER JOIN empleados AS e
+            ON e.id_empleado =
+              cc.id_empleado
+
+          WHERE cc.id_cliente =
+            ${idCliente}
+
+          ORDER BY
+            lastMessageTime DESC,
+            cc.id_conversacion DESC
+        `);
+
+      const conversaciones =
+        Array.isArray(respuesta?.recordset)
+          ? respuesta.recordset
+          : Array.isArray(
+                respuesta?.recordsets?.[0]
+              )
+            ? respuesta.recordsets[0]
+            : Array.isArray(respuesta?.[0])
+              ? respuesta[0]
+              : Array.isArray(
+                    respuesta?.rows
+                  )
+                ? respuesta.rows
+                : Array.isArray(respuesta)
+                  ? respuesta
+                  : [];
+
+      return res.status(200).json(
+        conversaciones
+      );
     } catch (error: any) {
       console.error(
         "Error al consultar conversaciones del cliente:",
@@ -2942,9 +3086,10 @@ app.get(
       );
 
       return res.status(500).json({
-        mensaje: "Error al consultar las conversaciones",
-        detalle: error.message,
-        codigo: error.code,
+        mensaje:
+          "Error al consultar las conversaciones",
+        detalle:
+          error?.message || String(error),
       });
     }
   }
@@ -2953,7 +3098,7 @@ app.get(
 // ==========================================
 // MARCAR MENSAJES COMO LEÍDOS
 // ==========================================
-app.put("/api/chat/leidos", async (req, res) => {
+/*app.put("/api/chat/leidos", async (req, res) => {
   try {
     const {
       fk_cliente,
@@ -2999,7 +3144,153 @@ app.put("/api/chat/leidos", async (req, res) => {
       detalle: error.message,
     });
   }
-});
+});*/
+
+// ==========================================
+// MARCAR MENSAJES COMO LEÍDOS
+// ==========================================
+app.put(
+  '/api/chat/leidos',
+  async (req, res) => {
+    try {
+      const {
+        fk_cliente,
+        fk_empleado,
+        lector,
+      } = req.body;
+
+      const idCliente = Number(fk_cliente);
+      const idEmpleado = Number(fk_empleado);
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de cliente inválido',
+        });
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      if (
+        lector !== 'cliente' &&
+        lector !== 'empleado'
+      ) {
+        return res.status(400).json({
+          mensaje: 'Lector inválido',
+        });
+      }
+
+      const respuestaConversacion: any =
+        await database.query(`
+          SELECT TOP 1
+            id_conversacion
+          FROM chat_conversaciones
+          WHERE id_cliente = ${idCliente}
+            AND id_empleado = ${idEmpleado}
+        `);
+
+      let conversaciones: any[] = [];
+
+      if (
+        Array.isArray(
+          respuestaConversacion?.recordset
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.recordset;
+      } else if (
+        Array.isArray(
+          respuestaConversacion
+            ?.recordsets?.[0]
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.recordsets[0];
+      } else if (
+        Array.isArray(
+          respuestaConversacion?.[0]
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion[0];
+      } else if (
+        Array.isArray(
+          respuestaConversacion?.rows
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion.rows;
+      } else if (
+        Array.isArray(
+          respuestaConversacion
+        )
+      ) {
+        conversaciones =
+          respuestaConversacion;
+      }
+
+      if (conversaciones.length === 0) {
+        return res.status(200).json({
+          mensaje: 'No existe conversación',
+          actualizados: 0,
+        });
+      }
+
+      const idConversacion = Number(
+        conversaciones[0].id_conversacion
+      );
+
+      const remitenteContrario =
+        lector === 'empleado'
+          ? 'CLIENTE'
+          : 'EMPLEADO';
+
+      const resultado: any =
+        await database.query(`
+          UPDATE chat_mensajes
+          SET
+            entregado = 1,
+            leido = 1
+          WHERE id_conversacion =
+            ${idConversacion}
+            AND remitente =
+              '${remitenteContrario}'
+            AND leido = 0
+        `);
+
+      return res.status(200).json({
+        mensaje:
+          'Mensajes marcados como leídos',
+        actualizados:
+          resultado?.rowsAffected?.[0] ?? 0,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al marcar mensajes como leídos:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al marcar mensajes como leídos',
+        detalle:
+          error?.message ||
+          String(error),
+        codigo:
+          error?.code ?? null,
+      });
+    }
+  }
+);
 
 app.post(
   '/api/servicios/:idServicio/postular',
@@ -4757,6 +5048,52 @@ app.post('/api/resenas', async (req, res) => {
   }
 });
 
+app.put(
+  "/api/usuarios/actividad",
+  async (req, res) => {
+    try {
+      const rol = String(req.body.rol);
+      const idUsuario = Number(req.body.idUsuario);
+
+      if (
+        !Number.isInteger(idUsuario) ||
+        idUsuario <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de usuario inválido",
+        });
+      }
+
+      if (rol === "client") {
+        await database.query(`
+          UPDATE clientes
+          SET ultima_actividad = GETDATE()
+          WHERE id_cliente = ${idUsuario}
+        `);
+      } else if (rol === "worker") {
+        await database.query(`
+          UPDATE empleados
+          SET ultima_actividad = GETDATE()
+          WHERE id_empleado = ${idUsuario}
+        `);
+      } else {
+        return res.status(400).json({
+          mensaje: "Rol inválido",
+        });
+      }
+
+      return res.status(200).json({
+        mensaje: "Actividad actualizada",
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        mensaje: "Error al actualizar actividad",
+        detalle: error?.message || String(error),
+      });
+    }
+  }
+);
+
 // ==========================================
 // CONTACTOS DISPONIBLES PARA INICIAR CHAT
 // ==========================================
@@ -4783,9 +5120,12 @@ app.get(
             nombre AS nombre,
             foto_url AS foto,
             titulo AS descripcion,
-            estado
+            CASE
+              WHEN ultima_actividad >= DATEADD(SECOND, -90, GETDATE())
+                THEN 1
+              ELSE 0
+            END AS conectado
           FROM empleados
-          WHERE id_empleado <> ${idUsuario}
           ORDER BY nombre ASC
         `);
 
@@ -4801,15 +5141,19 @@ app.get(
 
       if (rol === "worker") {
         const respuesta: any = await database.query(`
-          SELECT
-            id_cliente AS id,
-            nombre AS nombre,
-            foto_url AS foto,
-            correo AS descripcion,
-            'Cliente' AS estado
-          FROM clientes
-          ORDER BY nombre ASC
-        `);
+        SELECT
+          id_cliente AS id,
+          nombre AS nombre,
+          foto_url AS foto,
+          correo AS descripcion,
+          CASE
+            WHEN ultima_actividad >= DATEADD(SECOND, -90, GETDATE())
+              THEN 1
+            ELSE 0
+          END AS conectado
+        FROM clientes
+        ORDER BY nombre ASC
+      `);
 
         const contactos =
           respuesta?.recordset ??
@@ -4837,7 +5181,6 @@ app.get(
     }
   }
 );
-
 // ==========================================
 // MÉTODOS DE PAGO (simple storage)
 // ==========================================

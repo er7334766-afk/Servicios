@@ -11,11 +11,9 @@ import {
 import { motion } from 'motion/react';
 import {
   ChevronLeft,
-  Phone,
   MoreVertical,
   Send,
   Image,
-  Smile,
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -34,7 +32,8 @@ interface MensajeChat {
   fk_empleado: number;
   remitente: 'cliente' | 'empleado';
   mensaje: string;
-  leido: number;
+  entregado: boolean | number;
+  leido: boolean | number;
   fecha: string;
 }
 
@@ -111,7 +110,13 @@ export default function ChatScreen() {
   const bottomRef =
     useRef<HTMLDivElement>(null);
 
+  const mensajesContainerRef =
+    useRef<HTMLDivElement>(null);
+
   const primeraCargaRef = useRef(true);
+  const usuarioEstaAbajoRef = useRef(true);
+  const ultimoMensajeIdRef =
+    useRef<number | null>(null);
 
   const usuarioLocal = leerUsuarioLocal();
 
@@ -319,7 +324,7 @@ if (texto) {
 
     setMensajes(listaMensajes);
 
-    await marcarMensajesComoLeidos();
+    
   };
 
   /*
@@ -351,10 +356,10 @@ if (texto) {
           );
         }
 
-        await Promise.all([
-          cargarContacto(),
-          cargarMensajes(),
-        ]);
+      await cargarContacto();
+      await marcarMensajesComoLeidos();
+      await cargarMensajes();
+
       } catch (error) {
         const mensaje =
           error instanceof Error
@@ -395,18 +400,26 @@ if (texto) {
       return;
     }
 
-    const intervalo = window.setInterval(
-      () => {
-        cargarMensajes().catch((error) => {
-          console.error(
-            'Error al actualizar los mensajes:',
-            error
-          );
-        });
-      },
-      2000
-    );
+   const intervalo = window.setInterval(
+  async () => {
+    try {
+      await cargarMensajes();
 
+      // Como esta pantalla está abierta,
+      // los mensajes recibidos se consideran vistos.
+      await marcarMensajesComoLeidos();
+
+      // Volver a cargar para reflejar leido = true
+      await cargarMensajes();
+    } catch (error) {
+      console.error(
+        'Error al actualizar los mensajes:',
+        error
+      );
+    }
+  },
+  2000
+);
     return () => {
       window.clearInterval(intervalo);
     };
@@ -417,16 +430,48 @@ if (texto) {
   ]);
 
   /*
-   * Hace scroll al último mensaje.
+   * Mantiene el scroll donde lo dejó el usuario.
+   *
+   * - Al abrir el chat, baja al último mensaje.
+   * - Si llega un mensaje nuevo y el usuario ya estaba abajo,
+   *   baja automáticamente.
+   * - Si el usuario subió para leer mensajes anteriores,
+   *   no lo devuelve al final.
    */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: primeraCargaRef.current
-        ? 'auto'
-        : 'smooth',
-    });
+    const ultimoMensaje =
+      mensajes[mensajes.length - 1];
 
-    primeraCargaRef.current = false;
+    const ultimoMensajeId =
+      ultimoMensaje?.id_chat ?? null;
+
+    if (primeraCargaRef.current) {
+      bottomRef.current?.scrollIntoView({
+        behavior: 'auto',
+      });
+
+      primeraCargaRef.current = false;
+      ultimoMensajeIdRef.current =
+        ultimoMensajeId;
+      return;
+    }
+
+    const llegoMensajeNuevo =
+      ultimoMensajeId !== null &&
+      ultimoMensajeId !==
+        ultimoMensajeIdRef.current;
+
+    if (
+      llegoMensajeNuevo &&
+      usuarioEstaAbajoRef.current
+    ) {
+      bottomRef.current?.scrollIntoView({
+        behavior: 'smooth',
+      });
+    }
+
+    ultimoMensajeIdRef.current =
+      ultimoMensajeId;
   }, [mensajes]);
 
   const handleEnviar = async () => {
@@ -486,6 +531,10 @@ if (texto) {
       }
 
       setTexto('');
+
+      // Al enviar un mensaje propio, llevar al usuario
+      // al final del chat.
+      usuarioEstaAbajoRef.current = true;
 
       await cargarMensajes();
     } catch (error) {
@@ -601,12 +650,7 @@ if (texto) {
         </div>
 
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
-          >
-            <Phone className="w-4 h-4 text-muted-foreground" />
-          </button>
+        
 
           <button
             type="button"
@@ -618,7 +662,26 @@ if (texto) {
       </div>
 
       {/* Mensajes */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div
+        ref={mensajesContainerRef}
+        onScroll={() => {
+          const contenedor =
+            mensajesContainerRef.current;
+
+          if (!contenedor) {
+            return;
+          }
+
+          const distanciaAlFinal =
+            contenedor.scrollHeight -
+            contenedor.scrollTop -
+            contenedor.clientHeight;
+
+          usuarioEstaAbajoRef.current =
+            distanciaAlFinal < 80;
+        }}
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3"
+      >
         {mensajes.length === 0 && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center px-6">
@@ -673,20 +736,23 @@ if (texto) {
                 </div>
 
                 <span className="text-[10px] text-muted-foreground px-1">
-                  {formatTime(
-                    mensaje.fecha
-                  )}
+                {formatTime(mensaje.fecha)}
 
-                  {propio && (
-                    <span className="ml-1">
-                      {Number(
-                        mensaje.leido
-                      ) === 1
-                        ? '✓✓'
-                        : '✓'}
-                    </span>
-                  )}
+                {propio && (
+                <span
+                  className={`ml-1 ${
+                    Boolean(mensaje.leido)
+                      ? 'text-blue-500'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {Boolean(mensaje.leido)
+                    ? '✓✓'
+                    : '✓'}
                 </span>
+              )}
+              
+            </span>
               </div>
             </motion.div>
           );
@@ -725,9 +791,7 @@ if (texto) {
             disabled={enviando}
           />
 
-          <button type="button">
-            <Smile className="w-4 h-4 text-muted-foreground" />
-          </button>
+          
         </div>
 
         <motion.button

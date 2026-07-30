@@ -18,13 +18,13 @@ import { StarRating } from '../shared/StarRating';
 interface CategoriaEmpleado {
   id_categoria: number;
   nombre: string;
-  subCatgeoria?: string;
 }
 
-interface ServicioEmpleado {
-  id_servicio: number;
-  nombre_servicio?: string;
+interface SubcategoriaEmpleado {
+  id_subcategoria: number;
   nombre?: string;
+  nombre_subcategoria?: string;
+  descripcion?: string;
 }
 
 interface Empleado {
@@ -42,7 +42,6 @@ interface Empleado {
   calificacion?: number;
   cantidad_resenas?: number;
   categorias?: CategoriaEmpleado[];
-  servicios?: ServicioEmpleado[];
   galeria?: string[];
 }
 
@@ -52,13 +51,34 @@ export default function WorkerProfileScreen() {
 
   const [worker, setWorker] = useState<Empleado | null>(null);
   const [categorias, setCategorias] = useState<CategoriaEmpleado[]>([]);
+  const [subcategorias, setSubcategorias] =
+    useState<SubcategoriaEmpleado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const parsearJsonSeguro = async (respuesta: Response) => {
+      const texto = await respuesta.text();
+
+      if (!texto) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(texto);
+      } catch {
+        return null;
+      }
+    };
+
     const obtenerEmpleado = async () => {
-      if (!id) {
-        setError('No se recibió el ID del empleado');
+      const idEmpleado = Number(id);
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        setError('No se recibió un ID de empleado válido');
         setCargando(false);
         return;
       }
@@ -67,68 +87,112 @@ export default function WorkerProfileScreen() {
         setCargando(true);
         setError('');
 
-        const parsearJsonSeguro = async (respuesta: Response) => {
-          const texto = await respuesta.text();
-
-          if (!texto) {
-            return null;
+        const respuestaEmpleado = await fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}`,
+          {
+            cache: 'no-store',
           }
-
-          try {
-            return JSON.parse(texto);
-          } catch {
-            return null;
-          }
-        };
-
-        const respuesta = await fetch(
-          `http://localhost:3000/api/empleados/${id}`
         );
 
-        if (!respuesta.ok) {
-          const mensaje = await respuesta.text();
-
-          console.error(
-            'Error API empleado:',
-            respuesta.status,
-            mensaje
-          );
+        if (!respuestaEmpleado.ok) {
+          const datosError =
+            await parsearJsonSeguro(respuestaEmpleado);
 
           throw new Error(
-            `No se pudo obtener el empleado. Código: ${respuesta.status}`
+            datosError?.mensaje ||
+              `No se pudo obtener el empleado. Código: ${respuestaEmpleado.status}`
           );
         }
 
-        const datos = await parsearJsonSeguro(respuesta);
-        const empleadoRecibido = datos?.empleado ?? datos ?? null;
+        const datosEmpleado =
+          await parsearJsonSeguro(respuestaEmpleado);
 
-        if (!empleadoRecibido || typeof empleadoRecibido !== 'object') {
-          throw new Error('No se pudo cargar la información del empleado');
+        const empleadoRecibido =
+          datosEmpleado?.empleado ??
+          datosEmpleado ??
+          null;
+
+        if (
+          !empleadoRecibido ||
+          typeof empleadoRecibido !== 'object'
+        ) {
+          throw new Error(
+            'No se pudo cargar la información del empleado'
+          );
         }
 
         setWorker(empleadoRecibido as Empleado);
 
-        const respuestaCategorias = await fetch(
-          `http://localhost:3000/api/empleados/${id}/categorias`
-        );
+        const [
+          respuestaCategorias,
+          respuestaSubcategorias,
+        ] = await Promise.all([
+          fetch(
+            `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+            {
+              cache: 'no-store',
+            }
+          ),
+          fetch(
+            `http://localhost:3000/api/empleados/${idEmpleado}/subcategorias`,
+            {
+              cache: 'no-store',
+            }
+          ),
+        ]);
 
         if (respuestaCategorias.ok) {
-          const datosCategorias = await parsearJsonSeguro(respuestaCategorias);
+          const datosCategorias =
+            await parsearJsonSeguro(
+              respuestaCategorias
+            );
 
           setCategorias(
             Array.isArray(datosCategorias)
               ? datosCategorias
-              : datosCategorias?.categorias ?? []
+              : Array.isArray(
+                    datosCategorias?.categorias
+                  )
+                ? datosCategorias.categorias
+                : []
           );
         } else {
           setCategorias(
-            Array.isArray((empleadoRecibido as Empleado).categorias)
-              ? (empleadoRecibido as Empleado).categorias!
+            Array.isArray(
+              (empleadoRecibido as Empleado)
+                .categorias
+            )
+              ? (empleadoRecibido as Empleado)
+                  .categorias!
               : []
           );
         }
+
+        if (respuestaSubcategorias.ok) {
+          const datosSubcategorias =
+            await parsearJsonSeguro(
+              respuestaSubcategorias
+            );
+
+          setSubcategorias(
+            Array.isArray(datosSubcategorias)
+              ? datosSubcategorias
+              : Array.isArray(
+                    datosSubcategorias
+                      ?.subcategorias
+                  )
+                ? datosSubcategorias
+                    .subcategorias
+                : []
+          );
+        } else {
+          setSubcategorias([]);
+        }
       } catch (error) {
-        console.error('Error al cargar el empleado:', error);
+        console.error(
+          'Error al cargar el empleado:',
+          error
+        );
 
         setError(
           error instanceof Error
@@ -171,9 +235,12 @@ export default function WorkerProfileScreen() {
     );
   }
 
+  const estadoNormalizado =
+    worker.estado?.trim().toLowerCase();
+
   const estaDisponible =
-    worker.estado?.trim().toLowerCase() === 'disponible' ||
-    worker.estado?.trim().toLowerCase() === 'activo';
+    estadoNormalizado === 'disponible' ||
+    estadoNormalizado === 'activo';
 
   const galeria = Array.isArray(worker.galeria)
     ? worker.galeria.filter(Boolean)
@@ -181,10 +248,6 @@ export default function WorkerProfileScreen() {
 
   const imagenPrincipal =
     galeria[0] || worker.foto || '';
-
-  const servicios = Array.isArray(worker.servicios)
-    ? worker.servicios
-    : [];
 
   return (
     <div className="flex min-h-full flex-col">
@@ -201,6 +264,7 @@ export default function WorkerProfileScreen() {
           type="button"
           onClick={() => navigate(-1)}
           className="absolute left-4 top-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
+          aria-label="Regresar"
         >
           <ChevronLeft className="h-5 w-5 text-white" />
         </button>
@@ -241,7 +305,8 @@ export default function WorkerProfileScreen() {
               <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
 
               <span className="text-sm text-muted-foreground">
-                {worker.direccion || 'Dirección no disponible'}
+                {worker.direccion ||
+                  'Dirección no disponible'}
               </span>
             </div>
           </div>
@@ -253,7 +318,9 @@ export default function WorkerProfileScreen() {
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {estaDisponible ? 'Disponible' : 'Ocupado'}
+            {estaDisponible
+              ? 'Disponible'
+              : 'Ocupado'}
           </span>
         </div>
 
@@ -263,12 +330,17 @@ export default function WorkerProfileScreen() {
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
 
               <span className="font-bold text-foreground">
-                {Number(worker.calificacion ?? 0)}
+                {Number(
+                  worker.calificacion ?? 0
+                )}
               </span>
             </div>
 
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {Number(worker.cantidad_resenas ?? 0)} reseñas
+              {Number(
+                worker.cantidad_resenas ?? 0
+              )}{' '}
+              reseñas
             </p>
           </div>
 
@@ -295,7 +367,10 @@ export default function WorkerProfileScreen() {
               <DollarSign className="h-4 w-4 text-green-600" />
 
               <span className="font-bold text-foreground">
-                L {Number(worker.precio_hora ?? 0)}
+                L{' '}
+                {Number(
+                  worker.precio_hora ?? 0
+                )}
               </span>
             </div>
 
@@ -314,14 +389,12 @@ export default function WorkerProfileScreen() {
                   className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
                 >
                   {categoria.nombre}
-                  {categoria.subCatgeoria
-                    ? ` - ${categoria.subCatgeoria}`
-                    : ''}
                 </span>
               ))
             ) : (
               <p className="text-sm text-muted-foreground">
-                Este empleado no tiene categorías asignadas.
+                Este empleado no tiene categorías
+                asignadas.
               </p>
             )}
           </div>
@@ -344,20 +417,25 @@ export default function WorkerProfileScreen() {
           </h3>
 
           <div className="flex flex-wrap gap-2">
-            {servicios.length > 0 ? (
-              servicios.map((servicio) => (
-                <span
-                  key={servicio.id_servicio}
-                  className="rounded-full border border-[#1A56DB]/20 bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
-                >
-                  {servicio.nombre_servicio ||
-                    servicio.nombre ||
-                    'Servicio sin nombre'}
-                </span>
-              ))
+            {subcategorias.length > 0 ? (
+              subcategorias.map(
+                (subcategoria) => (
+                  <span
+                    key={
+                      subcategoria.id_subcategoria
+                    }
+                    className="rounded-full border border-[#1A56DB]/20 bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+                  >
+                    {subcategoria.nombre ||
+                      subcategoria.nombre_subcategoria ||
+                      'Subcategoría sin nombre'}
+                  </span>
+                )
+              )
             ) : (
               <p className="text-sm text-muted-foreground">
-                Este empleado todavía no tiene servicios registrados.
+                Este empleado todavía no tiene
+                subcategorías seleccionadas.
               </p>
             )}
           </div>
@@ -390,17 +468,25 @@ export default function WorkerProfileScreen() {
         <div className="mb-24 mt-5">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">
-              Reseñas ({Number(worker.cantidad_resenas ?? 0)})
+              Reseñas (
+              {Number(
+                worker.cantidad_resenas ?? 0
+              )}
+              )
             </h3>
 
             <div className="flex items-center gap-1">
               <StarRating
-                value={Number(worker.calificacion ?? 0)}
+                value={Number(
+                  worker.calificacion ?? 0
+                )}
                 size="xs"
               />
 
               <span className="text-xs font-semibold text-foreground">
-                {Number(worker.calificacion ?? 0)}
+                {Number(
+                  worker.calificacion ?? 0
+                )}
               </span>
             </div>
           </div>
@@ -415,7 +501,11 @@ export default function WorkerProfileScreen() {
         <motion.button
           type="button"
           whileTap={{ scale: 0.97 }}
-          onClick={() => navigate(`/home/chat/${worker.id_empleado}`)}
+          onClick={() =>
+            navigate(
+              `/home/chat/${worker.id_empleado}`
+            )
+          }
           className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#1A56DB] py-3 font-semibold text-[#1A56DB]"
         >
           <MessageCircle className="h-4 w-4" />
@@ -428,7 +518,8 @@ export default function WorkerProfileScreen() {
           onClick={() =>
             navigate('/home/payment', {
               state: {
-                workerId: worker.id_empleado,
+                workerId:
+                  worker.id_empleado,
                 workerName: worker.nombre_E,
               },
             })
