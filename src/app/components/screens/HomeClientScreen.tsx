@@ -14,17 +14,15 @@ import {
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { WorkerCard } from '../shared/WorkerCard';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
 import { useApp } from '../../context/AppContext';
 
-// Categories will be loaded from backend; using empty list for now
-const SERVICE_CATEGORIES_RUNTIME: any[] = [];
 import { obtenerCategoriasDB } from '../../services/solicitudesApi';
 import { obtenerEmpleados } from '../../services/empleadosApi';
 
 import type {
-  ServiceCategory,ServiceCategoryItem, Worker
+  ServiceCategory,
+  ServiceCategoryItem,
 } from '../../types';
 
 import {
@@ -127,15 +125,19 @@ function colorEstado(
 
 interface EmpleadoDisponible {
   id_empleado: number;
-  nombre_E: string;
+  nombre: string;
   correo: string;
-  celular: string;
+  telefono: string;
+  dni?: string | null;
   titulo: string | null;
+  antecedentes?: string | null;
   direccion: string | null;
-  fk_categoria: number | null;
   estado: string;
-  N_trabajos: number;
+  numero_trabajos: number;
   sobre_mi: string | null;
+  foto_url?: string | null;
+  fecha_creacion?: string | null;
+  ultima_actividad?: string | null;
 }
 
 export default function HomeClientScreen() {
@@ -180,12 +182,12 @@ export default function HomeClientScreen() {
   const idCliente = Number(currentUser?.id);
 
   const [categories, setCategories] = useState<ServiceCategoryItem[]>([]);
-  const [featured, setFeatured] = useState<Worker[]>([]);
   useEffect(() => {
     (async () => {
       try {
         const cats = await obtenerCategoriasDB();
 
+      
         const mapped: ServiceCategoryItem[] = (cats || []).map((c: any) => {
           const idLabel = String(c.id ?? c.nombre ?? c.label ?? '').toLowerCase();
 
@@ -280,32 +282,43 @@ export default function HomeClientScreen() {
 
     (async () => {
       try {
+        setCargandoDestacados(true);
+
         const empleados = await obtenerEmpleados();
 
-        const mapped: Worker[] = (empleados || []).slice(0, 8).map((e: any) => ({
-          id: String(e.id_empleado ?? e.id ?? e._id),
-          name: e.nombre_E || e.nombre || 'Trabajador',
-          email: e.correo ?? '',
-          phone: e.celular ?? '',
-          avatarUrl: e.foto ?? e.avatarUrl ?? '',
-          role: 'worker',
-          location: e.direccion ?? 'No especificada',
-          joinedDate: e.fechaCreacion ?? '',
-          categories: e.id_categoria ? [String(e.id_categoria) as any] : [],
-          rating: Number(e.rating ?? 0),
-          reviewCount: Number(e.reviews ?? 0),
-          jobCount: Number(e.N_trabajos ?? e.numeroTrabajos ?? 0),
-          bio: e.descripcion ?? '',
-          distanceKm: 0,
-          pricePerHour: Number(e.precio ?? 0),
-          isAvailable: String(e.estado ?? '').toLowerCase() === 'disponible',
-          galleryUrls: [],
-          services: [e.titulo?.trim() || e.categoria || 'Servicios generales'],
-        }));
+        const empleadosFiltrados = (empleados || []).filter(
+          (e: any) =>
+            String(e.estado ?? '').trim().toLowerCase() === 'disponible'
+        );
 
-        setFeatured(mapped);
+
+        const mapped: EmpleadoDisponible[] = (empleados || [])
+          .slice(0, 8)
+          .map((e: any) => ({
+            id_empleado: Number(e.id_empleado ?? e.id ?? e._id),
+            nombre: String(e.nombre ?? e.nombre_E ?? 'Trabajador'),
+            correo: String(e.correo ?? ''),
+            telefono: String(e.telefono ?? e.celular ?? ''),
+            dni: e.dni ?? null,
+            titulo: e.titulo ?? null,
+            antecedentes: e.antecedentes ?? null,
+            direccion: e.direccion ?? null,
+            estado: String(e.estado ?? 'Disponible'),
+            numero_trabajos: Number(
+              e.numero_trabajos ?? e.N_trabajos ?? e.numeroTrabajos ?? 0
+            ),
+            sobre_mi: e.sobre_mi ?? e.descripcion ?? null,
+            foto_url: e.foto_url ?? e.foto ?? e.avatarUrl ?? null,
+            fecha_creacion: e.fecha_creacion ?? e.fechaCreacion ?? null,
+            ultima_actividad: e.ultima_actividad ?? null,
+          }));
+
+        setEmpleadosDestacados(mapped);
       } catch (err) {
         console.error('No se pudieron cargar empleados destacados:', err);
+        setEmpleadosDestacados([]);
+      } finally {
+        setCargandoDestacados(false);
       }
     })();
   }, []);
@@ -377,7 +390,29 @@ export default function HomeClientScreen() {
         }
 
         const datos = await respuesta.json();
-        setEmpleadosDisponibles(datos);
+
+        const empleadosNormalizados: EmpleadoDisponible[] = (
+          Array.isArray(datos) ? datos : []
+        ).map((e: any) => ({
+          id_empleado: Number(e.id_empleado ?? e.id),
+          nombre: String(e.nombre ?? e.nombre_E ?? 'Trabajador'),
+          correo: String(e.correo ?? ''),
+          telefono: String(e.telefono ?? e.celular ?? ''),
+          dni: e.dni ?? null,
+          titulo: e.titulo ?? null,
+          antecedentes: e.antecedentes ?? null,
+          direccion: e.direccion ?? null,
+          estado: String(e.estado ?? 'Disponible'),
+          numero_trabajos: Number(
+            e.numero_trabajos ?? e.N_trabajos ?? e.numeroTrabajos ?? 0
+          ),
+          sobre_mi: e.sobre_mi ?? e.descripcion ?? null,
+          foto_url: e.foto_url ?? e.foto ?? null,
+          fecha_creacion: e.fecha_creacion ?? e.fechaCreacion ?? null,
+          ultima_actividad: e.ultima_actividad ?? null,
+        }));
+
+        setEmpleadosDisponibles(empleadosNormalizados);
       } catch (error) {
         console.error('Error al cargar empleados disponibles:', error);
         setEmpleadosDisponibles([]);
@@ -539,17 +574,17 @@ export default function HomeClientScreen() {
               <div className="flex justify-center mb-3">
                 <div className="w-16 h-16 rounded-full bg-[#EFF4FF] flex items-center justify-center">
                   <span className="text-2xl font-bold text-[#1A56DB]">
-                    {worker.nombre_E.charAt(0).toUpperCase()}
+                    {worker.nombre?.charAt(0).toUpperCase() ?? '?'}
                   </span>
                 </div>
               </div>
 
               <h3 className="font-semibold text-center text-sm">
-                {worker.nombre_E}
+                {worker.nombre ?? 'Trabajador'}
               </h3>
 
               <p className="text-xs text-center text-muted-foreground mt-1">
-                {worker.N_trabajos ?? 0} Trabajos realizados
+                {worker.numero_trabajos ?? 0} Trabajos realizados
               </p>
 
               <p className="text-xs text-center text-green-600 font-medium mt-2">
@@ -780,7 +815,7 @@ export default function HomeClientScreen() {
                   <div className="relative flex-shrink-0">
                     <div className="w-14 h-14 rounded-xl bg-[#EFF4FF] flex items-center justify-center">
                       <span className="text-xl font-bold text-[#1A56DB]">
-                        {worker.nombre_E.charAt(0).toUpperCase()}
+                        {worker.nombre?.charAt(0).toUpperCase() ?? '?'}
                       </span>
                     </div>
 
@@ -789,11 +824,11 @@ export default function HomeClientScreen() {
 
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-foreground truncate">
-                      {worker.nombre_E}
+                      {worker.nombre ?? 'Trabajador'}
                     </h3>
 
                     <p className="text-xs text-muted-foreground mt-1">
-                      {worker.N_trabajos ?? 0} trabajos realizados
+                      {worker.numero_trabajos ?? 0} trabajos realizados
                     </p>
 
                     <div className="flex items-center gap-1 mt-1">

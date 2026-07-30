@@ -255,31 +255,44 @@ app.get('/api/empleados', async (_req, res) => {
 //disponibilidad de empleados
 app.get('/api/empleados/disponibles', async (_req, res) => {
   try {
-    const [empleados] = await database.execute(
-    `
-    SELECT
-      id_empleado,
-      nombre_E,
-      correo,
-      celular,
-      titulo,
-      direccion,
-      fk_categoria,
-      estado,
-      N_trabajos,
-      sobre_mi,
-      fechaCreacion
-    FROM empleados
-    WHERE LOWER(TRIM(estado)) = 'disponible'
-    `
+    const [respuesta]: any = await database.execute(`
+      SELECT
+        id_empleado,
+        nombre,
+        correo,
+        telefono,
+        dni,
+        titulo,
+        antecedentes,
+        direccion,
+        estado,
+        numero_trabajos,
+        sobre_mi,
+        foto_url,
+        fecha_creacion,
+        ultima_actividad
+      FROM empleados
+      WHERE LOWER(LTRIM(RTRIM(estado))) = 'disponible'
+    `);
+
+    const empleados: any[] = Array.isArray(respuesta?.recordset)
+      ? respuesta.recordset
+      : Array.isArray(respuesta?.recordsets?.[0])
+        ? respuesta.recordsets[0]
+        : Array.isArray(respuesta)
+          ? respuesta
+          : [];
+
+    return res.status(200).json(empleados);
+  } catch (error: any) {
+    console.error(
+      'Error al consultar empleados disponibles:',
+      error
     );
 
-    res.json(empleados);
-  } catch (error) {
-    console.error('Error al consultar empleados disponibles:', error);
-
-    res.status(500).json({
+    return res.status(500).json({
       mensaje: 'Error al consultar los empleados disponibles',
+      detalle: error?.message ?? String(error),
     });
   }
 });
@@ -1211,34 +1224,41 @@ app.post("/api/login", async (req, res) => {
         ? respuesta
         : [];
 
-  //console.log("Respuesta cliente:", respuesta);
-  //console.log("Clientes encontrados:", filas.length);
+  
+  console.log('Correo buscado:', correoLimpio);
+console.log('Rol recibido:', rol);
+console.log('Empleados encontrados:', filas.length);
 
-  if (filas.length > 0) {
-    const cliente = filas[0];
+if (filas.length > 0) {
+  const empleado = filas[0];
 
-    const hashGuardado = String(
-      cliente.password_hash ?? ""
-    ).trim();
+  const hashGuardado = String(
+    empleado.password_hash ?? ''
+  ).trim();
 
-    //console.log("Longitud del hash:", hashGuardado.length);
+  console.log('ID encontrado:', empleado.id);
+  console.log('Longitud del hash:', hashGuardado.length);
+  console.log(
+    'Comienza como bcrypt:',
+    hashGuardado.startsWith('$2')
+  );
 
-    const valid = await bcrypt.compare(
-      String(password),
-      hashGuardado
-    );
+  const valid = await bcrypt.compare(
+    String(password),
+    hashGuardado
+  );
 
-    //console.log("Resultado bcrypt cliente:", valid);
+  console.log('Resultado bcrypt empleado:', valid);
 
-    if (valid) {
-      const {
-        password_hash,
-        ...usuarioSinPassword
-      } = cliente;
+  if (valid) {
+    const {
+      password_hash,
+      ...usuarioSinPassword
+    } = empleado;
 
-      usuario = usuarioSinPassword;
-    }
+    usuario = usuarioSinPassword;
   }
+}
 } else if (rol === "worker") {
   const [respuesta]: any = await database.execute(
     `
