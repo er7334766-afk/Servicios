@@ -925,7 +925,7 @@ app.get("/api/categorias/:id/empleados", async (req, res) => {
 // ==========================================
 // RUTA DE LOGIN (NUEVA)
 // ==========================================
-app.post("/api/login", async (req, res) => {
+/*app.post("/api/login", async (req, res) => {
   try {
     const { correo, password, rol } = req.body;
 
@@ -939,13 +939,14 @@ app.post("/api/login", async (req, res) => {
 
     // Usamos alias (AS id, AS nombre) para estandarizar la respuesta sin importar si es cliente o empleado
     if (rol === 'client') {
-      const [rows]: any = await database.execute(
+      /*const [rows]: any = await database.execute(
         "SELECT id_cliente AS id, nombre AS nombre, correo, telefono AS celular, NULL AS estado, foto_url AS foto, password_hash FROM clientes WHERE correo = ?",
         [correo]
       );
       if (rows.length > 0) {
         const cliente = rows[0];
-        const valid = await bcrypt.compare(password, cliente.password_hash);
+        //const valid = await bcrypt.compare(password, cliente.password_hash);
+        
         if (valid) {
           const { password_hash, ...usuarioSinPassword } = cliente;
           usuario = usuarioSinPassword;
@@ -971,7 +972,7 @@ app.post("/api/login", async (req, res) => {
       );
       if (rows.length > 0) {
         const empleado = rows[0];
-        const valid = await bcrypt.compare(password, empleado.password_hash);
+        //const valid = await bcrypt.compare(password, empleado.password_hash);
         if (valid) {
           const { password_hash, ...usuarioSinPassword } = empleado;
           usuario = usuarioSinPassword;
@@ -979,9 +980,9 @@ app.post("/api/login", async (req, res) => {
       }
     } else {
       return res.status(400).json({ mensaje: "Rol no válido" });
-    }
+    }*/
 
-    if (!usuario) {
+    /*if (!usuario) {
       return res.status(401).json({ mensaje: "Correo o contraseña incorrectos" });
     }
 
@@ -993,6 +994,153 @@ app.post("/api/login", async (req, res) => {
     console.error("Error al iniciar sesión:", error);
     res.status(500).json({
       mensaje: "Error interno del servidor al iniciar sesión",
+    });
+  }
+});*/
+
+app.post("/api/login", async (req, res) => {
+  try {
+    const { correo, password, rol } = req.body;
+
+    if (!correo || !password || !rol) {
+      return res.status(400).json({
+        mensaje: "Correo, contraseña y rol son obligatorios",
+      });
+    }
+
+    const correoLimpio = String(correo).trim().toLowerCase();
+    let usuario = null;
+
+    if (rol === "client") {
+  const [respuesta]: any = await database.execute(
+    `
+      SELECT
+        id_cliente AS id,
+        nombre,
+        correo,
+        telefono AS celular,
+        NULL AS estado,
+        foto_url AS foto,
+        password_hash
+      FROM clientes
+      WHERE correo = ?
+    `,
+    [correoLimpio]
+  );
+
+  const filas: any[] = Array.isArray(respuesta?.recordset)
+    ? respuesta.recordset
+    : Array.isArray(respuesta?.recordsets?.[0])
+      ? respuesta.recordsets[0]
+      : Array.isArray(respuesta)
+        ? respuesta
+        : [];
+
+  //console.log("Respuesta cliente:", respuesta);
+  //console.log("Clientes encontrados:", filas.length);
+
+  if (filas.length > 0) {
+    const cliente = filas[0];
+
+    const hashGuardado = String(
+      cliente.password_hash ?? ""
+    ).trim();
+
+    //console.log("Longitud del hash:", hashGuardado.length);
+
+    const valid = await bcrypt.compare(
+      String(password),
+      hashGuardado
+    );
+
+    //console.log("Resultado bcrypt cliente:", valid);
+
+    if (valid) {
+      const {
+        password_hash,
+        ...usuarioSinPassword
+      } = cliente;
+
+      usuario = usuarioSinPassword;
+    }
+  }
+} else if (rol === "worker") {
+  const [respuesta]: any = await database.execute(
+    `
+      SELECT
+        id_empleado AS id,
+        id_empleado AS idEmpleado,
+        id_empleado AS id_empleado,
+        nombre,
+        correo,
+        telefono AS celular,
+        estado,
+        foto_url AS foto,
+        password_hash
+      FROM empleados
+      WHERE correo = ?
+    `,
+    [correoLimpio]
+  );
+
+  const filas: any[] = Array.isArray(respuesta?.recordset)
+    ? respuesta.recordset
+    : Array.isArray(respuesta?.recordsets?.[0])
+      ? respuesta.recordsets[0]
+      : Array.isArray(respuesta)
+        ? respuesta
+        : [];
+
+  //console.log("Respuesta empleado:", respuesta);
+  //console.log("Empleados encontrados:", filas.length);
+
+  if (filas.length > 0) {
+    const empleado = filas[0];
+
+    const hashGuardado = String(
+      empleado.password_hash ?? ""
+    ).trim();
+
+    //console.log("Longitud del hash:", hashGuardado.length);
+
+    const valid = await bcrypt.compare(
+      String(password),
+      hashGuardado
+    );
+
+    //console.log("Resultado bcrypt empleado:", valid);
+
+    if (valid) {
+      const {
+        password_hash,
+        ...usuarioSinPassword
+      } = empleado;
+
+      usuario = usuarioSinPassword;
+    }
+  }
+} else {
+      return res.status(400).json({
+        mensaje: "Rol no válido",
+      });
+    }
+
+    if (!usuario) {
+      return res.status(401).json({
+        mensaje: "Correo o contraseña incorrectos",
+      });
+    }
+
+    return res.status(200).json({
+      mensaje: "Inicio de sesión exitoso",
+      usuario,
+    });
+  } catch (error: any) {
+    console.error("Error al iniciar sesión:", error);
+
+    return res.status(500).json({
+      mensaje: "Error interno del servidor al iniciar sesión",
+      detalle: error?.message ?? String(error),
     });
   }
 });
