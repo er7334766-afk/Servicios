@@ -1,14 +1,16 @@
-// ReviewScreen.tsx
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import { ChevronLeft, Send } from 'lucide-react';
 import { StarRating } from '../shared/StarRating';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
 
+const API_URL = 'http://localhost:3000';
+
 interface Reserva {
   id_reserva: number;
+  id_servicio: number;
   id_empleado: number;
   descripcion?: string;
   fecha?: string;
@@ -17,64 +19,231 @@ interface Reserva {
   foto_empleado?: string;
 }
 
+interface ReservaApi {
+  reserva?: Reserva;
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface ResenaApi {
+  mensaje?: string;
+  detalle?: string;
+}
+
+async function leerRespuestaJson<T>(
+  respuesta: Response,
+): Promise<T> {
+  const texto = await respuesta.text();
+
+  if (!texto.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error(
+      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}.`,
+    );
+  }
+}
+
 export default function ReviewScreen() {
-  const { bookingId } = useParams<{ bookingId: string }>();
+  const { idServicio } =
+    useParams<{ idServicio: string }>();
+
   const navigate = useNavigate();
 
-  const [reserva, setReserva] = useState<Reserva | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState('');
+  const [reserva, setReserva] =
+    useState<Reserva | null>(null);
 
-  const [overall, setOverall] = useState(0);
-  const [punctuality, setPunctuality] = useState(0);
-  const [quality, setQuality] = useState(0);
-  const [communication, setCommunication] = useState(0);
-  const [comment, setComment] = useState('');
+  const [cargando, setCargando] =
+    useState(true);
+
+  const [enviando, setEnviando] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [overall, setOverall] =
+    useState(0);
+
+  const [punctuality, setPunctuality] =
+    useState(0);
+
+  const [quality, setQuality] =
+    useState(0);
+
+  const [communication, setCommunication] =
+    useState(0);
+
+  const [comment, setComment] =
+    useState('');
 
   useEffect(() => {
-    const obtenerReserva = async () => {
+    async function obtenerReserva() {
+      if (!idServicio) {
+        setError(
+          'No se recibió el identificador del servicio.',
+        );
+        setCargando(false);
+        return;
+      }
+
+      const idServicioNumero = Number(idServicio);
+
+      if (
+        !Number.isInteger(idServicioNumero) ||
+        idServicioNumero <= 0
+      ) {
+        setError(
+          'El identificador del servicio no es válido.',
+        );
+        setCargando(false);
+        return;
+      }
+
       try {
         setCargando(true);
         setError('');
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/reservas/${bookingId}`
+          `${API_URL}/api/reservas/servicio/${idServicioNumero}`,
         );
 
+        const datos =
+          await leerRespuestaJson<ReservaApi>(
+            respuesta,
+          );
+
         if (!respuesta.ok) {
-          throw new Error('No se pudo obtener la reserva');
+          throw new Error(
+            datos.detalle ||
+              datos.mensaje ||
+              'No se pudo obtener la reserva.',
+          );
         }
 
-        const datos = await respuesta.json();
+        const reservaRecibida =
+          datos.reserva;
 
-        console.log('Reserva recibida:', datos);
+        if (!reservaRecibida) {
+          throw new Error(
+            'No se encontró la reserva relacionada con este servicio.',
+          );
+        }
 
-        setReserva(datos.reserva ?? datos);
-      } catch (error) {
-        console.error('Error al obtener la reserva:', error);
-        setError('No se pudo cargar la información del servicio');
+        const idReserva = Number(
+          reservaRecibida.id_reserva,
+        );
+
+        const idEmpleado = Number(
+          reservaRecibida.id_empleado,
+        );
+
+        if (
+          !Number.isInteger(idReserva) ||
+          idReserva <= 0
+        ) {
+          throw new Error(
+            'La reserva relacionada no es válida.',
+          );
+        }
+
+        if (
+          !Number.isInteger(idEmpleado) ||
+          idEmpleado <= 0
+        ) {
+          throw new Error(
+            'No se encontró el trabajador relacionado.',
+          );
+        }
+
+        setReserva({
+          id_reserva: idReserva,
+          id_servicio: Number(
+            reservaRecibida.id_servicio ??
+              idServicioNumero,
+          ),
+          id_empleado: idEmpleado,
+          descripcion:
+            reservaRecibida.descripcion ||
+            'Servicio realizado',
+          fecha:
+            reservaRecibida.fecha || '',
+          hora:
+            reservaRecibida.hora || '',
+          nombre_empleado:
+            reservaRecibida.nombre_empleado ||
+            'Trabajador',
+          foto_empleado:
+            reservaRecibida.foto_empleado ||
+            '',
+        });
+      } catch (errorDesconocido) {
+        console.error(
+          'Error al obtener la reserva:',
+          errorDesconocido,
+        );
+
+        setReserva(null);
+
+        setError(
+          errorDesconocido instanceof Error
+            ? errorDesconocido.message
+            : 'No se pudo cargar la información del servicio.',
+        );
       } finally {
         setCargando(false);
       }
-    };
-
-    if (bookingId) {
-      obtenerReserva();
-    } else {
-      setError('No se recibió el identificador de la reserva');
-      setCargando(false);
     }
-  }, [bookingId]);
 
-  const handleSubmit = async () => {
-    if (overall === 0) {
-      toast.error('Selecciona una calificación general');
+    void obtenerReserva();
+  }, [idServicio]);
+
+  async function handleSubmit() {
+    if (!reserva) {
+      toast.error(
+        'No se encontró la información de la reserva.',
+      );
       return;
     }
 
-    if (!reserva) {
-      toast.error('No se encontró la información de la reserva');
+    if (overall < 1 || overall > 5) {
+      toast.error(
+        'Selecciona una calificación general.',
+      );
+      return;
+    }
+
+    if (
+      punctuality < 1 ||
+      punctuality > 5
+    ) {
+      toast.error(
+        'Selecciona una calificación de puntualidad.',
+      );
+      return;
+    }
+
+    if (
+      quality < 1 ||
+      quality > 5
+    ) {
+      toast.error(
+        'Selecciona una calificación de calidad.',
+      );
+      return;
+    }
+
+    if (
+      communication < 1 ||
+      communication > 5
+    ) {
+      toast.error(
+        'Selecciona una calificación de comunicación.',
+      );
       return;
     }
 
@@ -82,49 +251,75 @@ export default function ReviewScreen() {
       setEnviando(true);
 
       const respuesta = await fetch(
-        'http://localhost:3000/api/resenas',
+        `${API_URL}/api/resenas`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            id_reserva: reserva.id_reserva,
-            id_empleado: reserva.id_empleado,
-            calificacion_general: overall,
-            puntualidad: punctuality,
-            calidad: quality,
-            comunicacion: communication,
-            comentario: comment.trim(),
+            id_reserva:
+              reserva.id_reserva,
+            id_empleado:
+              reserva.id_empleado,
+            calificacion_general:
+              overall,
+            puntualidad:
+              punctuality,
+            calidad:
+              quality,
+            comunicacion:
+              communication,
+            comentario:
+              comment.trim() || null,
           }),
-        }
+        },
       );
 
-      const datos = await respuesta.json();
+      const datos =
+        await leerRespuestaJson<ResenaApi>(
+          respuesta,
+        );
 
       if (!respuesta.ok) {
-        throw new Error(datos.mensaje || 'No se pudo enviar la reseña');
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo enviar la reseña.',
+        );
       }
 
-      toast.success('Reseña enviada', {
-        description: `Gracias por calificar a ${
-          reserva.nombre_empleado || 'este trabajador'
-        }`,
-      });
+      toast.success(
+        'Reseña enviada',
+        {
+          description:
+            `Gracias por calificar a ${
+              reserva.nombre_empleado ||
+              'este trabajador'
+            }.`,
+        },
+      );
 
-      setTimeout(() => navigate('/home'), 800);
-    } catch (error) {
-      console.error('Error al enviar la reseña:', error);
+      window.setTimeout(() => {
+        navigate(
+          `/home/contratacion/${reserva.id_servicio}`,
+        );
+      }, 800);
+    } catch (errorDesconocido) {
+      console.error(
+        'Error al enviar la reseña:',
+        errorDesconocido,
+      );
 
       toast.error(
-        error instanceof Error
-          ? error.message
-          : 'No se pudo enviar la reseña'
+        errorDesconocido instanceof Error
+          ? errorDesconocido.message
+          : 'No se pudo enviar la reseña.',
       );
     } finally {
       setEnviando(false);
     }
-  };
+  }
 
   const criteria = [
     {
@@ -144,9 +339,16 @@ export default function ReviewScreen() {
     },
   ];
 
+  const formularioValido =
+    overall >= 1 &&
+    punctuality >= 1 &&
+    quality >= 1 &&
+    communication >= 1 &&
+    !enviando;
+
   if (cargando) {
     return (
-      <div className="min-h-full flex items-center justify-center">
+      <div className="flex min-h-full items-center justify-center">
         <p className="text-sm text-muted-foreground">
           Cargando servicio...
         </p>
@@ -156,12 +358,14 @@ export default function ReviewScreen() {
 
   if (error || !reserva) {
     return (
-      <div className="min-h-full flex flex-col items-center justify-center px-6">
-        <p className="text-sm text-red-500 text-center">
-          {error || 'Reserva no encontrada'}
+      <div className="flex min-h-full flex-col items-center justify-center px-6">
+        <p className="text-center text-sm text-red-500">
+          {error ||
+            'Reserva no encontrada.'}
         </p>
 
         <button
+          type="button"
           onClick={() => navigate(-1)}
           className="mt-4 text-sm font-semibold text-[#1A56DB]"
         >
@@ -172,85 +376,119 @@ export default function ReviewScreen() {
   }
 
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="bg-card px-4 pt-10 pb-4 border-b border-border">
+    <div className="flex min-h-full flex-col">
+      <div className="border-b border-border bg-card px-4 pb-4 pt-10">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
+            aria-label="Regresar"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
 
-          <h1 className="text-lg font-bold text-foreground">
-            Calificar servicio
-          </h1>
+          <div>
+            <h1 className="text-lg font-bold text-foreground">
+              Calificar servicio
+            </h1>
+
+            <p className="text-xs text-muted-foreground">
+              Servicio #{reserva.id_servicio}
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ImageWithFallback
             src={
               reserva.foto_empleado ||
               'https://via.placeholder.com/150'
             }
-            alt={reserva.nombre_empleado || 'Trabajador'}
-            className="w-14 h-14 rounded-xl object-cover"
+            alt={
+              reserva.nombre_empleado ||
+              'Trabajador'
+            }
+            className="h-14 w-14 rounded-xl object-cover"
           />
 
           <div>
             <p className="font-semibold text-foreground">
-              {reserva.nombre_empleado || 'Trabajador'}
+              {reserva.nombre_empleado ||
+                'Trabajador'}
             </p>
 
             <p className="text-xs text-muted-foreground">
-              {reserva.descripcion || 'Servicio realizado'}
+              {reserva.descripcion ||
+                'Servicio realizado'}
             </p>
 
             <p className="text-xs text-muted-foreground">
-              {reserva.fecha || 'Fecha no disponible'}
-              {reserva.hora ? ` · ${reserva.hora}` : ''}
+              {reserva.fecha ||
+                'Fecha no disponible'}
+
+              {reserva.hora
+                ? ` · ${reserva.hora}`
+                : ''}
             </p>
           </div>
         </div>
 
-        <div className="text-center mb-8">
-          <p className="text-base font-semibold text-foreground mb-4">
+        <div className="mb-8 text-center">
+          <p className="mb-4 text-base font-semibold text-foreground">
             ¿Cómo fue tu experiencia?
           </p>
 
           <div className="flex justify-center gap-3">
-            {[1, 2, 3, 4, 5].map((valor) => (
-              <motion.button
-                key={valor}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setOverall(valor)}
-                className="flex flex-col items-center gap-1"
-              >
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl transition-all ${
-                    valor <= overall
-                      ? 'bg-amber-100 scale-110'
-                      : 'bg-muted'
-                  }`}
+            {[1, 2, 3, 4, 5].map(
+              (valor) => (
+                <motion.button
+                  key={valor}
+                  type="button"
+                  whileHover={{
+                    scale: 1.15,
+                  }}
+                  whileTap={{
+                    scale: 0.9,
+                  }}
+                  onClick={() =>
+                    setOverall(valor)
+                  }
+                  className="flex flex-col items-center gap-1"
                 >
-                  {valor <= overall ? '⭐' : '☆'}
-                </div>
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl transition-all ${
+                      valor <= overall
+                        ? 'scale-110 bg-amber-100'
+                        : 'bg-muted'
+                    }`}
+                  >
+                    {valor <= overall
+                      ? '⭐'
+                      : '☆'}
+                  </div>
 
-                <span className="text-[10px] text-muted-foreground">
-                  {valor}
-                </span>
-              </motion.button>
-            ))}
+                  <span className="text-[10px] text-muted-foreground">
+                    {valor}
+                  </span>
+                </motion.button>
+              ),
+            )}
           </div>
 
           {overall > 0 && (
             <motion.p
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-sm font-semibold text-amber-600 mt-3"
+              initial={{
+                opacity: 0,
+                y: 5,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              className="mt-3 text-sm font-semibold text-amber-600"
             >
               {
                 [
@@ -266,59 +504,81 @@ export default function ReviewScreen() {
           )}
         </div>
 
-        <div className="flex flex-col gap-4 mb-6">
-          {criteria.map(({ label, value, setter }) => (
-            <div
-              key={label}
-              className="bg-card rounded-2xl border border-border p-4"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-foreground">
-                  {label}
-                </p>
+        <div className="mb-6 flex flex-col gap-4">
+          {criteria.map(
+            ({
+              label,
+              value,
+              setter,
+            }) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-border bg-card p-4"
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">
+                    {label}
+                  </p>
 
-                <span className="text-xs text-muted-foreground">
-                  {value > 0 ? `${value}/5` : 'Sin calificar'}
-                </span>
+                  <span className="text-xs text-muted-foreground">
+                    {value > 0
+                      ? `${value}/5`
+                      : 'Sin calificar'}
+                  </span>
+                </div>
+
+                <StarRating
+                  value={value}
+                  interactive
+                  onChange={setter}
+                  size="lg"
+                />
               </div>
-
-              <StarRating
-                value={value}
-                interactive
-                onChange={setter}
-                size="lg"
-              />
-            </div>
-          ))}
+            ),
+          )}
         </div>
 
         <div className="mb-6">
-          <label className="text-sm font-semibold text-foreground mb-2 block">
+          <label
+            htmlFor="comentario-resena"
+            className="mb-2 block text-sm font-semibold text-foreground"
+          >
             Comentario
           </label>
 
           <textarea
+            id="comentario-resena"
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            onChange={(evento) =>
+              setComment(
+                evento.target.value,
+              )
+            }
             placeholder="Cuéntanos más sobre tu experiencia con este trabajador..."
             rows={4}
             maxLength={300}
-            className="w-full bg-input-background rounded-xl px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30 resize-none"
+            className="w-full resize-none rounded-xl bg-input-background px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
           />
 
-          <p className="text-xs text-muted-foreground text-right mt-1">
+          <p className="mt-1 text-right text-xs text-muted-foreground">
             {comment.length}/300
           </p>
         </div>
 
         <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleSubmit}
-          disabled={enviando}
-          className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold flex items-center justify-center gap-2 shadow-lg shadow-[#1A56DB]/30 mb-6 disabled:opacity-60"
+          whileTap={{
+            scale: 0.97,
+          }}
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={!formularioValido}
+          className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A56DB] py-3.5 font-semibold text-white shadow-lg shadow-[#1A56DB]/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Send className="w-4 h-4" />
-          {enviando ? 'Enviando...' : 'Enviar reseña'}
+          <Send className="h-4 w-4" />
+
+          {enviando
+            ? 'Enviando...'
+            : 'Enviar reseña'}
         </motion.button>
       </div>
     </div>

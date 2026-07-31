@@ -5451,275 +5451,6 @@ app.get('/api/agenda/empleados/:idEmpleado', async (req, res) => {
   }
 });
 
-app.get('/api/reservas/:id', async (req, res) => {
-  try {
-    const idReserva = Number(req.params.id);
-
-    if (!Number.isInteger(idReserva) || idReserva <= 0) {
-      return res.status(400).json({ mensaje: 'ID de reserva inválido' });
-    }
-
-    const [rows]: any = await database.execute(
-      `
-      SELECT
-        r.id_reserva,
-        r.id_empleado,
-        r.descripcion,
-        r.fecha,
-        r.hora,
-        e.nombre AS nombre_empleado,
-        e.foto_url AS foto_empleado
-      FROM reservas r
-      LEFT JOIN empleados e ON e.id_empleado = r.id_empleado
-      WHERE r.id_reserva = ?
-      LIMIT 1
-      `,
-      [idReserva]
-    );
-
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ mensaje: 'Reserva no encontrada' });
-    }
-
-    return res.json({ reserva: rows[0] });
-  } catch (error: any) {
-    console.error('Error al obtener reserva:', error);
-    return res.status(500).json({ mensaje: 'Error al consultar la reserva', detalle: error.message });
-  }
-});
-
-app.post('/api/resenas', async (req, res) => {
-  try {
-    const {
-      id_reserva,
-      id_empleado,
-      calificacion_general,
-      puntualidad,
-      calidad,
-      comunicacion,
-      comentario,
-    } = req.body;
-
-    if (!id_reserva || !id_empleado || !calificacion_general) {
-      return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
-    }
-
-    const [resultado]: any = await database.execute(
-      `
-      INSERT INTO resenas (
-        id_reserva,
-        id_empleado,
-        calificacion_general,
-        puntualidad,
-        calidad,
-        comunicacion,
-        comentario,
-        fecha
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
-      `,
-      [
-        id_reserva,
-        id_empleado,
-        calificacion_general,
-        puntualidad || null,
-        calidad || null,
-        comunicacion || null,
-        comentario || null,
-      ]
-    );
-
-    return res.status(201).json({ mensaje: 'Reseña registrada correctamente', resultado });
-  } catch (error: any) {
-    console.error('Error al registrar reseña:', error);
-    return res.status(500).json({ mensaje: 'Error al registrar la reseña', detalle: error.message });
-  }
-});
-
-app.put(
-  "/api/usuarios/actividad",
-  async (req, res) => {
-    try {
-      const rol = String(req.body.rol);
-      const idUsuario = Number(req.body.idUsuario);
-
-      if (
-        !Number.isInteger(idUsuario) ||
-        idUsuario <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: "ID de usuario inválido",
-        });
-      }
-
-      if (rol === "client") {
-        await database.query(`
-          UPDATE clientes
-          SET ultima_actividad = GETDATE()
-          WHERE id_cliente = ${idUsuario}
-        `);
-      } else if (rol === "worker") {
-        await database.query(`
-          UPDATE empleados
-          SET ultima_actividad = GETDATE()
-          WHERE id_empleado = ${idUsuario}
-        `);
-      } else {
-        return res.status(400).json({
-          mensaje: "Rol inválido",
-        });
-      }
-
-      return res.status(200).json({
-        mensaje: "Actividad actualizada",
-      });
-    } catch (error: any) {
-      return res.status(500).json({
-        mensaje: "Error al actualizar actividad",
-        detalle: error?.message || String(error),
-      });
-    }
-  }
-);
-
-// ==========================================
-// CONTACTOS DISPONIBLES PARA INICIAR CHAT
-// ==========================================
-app.get(
-  "/api/chat/contactos/:rol/:idUsuario",
-  async (req, res) => {
-    try {
-      const rol = String(req.params.rol);
-      const idUsuario = Number(req.params.idUsuario);
-
-      if (
-        !Number.isInteger(idUsuario) ||
-        idUsuario <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: "ID de usuario inválido",
-        });
-      }
-
-      if (rol === "client") {
-        const respuesta: any = await database.query(`
-          SELECT
-            id_empleado AS id,
-            nombre AS nombre,
-            foto_url AS foto,
-            titulo AS descripcion,
-            CASE
-              WHEN ultima_actividad >= DATEADD(SECOND, -90, GETDATE())
-                THEN 1
-              ELSE 0
-            END AS conectado
-          FROM empleados
-          ORDER BY nombre ASC
-        `);
-
-        const contactos =
-          respuesta?.recordset ??
-          respuesta?.recordsets?.[0] ??
-          respuesta?.[0] ??
-          respuesta?.rows ??
-          [];
-
-        return res.status(200).json(contactos);
-      }
-
-      if (rol === "worker") {
-        const respuesta: any = await database.query(`
-        SELECT
-          id_cliente AS id,
-          nombre AS nombre,
-          foto_url AS foto,
-          correo AS descripcion,
-          CASE
-            WHEN ultima_actividad >= DATEADD(SECOND, -90, GETDATE())
-              THEN 1
-            ELSE 0
-          END AS conectado
-        FROM clientes
-        ORDER BY nombre ASC
-      `);
-
-        const contactos =
-          respuesta?.recordset ??
-          respuesta?.recordsets?.[0] ??
-          respuesta?.[0] ??
-          respuesta?.rows ??
-          [];
-
-        return res.status(200).json(contactos);
-      }
-
-      return res.status(400).json({
-        mensaje: "Rol inválido",
-      });
-    } catch (error: any) {
-      console.error(
-        "Error al consultar contactos:",
-        error
-      );
-
-      return res.status(500).json({
-        mensaje: "Error al consultar los contactos",
-        detalle: error?.message || String(error),
-      });
-    }
-  }
-);
-// ==========================================
-// MÉTODOS DE PAGO (simple storage)
-// ==========================================
-app.post('/api/payment-methods', async (req, res) => {
-  try {
-    const { fk_usuario, tipo, titular, numero_enmascarado, expiracion } = req.body;
-
-    if (!fk_usuario || !tipo || !titular || !numero_enmascarado) {
-      return res.status(400).json({ mensaje: 'Faltan datos del método de pago' });
-    }
-
-    const [resultado]: any = await database.execute(
-      `
-      INSERT INTO payment_methods (
-        fk_usuario,
-        tipo,
-        titular,
-        numero_enmascarado,
-        expiracion,
-        fecha_creacion
-      ) VALUES (?, ?, ?, ?, ?, GETDATE())
-      `,
-      [fk_usuario, tipo, titular, numero_enmascarado, expiracion || null]
-    );
-
-    return res.status(201).json({ mensaje: 'Método de pago agregado', resultado });
-  } catch (error: any) {
-    console.error('Error al agregar método de pago:', error);
-    return res.status(500).json({ mensaje: 'Error al guardar el método de pago', detalle: error.message });
-  }
-});
-
-app.get('/api/payment-methods/:fk_usuario', async (req, res) => {
-  try {
-    const fk_usuario = Number(req.params.fk_usuario);
-
-    if (!Number.isInteger(fk_usuario) || fk_usuario <= 0) {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido' });
-    }
-
-    const [methods] = await database.query(
-      `SELECT id_payment_method, fk_usuario, tipo, titular, numero_enmascarado, expiracion, fecha_creacion FROM payment_methods WHERE fk_usuario = ? ORDER BY fecha_creacion DESC`,
-      [fk_usuario]
-    );
-
-    return res.status(200).json(methods);
-  } catch (error: any) {
-    console.error('Error al consultar métodos de pago:', error);
-    return res.status(500).json({ mensaje: 'Error al consultar métodos de pago', detalle: error.message });
-  }
-});
 
 // ==========================================
 // RESERVAS: crear reserva (opcional)
@@ -5750,5 +5481,203 @@ app.post('/api/reservas', async (req, res) => {
   } catch (error: any) {
     console.error('Error al crear reserva:', error);
     return res.status(500).json({ mensaje: 'Error al crear la reserva', detalle: error.message });
+  }
+});
+
+// ==========================================
+// OBTENER RESERVA POR ID DEL SERVICIO
+// ==========================================
+app.get('/api/reservas/servicio/:idServicio', async (req, res) => {
+  try {
+    const idServicio = Number(req.params.idServicio);
+
+    if (!Number.isInteger(idServicio) || idServicio <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de servicio inválido',
+      });
+    }
+
+    const respuesta: any = await database.query(`
+      SELECT TOP 1
+        r.id_reserva,
+        r.id_servicio,
+        r.id_empleado,
+        r.descripcion,
+        r.fecha,
+        r.hora,
+        e.nombre AS nombre_empleado,
+        e.foto_url AS foto_empleado
+      FROM reservas r
+      LEFT JOIN empleados e
+        ON e.id_empleado = r.id_empleado
+      WHERE r.id_servicio = ${idServicio}
+      ORDER BY r.id_reserva DESC;
+    `);
+
+    const filas: any[] =
+      Array.isArray(respuesta?.recordset)
+        ? respuesta.recordset
+        : Array.isArray(respuesta?.recordsets?.[0])
+          ? respuesta.recordsets[0]
+          : Array.isArray(respuesta?.[0])
+            ? respuesta[0]
+            : Array.isArray(respuesta?.rows)
+              ? respuesta.rows
+              : [];
+
+    if (filas.length === 0) {
+      return res.status(404).json({
+        mensaje: 'No se encontró una reserva para este servicio',
+      });
+    }
+
+    return res.status(200).json({
+      reserva: filas[0],
+    });
+  } catch (error: any) {
+    console.error(
+      'Error al obtener reserva por servicio:',
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: 'Error al consultar la reserva del servicio',
+      detalle: error?.message || String(error),
+    });
+  }
+});
+
+// ==========================================
+// CREAR RESEÑA
+// ==========================================
+app.post('/api/resenas', async (req, res) => {
+  try {
+    const {
+      id_reserva,
+      id_empleado,
+      calificacion_general,
+      puntualidad,
+      calidad,
+      comunicacion,
+      comentario,
+    } = req.body;
+
+    const idReserva = Number(id_reserva);
+    const idEmpleado = Number(id_empleado);
+    const calificacionGeneral = Number(
+      calificacion_general,
+    );
+    const calificacionPuntualidad = Number(
+      puntualidad,
+    );
+    const calificacionCalidad = Number(
+      calidad,
+    );
+    const calificacionComunicacion = Number(
+      comunicacion,
+    );
+
+    if (
+      !Number.isInteger(idReserva) ||
+      idReserva <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: 'La reserva no es válida',
+      });
+    }
+
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      return res.status(400).json({
+        mensaje: 'El trabajador no es válido',
+      });
+    }
+
+    const calificaciones = [
+      calificacionGeneral,
+      calificacionPuntualidad,
+      calificacionCalidad,
+      calificacionComunicacion,
+    ];
+
+    const calificacionesValidas =
+      calificaciones.every(
+        (valor) =>
+          Number.isInteger(valor) &&
+          valor >= 1 &&
+          valor <= 5,
+      );
+
+    if (!calificacionesValidas) {
+      return res.status(400).json({
+        mensaje:
+          'Todas las calificaciones deben estar entre 1 y 5',
+      });
+    }
+
+    const comentarioLimpio =
+      typeof comentario === 'string'
+        ? comentario.trim()
+        : '';
+
+    const comentarioSql = comentarioLimpio
+      ? `'${comentarioLimpio.replace(/'/g, "''")}'`
+      : 'NULL';
+
+    const respuesta: any =
+      await database.query(`
+        INSERT INTO resenas
+        (
+          id_reserva,
+          id_empleado,
+          calificacion_general,
+          puntualidad,
+          calidad,
+          comunicacion,
+          comentario,
+          fecha_creacion
+        )
+        VALUES
+        (
+          ${idReserva},
+          ${idEmpleado},
+          ${calificacionGeneral},
+          ${calificacionPuntualidad},
+          ${calificacionCalidad},
+          ${calificacionComunicacion},
+          ${comentarioSql},
+          GETDATE()
+        );
+
+        SELECT SCOPE_IDENTITY() AS id_resena;
+      `);
+
+    const fila =
+      respuesta?.recordset?.[0] ??
+      respuesta?.recordsets?.[0]?.[0] ??
+      respuesta?.[0]?.[0] ??
+      null;
+
+    return res.status(201).json({
+      mensaje: 'Reseña guardada correctamente',
+      id_resena:
+        fila?.id_resena ??
+        fila?.insertId ??
+        null,
+    });
+  } catch (error: any) {
+    console.error(
+      'Error al guardar la reseña:',
+      error,
+    );
+
+    return res.status(500).json({
+      mensaje: 'Error al guardar la reseña',
+      detalle:
+        error?.message ??
+        String(error),
+    });
   }
 });

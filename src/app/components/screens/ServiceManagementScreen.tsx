@@ -732,18 +732,47 @@ export default function ServiceManagementScreen() {
           </div>
 
           {!esTrabajador && (
+  <>
             <motion.button
               whileTap={{ scale: 0.97 }}
               type="button"
               onClick={() =>
-                navigate(`/home/review/${servicio.id_servicio}`)
+                navigate(
+                  `/home/contratacion/${servicio.id_servicio}/pago`
+                )
+              }
+              className="w-full rounded-xl bg-[#1A56DB] px-4 py-3.5 text-sm font-bold text-white"
+            >
+              Realizar pago
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/home/contratacion/${servicio.id_servicio}/calificar`
+                )
               }
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-white"
             >
-              <span className="text-lg">⭐</span>
-              Calificar servicio
+              ⭐ Calificar servicio
             </motion.button>
-          )}
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/home/contratacion/${servicio.id_servicio}/reportar`
+                )
+              }
+              className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-bold text-red-600"
+            >
+              Reportar problema
+            </motion.button>
+          </>
+        )}
         </section>
       )}
       </main>

@@ -2,11 +2,13 @@ import {
   createBrowserRouter,
   Navigate,
 } from 'react-router';
+
 import {
   lazy,
   Suspense,
   type ReactNode,
 } from 'react';
+
 import { MobileShell } from './components/layout/MobileShell';
 
 import ServiceManagementScreen from './components/screens/ServiceManagementScreen';
@@ -116,6 +118,13 @@ const PaymentMethodScreen = lazy(
     )
 );
 
+const ServiceReportScreen = lazy(
+  () =>
+    import(
+      './components/screens/ServiceReportScreen'
+    )
+);
+
 function Loader() {
   return (
     <div className="flex h-full items-center justify-center">
@@ -136,177 +145,204 @@ function S({
   );
 }
 
-export const router =
-  createBrowserRouter([
-    {
-      path: '/',
-      element: (
-        <S>
-          <LandingScreen />
-        </S>
-      ),
-    },
-    {
-      path: '/auth',
-      element: (
-        <S>
-          <AuthScreen />
-        </S>
-      ),
-    },
-    
+export const router = createBrowserRouter([
+  {
+    path: '/',
+    element: (
+      <S>
+        <LandingScreen />
+      </S>
+    ),
+  },
+
+  {
+    path: '/auth',
+    element: (
+      <S>
+        <AuthScreen />
+      </S>
+    ),
+  },
+
+  {
+    path: '/home',
+    Component: MobileShell,
+    children: [
+      {
+        index: true,
+        element: (
+          <S>
+            <HomeRouter />
+          </S>
+        ),
+      },
 
       {
-  path: '/home',
-  Component: MobileShell,
-  children: [
-    {
-      index: true,
-      element: (
-        <S>
-          <HomeRouter />
-        </S>
-      ),
-    },
-    {
-      path: 'search',
-      element: (
-        <S>
-          <SearchScreen />
-        </S>
-      ),
-    },
-    {
-      path: 'worker/:id',
-      element: (
-        <S>
-          <WorkerProfileScreen />
-        </S>
-      ),
-    },
+        path: 'search',
+        element: (
+          <S>
+            <SearchScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'solicitud/:idServicio',
-      element: (
-        <S>
-          <WorkerServiceDetailScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'worker/:id',
+        element: (
+          <S>
+            <WorkerProfileScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'mis-solicitudes/:idServicio',
-      element: (
-        <S>
-          <ClientServiceDetailScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'solicitud/:idServicio',
+        element: (
+          <S>
+            <WorkerServiceDetailScreen />
+          </S>
+        ),
+      },
 
-    // ===============================
-    // NUEVAS RUTAS
-    // ===============================
+      {
+        path: 'mis-solicitudes/:idServicio',
+        element: (
+          <S>
+            <ClientServiceDetailScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'trabajo/:idServicio',
-      element: (
-        <S>
-          <ServiceManagementScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'trabajo/:idServicio',
+        element: (
+          <S>
+            <ServiceManagementScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'contratacion/:idServicio',
-      element: (
-        <S>
-          <ServiceManagementScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'contratacion/:idServicio',
+        element: (
+          <S>
+            <ServiceManagementScreen />
+          </S>
+        ),
+      },
 
-    // ===============================
+      {
+        path: 'contratacion/:idServicio/calificar',
+        element: (
+          <S>
+            <ReviewScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'profile',
-      element: (
-        <S>
-          <ProfileRouter />
-        </S>
-      ),
-    },
+      {
+        path: 'contratacion/:idServicio/pago',
+        element: (
+          <S>
+            <PaymentMethodScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'chat',
-      element: (
-        <S>
-          <ChatListScreen />
-        </S>
-      ),
-    },
+       {
+        path: 'contratacion/:idServicio/reportar',
+        element: (
+          <S>
+            <ServiceReportScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'chat/:id',
-      element: (
-        <S>
-          <ChatScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'profile',
+        element: (
+          <S>
+            <ProfileRouter />
+          </S>
+        ),
+      },
 
-    {
-      path: 'agenda',
-      element: (
-        <S>
-          <AgendaScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'chat',
+        element: (
+          <S>
+            <ChatListScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'review/:bookingId',
-      element: (
-        <S>
-          <ReviewScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'chat/:id',
+        element: (
+          <S>
+            <ChatScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'report',
-      element: (
-        <S>
-          <ReportScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'agenda',
+        element: (
+          <S>
+            <AgendaScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'notifications',
-      element: (
-        <S>
-          <NotificationsScreen />
-        </S>
-      ),
-    },
+      {
+        path: 'notifications',
+        element: (
+          <S>
+            <NotificationsScreen />
+          </S>
+        ),
+      },
 
-    {
-      path: 'payment',
-      element: (
-        <S>
-          <PaymentMethodScreen />
-        </S>
-      ),
-    },
-  ],
-},
-    {
-      path: '*',
-      element: (
-        <Navigate
-          to="/"
-          replace
-        />
-      ),
-    },
-  ]);
+      /*
+       * Rutas anteriores conservadas temporalmente.
+       * Puedes eliminarlas cuando confirmes que ninguna otra pantalla las usa.
+       */
+      {
+        path: 'review/:bookingId',
+        element: (
+          <S>
+            <ReviewScreen />
+          </S>
+        ),
+      },
+
+      {
+        path: 'report',
+        element: (
+          <S>
+            <ReportScreen />
+          </S>
+        ),
+      },
+
+      {
+        path: 'payment',
+        element: (
+          <S>
+            <PaymentMethodScreen />
+          </S>
+        ),
+      },
+    ],
+  },
+
+  {
+    path: '*',
+    element: (
+      <Navigate
+        to="/"
+        replace
+      />
+    ),
+  },
+]);
