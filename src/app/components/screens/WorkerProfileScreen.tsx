@@ -360,24 +360,7 @@ export default function WorkerProfileScreen() {
             </p>
           </div>
 
-          <div className="w-px bg-border" />
-
-          <div className="flex-1 text-center">
-            <div className="flex items-center justify-center gap-1">
-              <DollarSign className="h-4 w-4 text-green-600" />
-
-              <span className="font-bold text-foreground">
-                L{' '}
-                {Number(
-                  worker.precio_hora ?? 0
-                )}
-              </span>
-            </div>
-
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              por hora
-            </p>
-          </div>
+          
         </div>
 
         <div className="mt-4">
@@ -388,7 +371,7 @@ export default function WorkerProfileScreen() {
                   key={categoria.id_categoria}
                   className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
                 >
-                  {categoria.nombre}
+                  {categoria.nombre.charAt(0).toUpperCase() + categoria.nombre.slice(1)}
                 </span>
               ))
             ) : (

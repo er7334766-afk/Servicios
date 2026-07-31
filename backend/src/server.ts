@@ -3281,6 +3281,139 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // ==========================================
+// ELIMINAR VARIAS CONVERSACIONES
+// ==========================================
+app.delete(
+  "/api/chat/conversaciones",
+  async (req, res) => {
+    try {
+      const {
+        rol,
+        idUsuario,
+        contactos,
+      } = req.body as {
+        rol?: "client" | "worker";
+        idUsuario?: number;
+        contactos?: number[];
+      };
+
+      const usuarioId = Number(idUsuario);
+
+      const idsContactos = Array.isArray(contactos)
+        ? contactos
+            .map((id) => Number(id))
+            .filter(
+              (id, indice, arreglo) =>
+                Number.isInteger(id) &&
+                id > 0 &&
+                arreglo.indexOf(id) === indice
+            )
+        : [];
+
+      if (
+        rol !== "client" &&
+        rol !== "worker"
+      ) {
+        return res.status(400).json({
+          mensaje: "Rol de usuario inválido",
+        });
+      }
+
+      if (
+        !Number.isInteger(usuarioId) ||
+        usuarioId <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: "ID de usuario inválido",
+        });
+      }
+
+      if (idsContactos.length === 0) {
+        return res.status(400).json({
+          mensaje:
+            "Debes seleccionar al menos una conversación",
+        });
+      }
+
+      const listaIds = idsContactos.join(",");
+
+      const condicion =
+        rol === "client"
+          ? `
+            cc.id_cliente = ${usuarioId}
+            AND cc.id_empleado IN (${listaIds})
+          `
+          : `
+            cc.id_empleado = ${usuarioId}
+            AND cc.id_cliente IN (${listaIds})
+          `;
+
+      const resultado: any =
+        await database.query(`
+          SET XACT_ABORT ON;
+
+          BEGIN TRY
+            BEGIN TRANSACTION;
+
+            DELETE cm
+            FROM chat_mensajes AS cm
+            INNER JOIN chat_conversaciones AS cc
+              ON cc.id_conversacion =
+                 cm.id_conversacion
+            WHERE ${condicion};
+
+            DELETE cc
+            FROM chat_conversaciones AS cc
+            WHERE ${condicion};
+
+            DECLARE @conversacionesEliminadas INT =
+              @@ROWCOUNT;
+
+            COMMIT TRANSACTION;
+
+            SELECT
+              @conversacionesEliminadas
+                AS conversacionesEliminadas;
+          END TRY
+          BEGIN CATCH
+            IF @@TRANCOUNT > 0
+              ROLLBACK TRANSACTION;
+
+            THROW;
+          END CATCH;
+        `);
+
+      const datos =
+        resultado?.recordset?.[0] ??
+        resultado?.recordsets?.[0]?.[0] ??
+        null;
+
+      return res.status(200).json({
+        mensaje:
+          "Conversaciones eliminadas correctamente",
+        conversacionesEliminadas: Number(
+          datos?.conversacionesEliminadas ?? 0
+        ),
+      });
+    } catch (error: any) {
+      console.error(
+        "Error al eliminar conversaciones:",
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          "Error al eliminar las conversaciones",
+        detalle:
+          error?.message ?? String(error),
+      });
+    }
+  }
+);
+
+
+
+// ==========================================
 // OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
 // ==========================================
 /*app.get(

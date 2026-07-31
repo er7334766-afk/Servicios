@@ -119,6 +119,7 @@ export default function ChatScreen() {
     useRef<number | null>(null);
 
   const usuarioLocal = leerUsuarioLocal();
+  const [mostrarMenu, setMostrarMenu] = useState(false);
 
   /*
    * Cliente:
@@ -649,15 +650,65 @@ if (texto) {
           </p>
         </div>
 
-        <div className="flex items-center gap-1">
-        
-
+        <div className="relative">
           <button
             type="button"
+            onClick={() => setMostrarMenu(!mostrarMenu)}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
           >
             <MoreVertical className="w-4 h-4 text-muted-foreground" />
           </button>
+
+          {mostrarMenu && (
+            <div className="absolute right-0 top-11 w-44 rounded-xl border border-border bg-card shadow-lg overflow-hidden z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarMenu(false);
+                  if (esEmpleado) {
+                    navigate(`/home/client/${contacto.id}`);
+                  } else {
+                    navigate(`/home/worker/${contacto.id}`);
+                  }
+                }}
+                className="w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
+              >
+                👤 Ver perfil
+              </button>
+
+              {/* <button
+                type="button"
+                onClick={() => {
+                  setMostrarMenu(false);
+
+                  const confirmar = window.confirm(
+                    '¿Estás seguro de que deseas eliminar todos los mensajes de esta conversación?\n\nEsta acción eliminará el historial únicamente de tu cuenta y no podrá deshacerse.'
+                  );
+
+                  if (!confirmar) {
+                    return;
+                  }
+
+                  // Aquí irá la llamada al backend
+                }}
+                className="w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
+              >
+                🗑️ Vaciar chat
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarMenu(false);
+
+                  // Bloquear usuario
+                }}
+                className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                🚫 Bloquear
+              </button> */}
+            </div>
+          )}
         </div>
       </div>
 

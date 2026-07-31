@@ -10,6 +10,8 @@ import {
   Search,
   Edit,
   RefreshCw,
+  MoreVertical,
+  Trash2,
   ArrowLeft,
 } from 'lucide-react';
 
@@ -503,6 +505,114 @@ export default function ChatListScreen() {
           },
     });
   };
+  const [mostrarMenu, setMostrarMenu] = useState(false);
+  const [modoSeleccion, setModoSeleccion] =
+  useState(false);
+  const [chatsSeleccionados, setChatsSeleccionados] =
+    useState<number[]>([]);
+
+  const alternarSeleccionChat = (id: number) => {
+    setChatsSeleccionados((actuales) =>
+      actuales.includes(id)
+        ? actuales.filter(
+            (chatId) => chatId !== id
+          )
+        : [...actuales, id]
+    );
+  };  
+
+  const eliminarChatsSeleccionados =
+  async () => {
+    if (chatsSeleccionados.length === 0) {
+      return;
+    }
+
+    const cantidad =
+      chatsSeleccionados.length;
+
+    const confirmar = window.confirm(
+      `¿Estás seguro de que deseas eliminar ${cantidad} chat(s)?\n\nEsta acción eliminará todos sus mensajes y no se puede deshacer.`
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setError('');
+
+      const respuesta = await fetch(
+        'http://localhost:3000/api/chat/conversaciones',
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            rol: rolActual,
+            idUsuario,
+            contactos:
+              chatsSeleccionados,
+          }),
+        }
+      );
+
+      const texto =
+        await respuesta.text();
+
+      let datos: any = {};
+
+      if (texto) {
+        try {
+          datos = JSON.parse(texto);
+        } catch {
+          throw new Error(
+            `El servidor devolvió una respuesta inválida ${respuesta.status}: ${texto}`
+          );
+        }
+      }
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.detalle ||
+            datos?.mensaje ||
+            'No se pudieron eliminar los chats'
+        );
+      }
+
+      // Quitar inmediatamente los chats de la pantalla.
+      setConversaciones(
+        (conversacionesActuales) =>
+          conversacionesActuales.filter(
+            (conversacion) =>
+              !chatsSeleccionados.includes(
+                conversacion.id
+              )
+          )
+      );
+
+      setChatsSeleccionados([]);
+      setModoSeleccion(false);
+
+      alert(
+        datos?.mensaje ||
+          'Chats eliminados correctamente'
+      );
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : 'Error al eliminar los chats';
+
+      console.error(
+        'Error al eliminar chats:',
+        error
+      );
+
+      setError(mensaje);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -545,14 +655,45 @@ export default function ChatListScreen() {
               />
             </button>
 
-            <button
-              type="button"
-              onClick={abrirContactos}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary"
-              title="Nuevo mensaje"
-            >
-              <Edit className="h-4 w-4 text-[#1A56DB]" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMostrarMenu(!mostrarMenu)}
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-secondary"
+                title="Opciones"
+              >
+                <MoreVertical className="w-4 h-4 text-[#1A56DB]" />
+              </button>
+
+              {mostrarMenu && (
+                <div className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarMenu(false);
+                      abrirContactos();
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
+                  >
+                    <Edit className="w-4 h-4 text-[#1A56DB]" />
+                    Nuevo chat
+                  </button>
+                  {/* eliminar chat */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarMenu(false);
+                      setModoSeleccion(true);
+                      setChatsSeleccionados([]);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar chats
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -613,13 +754,41 @@ export default function ChatListScreen() {
               transition={{
                 delay: indice * 0.04,
               }}
-              onClick={() =>
+              onClick={() => {
+                if (modoSeleccion) {
+                  alternarSeleccionChat(
+                    conversacion.id
+                  );
+                  return;
+                }
+
                 navigate(
                   `/home/chat/${conversacion.id}`
-                )
-              }
+                );
+              }}
               className="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-3.5 hover:bg-muted/50"
             >
+
+              {modoSeleccion && (
+                <div
+                  className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                    chatsSeleccionados.includes(
+                      conversacion.id
+                    )
+                      ? 'border-[#1A56DB] bg-[#1A56DB]'
+                      : 'border-gray-400'
+                  }`}
+                >
+                  {chatsSeleccionados.includes(
+                    conversacion.id
+                  ) && (
+                    <span className="text-xs font-bold text-white">
+                      ✓
+                    </span>
+                  )}
+                </div>
+              )}
+
           {/* Foto */}
           <div className="relative flex-shrink-0">
             <ImageWithFallback
@@ -697,6 +866,41 @@ export default function ChatListScreen() {
           </div>
         )}
       </div>
+
+        {modoSeleccion && (
+          <div className="absolute bottom-0 left-0 right-0 z-50 border-t border-border bg-card px-4 py-3 shadow-lg">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setModoSeleccion(false);
+                  setChatsSeleccionados([]);
+                }}
+                className="rounded-xl bg-secondary px-4 py-2 text-sm font-semibold"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  chatsSeleccionados.length === 0
+                }
+                onClick={
+                  eliminarChatsSeleccionados
+                }
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Eliminar seleccionados
+                {chatsSeleccionados.length > 0
+                  ? ` (${chatsSeleccionados.length})`
+                  : ''}
+              </button>
+
+            </div>
+          </div>
+        )}
+
 
       {/* Selector de contactos */}
       {mostrarContactos && (
