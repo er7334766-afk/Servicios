@@ -5459,7 +5459,7 @@ app.get('/api/reservas/:id', async (req, res) => {
       return res.status(400).json({ mensaje: 'ID de reserva inválido' });
     }
 
-    const [rows]: any = await database.execute(
+    const [rows]: any = await database.query(
       `
       SELECT
         r.id_reserva,
@@ -5488,6 +5488,44 @@ app.get('/api/reservas/:id', async (req, res) => {
   }
 });
 
+app.get('/api/reservas/servicio/:idServicio', async (req, res) => {
+  try {
+    const idServicio = Number(req.params.idServicio);
+
+    if (!Number.isInteger(idServicio) || idServicio <= 0) {
+      return res.status(400).json({ mensaje: 'ID de servicio inválido' });
+    }
+
+    const [rows]: any = await database.query(
+      `
+      SELECT TOP 1
+        r.id_reserva,
+        r.id_servicio,
+        r.id_empleado,
+        r.descripcion,
+        r.fecha,
+        r.hora,
+        e.nombre AS nombre_empleado,
+        e.foto_url AS foto_empleado
+      FROM reservas r
+      LEFT JOIN empleados e ON e.id_empleado = r.id_empleado
+      WHERE r.id_servicio = ?
+      ORDER BY r.fecha_creacion DESC, r.id_reserva DESC
+      `,
+      [idServicio]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ mensaje: 'No existe una reserva para este servicio' });
+    }
+
+    return res.status(200).json({ reserva: rows[0] });
+  } catch (error: any) {
+    console.error('Error al obtener reserva por servicio:', error);
+    return res.status(500).json({ mensaje: 'Error al consultar la reserva por servicio', detalle: error.message });
+  }
+});
+
 app.post('/api/resenas', async (req, res) => {
   try {
     const {
@@ -5500,9 +5538,33 @@ app.post('/api/resenas', async (req, res) => {
       comentario,
     } = req.body;
 
-    if (!id_reserva || !id_empleado || !calificacion_general) {
-      return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
+    const idReserva = Number(id_reserva);
+    const idEmpleado = Number(id_empleado);
+    const calificacionGeneral = Number(calificacion_general);
+
+    if (!Number.isInteger(idReserva) || idReserva <= 0) {
+      return res.status(400).json({ mensaje: 'Falta un id_reserva válido' });
     }
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      return res.status(400).json({ mensaje: 'Falta un id_empleado válido' });
+    }
+
+    if (!Number.isInteger(calificacionGeneral) || calificacionGeneral < 1 || calificacionGeneral > 5) {
+      return res.status(400).json({ mensaje: 'La calificación general debe estar entre 1 y 5' });
+    }
+
+    const parseOpcional = (valor: unknown) => {
+      if (valor === undefined || valor === null || valor === '') return null;
+
+      const numero = Number(valor);
+      return Number.isInteger(numero) && numero >= 1 && numero <= 5 ? numero : null;
+    };
+
+    const puntualidadValue = parseOpcional(puntualidad);
+    const calidadValue = parseOpcional(calidad);
+    const comunicacionValue = parseOpcional(comunicacion);
+    const comentarioValue = typeof comentario === 'string' ? comentario.trim() || null : null;
 
     const [resultado]: any = await database.execute(
       `
@@ -5519,13 +5581,13 @@ app.post('/api/resenas', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
       `,
       [
-        id_reserva,
-        id_empleado,
-        calificacion_general,
-        puntualidad || null,
-        calidad || null,
-        comunicacion || null,
-        comentario || null,
+        idReserva,
+        idEmpleado,
+        calificacionGeneral,
+        puntualidadValue,
+        calidadValue,
+        comunicacionValue,
+        comentarioValue,
       ]
     );
 

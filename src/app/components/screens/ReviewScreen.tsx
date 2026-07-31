@@ -6,22 +6,18 @@ import { ChevronLeft, Send } from 'lucide-react';
 import { StarRating } from '../shared/StarRating';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
-
-interface Reserva {
-  id_reserva: number;
-  id_empleado: number;
-  descripcion?: string;
-  fecha?: string;
-  hora?: string;
-  nombre_empleado?: string;
-  foto_empleado?: string;
-}
+import {
+  crearResena,
+  obtenerReservaPorId,
+  obtenerReservaPorServicio,
+  type ReservaDetalle,
+} from '../../services/reservasApi';
 
 export default function ReviewScreen() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
 
-  const [reserva, setReserva] = useState<Reserva | null>(null);
+  const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
@@ -32,25 +28,60 @@ export default function ReviewScreen() {
   const [communication, setCommunication] = useState(0);
   const [comment, setComment] = useState('');
 
+  const parseRouteId = (value?: string): number | null => {
+    if (!value) return null;
+
+    const trimmed = value.trim();
+    const numeric = Number(trimmed);
+
+    if (Number.isInteger(numeric) && numeric > 0) {
+      return numeric;
+    }
+
+    const match = /^b(\d+)$/i.exec(trimmed);
+    if (match) {
+      const extracted = Number(match[1]);
+      if (Number.isInteger(extracted) && extracted > 0) {
+        return extracted;
+      }
+    }
+
+    return null;
+  };
+
   useEffect(() => {
     const obtenerReserva = async () => {
       try {
         setCargando(true);
         setError('');
 
-        const respuesta = await fetch(
-          `http://localhost:3000/api/reservas/${bookingId}`
-        );
-
-        if (!respuesta.ok) {
-          throw new Error('No se pudo obtener la reserva');
+        if (!bookingId) {
+          throw new Error('No se recibió el identificador de la reserva');
         }
 
-        const datos = await respuesta.json();
+        const idSolicitado = parseRouteId(bookingId);
 
-        console.log('Reserva recibida:', datos);
+        if (!idSolicitado) {
+          throw new Error('El identificador de la reserva no es válido');
+        }
 
-        setReserva(datos.reserva ?? datos);
+        let reservaEncontrada: ReservaDetalle | null = null;
+
+        try {
+          reservaEncontrada = await obtenerReservaPorId(idSolicitado);
+        } catch {
+          try {
+            reservaEncontrada = await obtenerReservaPorServicio(idSolicitado);
+          } catch {
+            reservaEncontrada = null;
+          }
+        }
+
+        if (!reservaEncontrada) {
+          throw new Error('No se encontró la reserva o servicio asociado');
+        }
+
+        setReserva(reservaEncontrada);
       } catch (error) {
         console.error('Error al obtener la reserva:', error);
         setError('No se pudo cargar la información del servicio');
@@ -59,12 +90,7 @@ export default function ReviewScreen() {
       }
     };
 
-    if (bookingId) {
-      obtenerReserva();
-    } else {
-      setError('No se recibió el identificador de la reserva');
-      setCargando(false);
-    }
+    obtenerReserva();
   }, [bookingId]);
 
   const handleSubmit = async () => {
@@ -81,30 +107,15 @@ export default function ReviewScreen() {
     try {
       setEnviando(true);
 
-      const respuesta = await fetch(
-        'http://localhost:3000/api/resenas',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id_reserva: reserva.id_reserva,
-            id_empleado: reserva.id_empleado,
-            calificacion_general: overall,
-            puntualidad: punctuality,
-            calidad: quality,
-            comunicacion: communication,
-            comentario: comment.trim(),
-          }),
-        }
-      );
-
-      const datos = await respuesta.json();
-
-      if (!respuesta.ok) {
-        throw new Error(datos.mensaje || 'No se pudo enviar la reseña');
-      }
+      await crearResena({
+        id_reserva: reserva.id_reserva,
+        id_empleado: reserva.id_empleado,
+        calificacion_general: overall,
+        puntualidad: punctuality || null,
+        calidad: quality || null,
+        comunicacion: communication || null,
+        comentario: comment.trim() || null,
+      });
 
       toast.success('Reseña enviada', {
         description: `Gracias por calificar a ${
