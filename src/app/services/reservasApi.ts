@@ -1,4 +1,4 @@
-const API_URL = '/api';
+const API_URL = 'http://localhost:3000/api';
 
 export interface ReservaDetalle {
   id_reserva: number;

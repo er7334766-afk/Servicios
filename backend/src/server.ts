@@ -3513,9 +3513,7 @@ app.get(
 );
 
 
-// ==========================================
-// CONVERSACIONES DE UN EMPLEADO
-// ==========================================
+
 // ==========================================
 // CONVERSACIONES DE UN EMPLEADO
 // ==========================================
@@ -3631,9 +3629,7 @@ app.get(
   }
 );
 
-// ==========================================
-// CONVERSACIONES DE UN CLIENTE
-// ==========================================
+
 // ==========================================
 // CONVERSACIONES DE UN CLIENTE
 // ==========================================
@@ -5415,12 +5411,7 @@ app.get(
     }
   }
 );
-// ==========================================
-// INICIO DEL SERVIDOR
-// ==========================================
-app.listen(port, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${port}`);
-});
+
 
 // ==========================================
 // AGENDA / RESERVAS
@@ -5633,32 +5624,32 @@ app.post('/api/resenas', async (req, res) => {
       : 'NULL';
 
     const respuesta: any =
-      await database.query(`
-        INSERT INTO resenas
-        (
-          id_reserva,
-          id_empleado,
-          calificacion_general,
-          puntualidad,
-          calidad,
-          comunicacion,
-          comentario,
-          fecha_creacion
-        )
-        VALUES
-        (
-          ${idReserva},
-          ${idEmpleado},
-          ${calificacionGeneral},
-          ${calificacionPuntualidad},
-          ${calificacionCalidad},
-          ${calificacionComunicacion},
-          ${comentarioSql},
-          GETDATE()
-        );
+  await database.query(`
+    INSERT INTO resenas
+    (
+      id_reserva,
+      id_empleado,
+      calificacion_general,
+      puntualidad,
+      calidad,
+      comunicacion,
+      comentario,
+      fecha
+    )
+    VALUES
+    (
+      ${idReserva},
+      ${idEmpleado},
+      ${calificacionGeneral},
+      ${calificacionPuntualidad},
+      ${calificacionCalidad},
+      ${calificacionComunicacion},
+      ${comentarioSql},
+      GETDATE()
+    );
 
-        SELECT SCOPE_IDENTITY() AS id_resena;
-      `);
+    SELECT SCOPE_IDENTITY() AS id_resena;
+  `);
 
     const fila =
       respuesta?.recordset?.[0] ??
@@ -5686,4 +5677,158 @@ app.post('/api/resenas', async (req, res) => {
         String(error),
     });
   }
+});
+
+// ==========================================
+// MÉTODOS DE PAGO
+// ==========================================
+
+app.get('/api/payment-methods/:idUsuario', async (req, res) => {
+  try {
+    const idUsuario = Number(req.params.idUsuario);
+
+    if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de usuario inválido',
+      });
+    }
+
+    const respuesta: any = await database.query(`
+      SELECT
+        id_payment_method,
+        fk_usuario,
+        tipo,
+        titular,
+        numero_enmascarado,
+        expiracion,
+        fecha_creacion
+      FROM payment_methods
+      WHERE fk_usuario = ${idUsuario}
+      ORDER BY id_payment_method DESC;
+    `);
+
+    const filas: any[] =
+      Array.isArray(respuesta?.recordset)
+        ? respuesta.recordset
+        : Array.isArray(respuesta?.recordsets?.[0])
+          ? respuesta.recordsets[0]
+          : Array.isArray(respuesta?.[0])
+            ? respuesta[0]
+            : Array.isArray(respuesta?.rows)
+              ? respuesta.rows
+              : [];
+
+    return res.status(200).json(filas);
+  } catch (error: any) {
+    console.error('Error al obtener métodos de pago:', error);
+
+    return res.status(500).json({
+      mensaje: 'Error al obtener métodos de pago',
+      detalle: error?.message || String(error),
+    });
+  }
+});
+
+app.post('/api/payment-methods', async (req, res) => {
+  try {
+    const {
+      fk_usuario,
+      tipo,
+      titular,
+      numero_enmascarado,
+      expiracion,
+    } = req.body;
+
+    const idUsuario = Number(fk_usuario);
+
+    if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({
+        mensaje: 'ID de usuario inválido',
+      });
+    }
+
+    if (
+      typeof titular !== 'string' ||
+      titular.trim().length < 2
+    ) {
+      return res.status(400).json({
+        mensaje: 'El titular no es válido',
+      });
+    }
+
+    if (
+      typeof numero_enmascarado !== 'string' ||
+      !numero_enmascarado.trim()
+    ) {
+      return res.status(400).json({
+        mensaje: 'El número de tarjeta es obligatorio',
+      });
+    }
+
+    const titularSeguro = titular
+      .trim()
+      .replace(/'/g, "''");
+
+    const numeroSeguro = numero_enmascarado
+      .trim()
+      .replace(/'/g, "''");
+
+    const tipoSeguro = String(tipo || 'card')
+      .trim()
+      .replace(/'/g, "''");
+
+    const expiracionSql =
+      typeof expiracion === 'string' && expiracion.trim()
+        ? `'${expiracion.trim().replace(/'/g, "''")}'`
+        : 'NULL';
+
+    const respuesta: any = await database.query(`
+      INSERT INTO payment_methods
+      (
+        fk_usuario,
+        tipo,
+        titular,
+        numero_enmascarado,
+        expiracion,
+        fecha_creacion
+      )
+      VALUES
+      (
+        ${idUsuario},
+        '${tipoSeguro}',
+        '${titularSeguro}',
+        '${numeroSeguro}',
+        ${expiracionSql},
+        GETDATE()
+      );
+
+      SELECT SCOPE_IDENTITY() AS id_payment_method;
+    `);
+
+    const fila =
+      respuesta?.recordset?.[0] ??
+      respuesta?.recordsets?.[0]?.[0] ??
+      respuesta?.[0]?.[0] ??
+      null;
+
+    return res.status(201).json({
+      mensaje: 'Método de pago guardado correctamente',
+      id_payment_method:
+        fila?.id_payment_method ?? null,
+    });
+  } catch (error: any) {
+    console.error('Error al guardar método de pago:', error);
+
+    return res.status(500).json({
+      mensaje: 'Error al guardar el método de pago',
+      detalle: error?.message || String(error),
+    });
+  }
+});
+
+// ==========================================
+// INICIO DEL SERVIDOR
+// ==========================================
+app.listen(port, () => {
+  console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });

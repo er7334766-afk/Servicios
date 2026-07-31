@@ -8,48 +8,43 @@ import { toast } from 'sonner';
 
 import {
   crearResena,
-  obtenerReservaPorId,
   obtenerReservaPorServicio,
   type ReservaDetalle,
 } from '../../services/reservasApi';
 
 export default function ReviewScreen() {
-  const { idServicio } = useParams<{ idServicio: string }>();
+  const { idServicio } = useParams<{
+    idServicio: string;
+  }>();
+
   const navigate = useNavigate();
 
-  const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState('');
+  const [reserva, setReserva] =
+    useState<ReservaDetalle | null>(null);
 
-  const [overall, setOverall] = useState(0);
-  const [punctuality, setPunctuality] = useState(0);
-  const [quality, setQuality] = useState(0);
-  const [communication, setCommunication] = useState(0);
-  const [comment, setComment] = useState('');
+  const [cargando, setCargando] =
+    useState(true);
 
-  const parseRouteId = (value?: string): number | null => {
-    if (!value) return null;
+  const [enviando, setEnviando] =
+    useState(false);
 
-    const trimmed = value.trim();
-    const numeric = Number(trimmed);
+  const [error, setError] =
+    useState('');
 
-    if (Number.isInteger(numeric) && numeric > 0) {
-      return numeric;
-    }
+  const [overall, setOverall] =
+    useState(0);
 
-    const match = /^b(\d+)$/i.exec(trimmed);
+  const [punctuality, setPunctuality] =
+    useState(0);
 
-    if (match) {
-      const extracted = Number(match[1]);
+  const [quality, setQuality] =
+    useState(0);
 
-      if (Number.isInteger(extracted) && extracted > 0) {
-        return extracted;
-      }
-    }
+  const [communication, setCommunication] =
+    useState(0);
 
-    return null;
-  };
+  const [comment, setComment] =
+    useState('');
 
   useEffect(() => {
     async function cargarReserva() {
@@ -57,32 +52,64 @@ export default function ReviewScreen() {
         setCargando(true);
         setError('');
 
-        const idSolicitado = parseRouteId(idServicio);
+        const idServicioNumero =
+          Number(idServicio);
 
-        if (!idSolicitado) {
-          throw new Error('El identificador del servicio no es válido');
-        }
-
-        let reservaEncontrada: ReservaDetalle | null = null;
-
-        try {
-          reservaEncontrada = await obtenerReservaPorId(idSolicitado);
-        } catch {
-          try {
-            reservaEncontrada =
-              await obtenerReservaPorServicio(idSolicitado);
-          } catch {
-            reservaEncontrada = null;
-          }
-        }
-
-        if (!reservaEncontrada) {
+        if (
+          !Number.isInteger(idServicioNumero) ||
+          idServicioNumero <= 0
+        ) {
           throw new Error(
-            'No se encontró la reserva o servicio asociado',
+            'El identificador del servicio no es válido',
           );
         }
 
-        setReserva(reservaEncontrada);
+        const reservaEncontrada =
+          await obtenerReservaPorServicio(
+            idServicioNumero,
+          );
+
+        if (!reservaEncontrada) {
+          throw new Error(
+            'No se encontró la reserva asociada al servicio',
+          );
+        }
+
+        const idReserva = Number(
+          reservaEncontrada.id_reserva,
+        );
+
+        const idEmpleado = Number(
+          reservaEncontrada.id_empleado,
+        );
+
+        if (
+          !Number.isInteger(idReserva) ||
+          idReserva <= 0
+        ) {
+          throw new Error(
+            'El identificador de la reserva no es válido',
+          );
+        }
+
+        if (
+          !Number.isInteger(idEmpleado) ||
+          idEmpleado <= 0
+        ) {
+          throw new Error(
+            'No se encontró el trabajador asociado',
+          );
+        }
+
+        setReserva({
+          ...reservaEncontrada,
+          id_reserva: idReserva,
+          id_empleado: idEmpleado,
+          id_servicio:
+            Number(
+              reservaEncontrada.id_servicio,
+            ) || idServicioNumero,
+        });
       } catch (errorDesconocido) {
         console.error(
           'Error al obtener la reserva:',
@@ -90,6 +117,7 @@ export default function ReviewScreen() {
         );
 
         setReserva(null);
+
         setError(
           errorDesconocido instanceof Error
             ? errorDesconocido.message
@@ -106,14 +134,17 @@ export default function ReviewScreen() {
   async function handleSubmit() {
     if (!reserva) {
       toast.error(
-        'No se encontró la información de la reserva.',
+        'No se encontró la información de la reserva',
       );
       return;
     }
 
-    if (overall < 1 || overall > 5) {
+    if (
+      overall < 1 ||
+      overall > 5
+    ) {
       toast.error(
-        'Selecciona una calificación general.',
+        'Selecciona una calificación general',
       );
       return;
     }
@@ -123,7 +154,7 @@ export default function ReviewScreen() {
       punctuality > 5
     ) {
       toast.error(
-        'Selecciona una calificación de puntualidad.',
+        'Selecciona una calificación de puntualidad',
       );
       return;
     }
@@ -133,7 +164,7 @@ export default function ReviewScreen() {
       quality > 5
     ) {
       toast.error(
-        'Selecciona una calificación de calidad.',
+        'Selecciona una calificación de calidad',
       );
       return;
     }
@@ -143,7 +174,7 @@ export default function ReviewScreen() {
       communication > 5
     ) {
       toast.error(
-        'Selecciona una calificación de comunicación.',
+        'Selecciona una calificación de comunicación',
       );
       return;
     }
@@ -151,32 +182,50 @@ export default function ReviewScreen() {
     try {
       setEnviando(true);
 
-
       await crearResena({
-        id_reserva: reserva.id_reserva,
-        id_empleado: reserva.id_empleado,
-        calificacion_general: overall,
-        puntualidad: punctuality || null,
-        calidad: quality || null,
-        comunicacion: communication || null,
-        comentario: comment.trim() || null,
+        id_reserva:
+          Number(reserva.id_reserva),
+
+        id_empleado:
+          Number(reserva.id_empleado),
+
+        calificacion_general:
+          overall,
+
+        puntualidad:
+          punctuality,
+
+        calidad:
+          quality,
+
+        comunicacion:
+          communication,
+
+        comentario:
+          comment.trim() || null,
       });
 
-
       toast.success(
-        'Reseña enviada',
+        'Reseña enviada correctamente',
         {
           description:
             `Gracias por calificar a ${
               reserva.nombre_empleado ||
               'este trabajador'
-            }.`,
+            }`,
         },
       );
 
+      const servicioDestino =
+        Number(reserva.id_servicio) ||
+        Number(idServicio);
+
       window.setTimeout(() => {
         navigate(
-          `/home/contratacion/${reserva.id_servicio}`,
+          `/home/contratacion/${servicioDestino}`,
+          {
+            replace: true,
+          },
         );
       }, 800);
     } catch (errorDesconocido) {
@@ -188,14 +237,14 @@ export default function ReviewScreen() {
       toast.error(
         errorDesconocido instanceof Error
           ? errorDesconocido.message
-          : 'No se pudo enviar la reseña.',
+          : 'No se pudo enviar la reseña',
       );
     } finally {
       setEnviando(false);
     }
   }
 
-  const criteria = [
+  const criterios = [
     {
       label: 'Puntualidad',
       value: punctuality,
@@ -215,9 +264,13 @@ export default function ReviewScreen() {
 
   const formularioValido =
     overall >= 1 &&
+    overall <= 5 &&
     punctuality >= 1 &&
+    punctuality <= 5 &&
     quality >= 1 &&
+    quality <= 5 &&
     communication >= 1 &&
+    communication <= 5 &&
     !enviando;
 
   if (cargando) {
@@ -235,7 +288,7 @@ export default function ReviewScreen() {
       <div className="flex min-h-full flex-col items-center justify-center px-6">
         <p className="text-center text-sm text-red-500">
           {error ||
-            'Reserva no encontrada.'}
+            'Reserva no encontrada'}
         </p>
 
         <button
@@ -251,7 +304,7 @@ export default function ReviewScreen() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="border-b border-border bg-card px-4 pb-4 pt-10">
+      <header className="border-b border-border bg-card px-4 pb-4 pt-10">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -268,14 +321,16 @@ export default function ReviewScreen() {
             </h1>
 
             <p className="text-xs text-muted-foreground">
-              Servicio #{reserva.id_servicio}
+              Servicio #
+              {reserva.id_servicio ||
+                idServicio}
             </p>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
+      <main className="flex-1 overflow-y-auto px-5 py-5">
+        <section className="mb-6 flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ImageWithFallback
             src={
               reserva.foto_empleado ||
@@ -288,8 +343,8 @@ export default function ReviewScreen() {
             className="h-14 w-14 rounded-xl object-cover"
           />
 
-          <div>
-            <p className="font-semibold text-foreground">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-foreground">
               {reserva.nombre_empleado ||
                 'Trabajador'}
             </p>
@@ -308,9 +363,9 @@ export default function ReviewScreen() {
                 : ''}
             </p>
           </div>
-        </div>
+        </section>
 
-        <div className="mb-8 text-center">
+        <section className="mb-8 text-center">
           <p className="mb-4 text-base font-semibold text-foreground">
             ¿Cómo fue tu experiencia?
           </p>
@@ -331,6 +386,7 @@ export default function ReviewScreen() {
                     setOverall(valor)
                   }
                   className="flex flex-col items-center gap-1"
+                  aria-label={`Calificación general ${valor} de 5`}
                 >
                   <div
                     className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl transition-all ${
@@ -376,10 +432,10 @@ export default function ReviewScreen() {
               }
             </motion.p>
           )}
-        </div>
+        </section>
 
-        <div className="mb-6 flex flex-col gap-4">
-          {criteria.map(
+        <section className="mb-6 flex flex-col gap-4">
+          {criterios.map(
             ({
               label,
               value,
@@ -410,9 +466,9 @@ export default function ReviewScreen() {
               </div>
             ),
           )}
-        </div>
+        </section>
 
-        <div className="mb-6">
+        <section className="mb-6">
           <label
             htmlFor="comentario-resena"
             className="mb-2 block text-sm font-semibold text-foreground"
@@ -437,14 +493,18 @@ export default function ReviewScreen() {
           <p className="mt-1 text-right text-xs text-muted-foreground">
             {comment.length}/300
           </p>
-        </div>
+        </section>
 
         <motion.button
           whileTap={{
-            scale: 0.97,
+            scale: formularioValido
+              ? 0.97
+              : 1,
           }}
           type="button"
-          onClick={() => void handleSubmit()}
+          onClick={() =>
+            void handleSubmit()
+          }
           disabled={!formularioValido}
           className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A56DB] py-3.5 font-semibold text-white shadow-lg shadow-[#1A56DB]/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -454,7 +514,7 @@ export default function ReviewScreen() {
             ? 'Enviando...'
             : 'Enviar reseña'}
         </motion.button>
-      </div>
+      </main>
     </div>
   );
 }
