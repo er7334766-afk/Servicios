@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -36,6 +36,7 @@ interface ServicioGestion {
   estado: EstadoServicio;
   nombre_cliente: string;
   nombre_empleado: string;
+  tiene_resena?: boolean;
 }
 
 interface ServicioApi {
@@ -55,6 +56,7 @@ interface ServicioApi {
   nombre_cliente?: string | null;
   nombre_empleado?: string | null;
   nombre_E?: string | null;
+  total_resenas?: number | string | null;
 }
 const MOTIVOS_TRABAJADOR = [
   'Emergencia personal',
@@ -126,11 +128,14 @@ function formatearPrecio(precio: number): string {
 
 export default function ServiceManagementScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { idServicio } = useParams();
   const { role } = useApp();
 
   const esTrabajador = role === 'worker';
   const servicioId = Number(idServicio);
+  const pagoCompletado = location.state?.paymentCompleted === true;
+  const [pagoPersistido, setPagoPersistido] = useState(false);
 
   const [servicio, setServicio] = useState<ServicioGestion | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -144,6 +149,20 @@ export default function ServiceManagementScreen() {
     'cliente' | 'empleado' | null
   >(null);
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
+
+  useEffect(() => {
+    if (Number.isInteger(servicioId) && servicioId > 0) {
+      const pago = localStorage.getItem(`servicio_pago_${servicioId}`) === 'true';
+      setPagoPersistido(pago);
+    }
+  }, [servicioId]);
+
+  useEffect(() => {
+    if (pagoCompletado && Number.isInteger(servicioId) && servicioId > 0) {
+      localStorage.setItem(`servicio_pago_${servicioId}`, 'true');
+      setPagoPersistido(true);
+    }
+  }, [pagoCompletado, servicioId]);
 
   useEffect(() => {
     async function cargarServicio() {
@@ -204,6 +223,8 @@ export default function ServiceManagementScreen() {
             datos.nombre_empleado?.trim() ||
             datos.nombre_E?.trim() ||
             'Trabajador asignado',
+          tiene_resena:
+            Number(datos.total_resenas ?? 0) > 0,
         });
       } catch (errorDesconocido) {
         setError(
@@ -711,6 +732,24 @@ export default function ServiceManagementScreen() {
             <motion.button
               whileTap={{ scale: 0.98 }}
               type="button"
+              onClick={() =>
+                navigate('/home/payment', {
+                  state: {
+                    returnTo: `/home/contratacion/${servicio.id_servicio}`,
+                    serviceId: servicio.id_servicio,
+                    serviceTitle: servicio.titulo,
+                    serviceTotal: servicio.presupuesto,
+                  },
+                })
+              }
+              className="w-full rounded-xl bg-[#1A56DB] px-4 py-3 text-sm font-bold text-white"
+            >
+              Proceder al pago
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              type="button"
               disabled={guardando}
               onClick={abrirModalCancelacion}
               className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 disabled:opacity-50"
@@ -720,59 +759,79 @@ export default function ServiceManagementScreen() {
           </section>
         )}
 
-      {/* Servicio completado */}
-      {servicio.estado === 'Completado' && (
+      {/* Servicio completado / pago realizado */}
+      {((servicio.estado === 'Completado' || pagoCompletado) && !esTrabajador) && (
         <section className="space-y-3 pb-4">
           <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-center">
             <CheckCircle className="mx-auto h-8 w-8 text-green-600" />
 
             <p className="mt-2 text-sm font-bold text-green-700">
-              Servicio completado
+              {pagoCompletado
+                ? 'Pago realizado correctamente'
+                : 'Servicio completado'}
             </p>
           </div>
-
-          {!esTrabajador && (
+{!esTrabajador && (
   <>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/home/contratacion/${servicio.id_servicio}/pago`
-                )
-              }
-              className="w-full rounded-xl bg-[#1A56DB] px-4 py-3.5 text-sm font-bold text-white"
-            >
-              Realizar pago
-            </motion.button>
+    <motion.button
+      whileTap={{ scale: pagoPersistido ? 1 : 0.98 }}
+      type="button"
+      disabled={pagoPersistido}
+      onClick={() =>
+        !pagoPersistido &&
+        navigate('/home/payment', {
+          state: {
+            returnTo: `/home/contratacion/${servicio.id_servicio}`,
+            serviceId: servicio.id_servicio,
+            serviceTitle: servicio.titulo,
+            serviceTotal: servicio.presupuesto,
+          },
+        })
+      }
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A56DB] px-4 py-3.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="text-lg">💳</span>
 
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/home/contratacion/${servicio.id_servicio}/calificar`
-                )
-              }
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-white"
-            >
-              ⭐ Calificar servicio
-            </motion.button>
+      {pagoPersistido
+        ? 'Pago realizado'
+        : 'Proceder al pago'}
+    </motion.button>
 
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/home/contratacion/${servicio.id_servicio}/reportar`
-                )
-              }
-              className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-bold text-red-600"
-            >
-              Reportar problema
-            </motion.button>
-          </>
-        )}
+    <motion.button
+      whileTap={{
+        scale: servicio?.tiene_resena ? 1 : 0.97,
+      }}
+      type="button"
+      disabled={servicio?.tiene_resena}
+      onClick={() =>
+        !servicio?.tiene_resena &&
+        navigate(
+          `/home/contratacion/${servicio.id_servicio}/calificar`,
+        )
+      }
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="text-lg">⭐</span>
+
+      {servicio?.tiene_resena
+        ? 'Servicio calificado'
+        : 'Calificar servicio'}
+    </motion.button>
+
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      type="button"
+      onClick={() =>
+        navigate(
+          `/home/contratacion/${servicio.id_servicio}/reportar`,
+        )
+      }
+      className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-bold text-red-600"
+    >
+      Reportar problema
+    </motion.button>
+  </>
+)}
         </section>
       )}
       </main>

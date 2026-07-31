@@ -1830,6 +1830,12 @@ app.get('/api/servicios/:id', async (req, res) => {
 
           e.nombre AS nombre_empleado,
 
+          (SELECT COUNT(*)
+           FROM resenas r
+           JOIN reservas re ON re.id_reserva = r.id_reserva
+           WHERE re.id_servicio = s.id_servicio
+          ) AS total_resenas,
+
           cat.nombre AS nombre_categoria
 
         FROM servicios AS s

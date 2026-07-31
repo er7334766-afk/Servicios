@@ -6,181 +6,83 @@ import { StarRating } from '../shared/StarRating';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { toast } from 'sonner';
 
-const API_URL = 'http://localhost:3000';
-
-interface Reserva {
-  id_reserva: number;
-  id_servicio: number;
-  id_empleado: number;
-  descripcion?: string;
-  fecha?: string;
-  hora?: string;
-  nombre_empleado?: string;
-  foto_empleado?: string;
-}
-
-interface ReservaApi {
-  reserva?: Reserva;
-  mensaje?: string;
-  detalle?: string;
-}
-
-interface ResenaApi {
-  mensaje?: string;
-  detalle?: string;
-}
-
-async function leerRespuestaJson<T>(
-  respuesta: Response,
-): Promise<T> {
-  const texto = await respuesta.text();
-
-  if (!texto.trim()) {
-    return {} as T;
-  }
-
-  try {
-    return JSON.parse(texto) as T;
-  } catch {
-    throw new Error(
-      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}.`,
-    );
-  }
-}
+import {
+  crearResena,
+  obtenerReservaPorId,
+  obtenerReservaPorServicio,
+  type ReservaDetalle,
+} from '../../services/reservasApi';
 
 export default function ReviewScreen() {
-  const { idServicio } =
-    useParams<{ idServicio: string }>();
-
+  const { idServicio } = useParams<{ idServicio: string }>();
   const navigate = useNavigate();
 
-  const [reserva, setReserva] =
-    useState<Reserva | null>(null);
+  const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
 
-  const [cargando, setCargando] =
-    useState(true);
+  const [overall, setOverall] = useState(0);
+  const [punctuality, setPunctuality] = useState(0);
+  const [quality, setQuality] = useState(0);
+  const [communication, setCommunication] = useState(0);
+  const [comment, setComment] = useState('');
 
-  const [enviando, setEnviando] =
-    useState(false);
+  const parseRouteId = (value?: string): number | null => {
+    if (!value) return null;
 
-  const [error, setError] =
-    useState('');
+    const trimmed = value.trim();
+    const numeric = Number(trimmed);
 
-  const [overall, setOverall] =
-    useState(0);
+    if (Number.isInteger(numeric) && numeric > 0) {
+      return numeric;
+    }
 
-  const [punctuality, setPunctuality] =
-    useState(0);
+    const match = /^b(\d+)$/i.exec(trimmed);
 
-  const [quality, setQuality] =
-    useState(0);
+    if (match) {
+      const extracted = Number(match[1]);
 
-  const [communication, setCommunication] =
-    useState(0);
+      if (Number.isInteger(extracted) && extracted > 0) {
+        return extracted;
+      }
+    }
 
-  const [comment, setComment] =
-    useState('');
+    return null;
+  };
 
   useEffect(() => {
-    async function obtenerReserva() {
-      if (!idServicio) {
-        setError(
-          'No se recibió el identificador del servicio.',
-        );
-        setCargando(false);
-        return;
-      }
-
-      const idServicioNumero = Number(idServicio);
-
-      if (
-        !Number.isInteger(idServicioNumero) ||
-        idServicioNumero <= 0
-      ) {
-        setError(
-          'El identificador del servicio no es válido.',
-        );
-        setCargando(false);
-        return;
-      }
-
+    async function cargarReserva() {
       try {
         setCargando(true);
         setError('');
 
-        const respuesta = await fetch(
-          `${API_URL}/api/reservas/servicio/${idServicioNumero}`,
-        );
+        const idSolicitado = parseRouteId(idServicio);
 
-        const datos =
-          await leerRespuestaJson<ReservaApi>(
-            respuesta,
-          );
+        if (!idSolicitado) {
+          throw new Error('El identificador del servicio no es válido');
+        }
 
-        if (!respuesta.ok) {
+        let reservaEncontrada: ReservaDetalle | null = null;
+
+        try {
+          reservaEncontrada = await obtenerReservaPorId(idSolicitado);
+        } catch {
+          try {
+            reservaEncontrada =
+              await obtenerReservaPorServicio(idSolicitado);
+          } catch {
+            reservaEncontrada = null;
+          }
+        }
+
+        if (!reservaEncontrada) {
           throw new Error(
-            datos.detalle ||
-              datos.mensaje ||
-              'No se pudo obtener la reserva.',
+            'No se encontró la reserva o servicio asociado',
           );
         }
 
-        const reservaRecibida =
-          datos.reserva;
-
-        if (!reservaRecibida) {
-          throw new Error(
-            'No se encontró la reserva relacionada con este servicio.',
-          );
-        }
-
-        const idReserva = Number(
-          reservaRecibida.id_reserva,
-        );
-
-        const idEmpleado = Number(
-          reservaRecibida.id_empleado,
-        );
-
-        if (
-          !Number.isInteger(idReserva) ||
-          idReserva <= 0
-        ) {
-          throw new Error(
-            'La reserva relacionada no es válida.',
-          );
-        }
-
-        if (
-          !Number.isInteger(idEmpleado) ||
-          idEmpleado <= 0
-        ) {
-          throw new Error(
-            'No se encontró el trabajador relacionado.',
-          );
-        }
-
-        setReserva({
-          id_reserva: idReserva,
-          id_servicio: Number(
-            reservaRecibida.id_servicio ??
-              idServicioNumero,
-          ),
-          id_empleado: idEmpleado,
-          descripcion:
-            reservaRecibida.descripcion ||
-            'Servicio realizado',
-          fecha:
-            reservaRecibida.fecha || '',
-          hora:
-            reservaRecibida.hora || '',
-          nombre_empleado:
-            reservaRecibida.nombre_empleado ||
-            'Trabajador',
-          foto_empleado:
-            reservaRecibida.foto_empleado ||
-            '',
-        });
+        setReserva(reservaEncontrada);
       } catch (errorDesconocido) {
         console.error(
           'Error al obtener la reserva:',
@@ -188,18 +90,17 @@ export default function ReviewScreen() {
         );
 
         setReserva(null);
-
         setError(
           errorDesconocido instanceof Error
             ? errorDesconocido.message
-            : 'No se pudo cargar la información del servicio.',
+            : 'No se pudo cargar la información del servicio',
         );
       } finally {
         setCargando(false);
       }
     }
 
-    void obtenerReserva();
+    void cargarReserva();
   }, [idServicio]);
 
   async function handleSubmit() {
@@ -250,44 +151,17 @@ export default function ReviewScreen() {
     try {
       setEnviando(true);
 
-      const respuesta = await fetch(
-        `${API_URL}/api/resenas`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id_reserva:
-              reserva.id_reserva,
-            id_empleado:
-              reserva.id_empleado,
-            calificacion_general:
-              overall,
-            puntualidad:
-              punctuality,
-            calidad:
-              quality,
-            comunicacion:
-              communication,
-            comentario:
-              comment.trim() || null,
-          }),
-        },
-      );
 
-      const datos =
-        await leerRespuestaJson<ResenaApi>(
-          respuesta,
-        );
+      await crearResena({
+        id_reserva: reserva.id_reserva,
+        id_empleado: reserva.id_empleado,
+        calificacion_general: overall,
+        puntualidad: punctuality || null,
+        calidad: quality || null,
+        comunicacion: communication || null,
+        comentario: comment.trim() || null,
+      });
 
-      if (!respuesta.ok) {
-        throw new Error(
-          datos.detalle ||
-            datos.mensaje ||
-            'No se pudo enviar la reseña.',
-        );
-      }
 
       toast.success(
         'Reseña enviada',

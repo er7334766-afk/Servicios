@@ -1,7 +1,7 @@
 //elejir metodo de pago y con otra screen sellecionar el metodo de pago e ingresar los datos de la tarjeta de credito y debito
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -12,17 +12,22 @@ import {
   ChevronRight,
   Wallet,
 } from 'lucide-react';
-import CreditCardScreen from './CreditCardScreen'; //agregado
+import CreditCardScreen from './CreditCardScreen';
+import { useApp } from '../../context/AppContext';
 
 
 export default function PaymentMethodScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selected, setSelected] = useState('card');
-  const [isEnteringCard, setIsEnteringCard] = useState(false); //agregado
+  const [isEnteringCard, setIsEnteringCard] = useState(false);
   const { currentUser } = useApp();
   const [methodsList, setMethodsList] = useState<any[]>([]);
+  const locationState = (location.state as { returnTo?: string; serviceTotal?: number } | null) ?? null;
+  const returnTo = locationState?.returnTo || '/home';
+  const totalPagar = Number(locationState?.serviceTotal ?? 0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         if (!currentUser) return;
@@ -63,16 +68,23 @@ export default function PaymentMethodScreen() {
     if (selected === 'card') {
       setIsEnteringCard(true);
     } else {
-      navigate('/home/review/b1');
+      navigate(returnTo, {
+        state: { paymentCompleted: true },
+      });
     }
   };
 
   if (isEnteringCard) {
     return (
       <CreditCardScreen
-        montoTotal={450} 
-        onBack={() => setIsEnteringCard(false)} 
-        onPaymentSuccess={() => navigate('/home/review/b1')} 
+        montoTotal={totalPagar}
+        onBack={() => setIsEnteringCard(false)}
+        onPaymentSuccess={() =>
+          navigate(returnTo, {
+            replace: true,
+            state: { paymentCompleted: true },
+          })
+        }
       />
     );
   }
@@ -149,7 +161,10 @@ export default function PaymentMethodScreen() {
             </span>
 
             <span className="text-xl font-bold text-[#1A56DB]">
-              L 450.00
+              {new Intl.NumberFormat('es-HN', {
+                style: 'currency',
+                currency: 'HNL',
+              }).format(totalPagar)}
             </span>
           </div>
 
