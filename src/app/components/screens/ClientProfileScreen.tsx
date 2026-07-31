@@ -1,11 +1,15 @@
 //ClientProfileScreen.tsx
 import { useNavigate } from 'react-router';
-import { useState } from 'react'; //agregado
+
 import { motion } from 'motion/react';
 import { Settings, Star, Briefcase, MapPin, Calendar, ChevronRight, LogOut } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
+import {
+  useEffect,
+  useState,
+} from 'react';
 
 // No mock categories imported — use a safe empty list until real categories are loaded
 const SERVICE_CATEGORIES_LOCAL: any[] = [];
@@ -26,6 +30,49 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
 };
 
+interface HistorialServicio {
+  id_servicio: number;
+  id_cliente: number;
+  id_categoria?: number;
+  fk_empleado?: number | null;
+  titulo?: string | null;
+  descripcion?: string | null;
+  direccion?: string | null;
+  presupuesto?: number | null;
+  fecha?: string | null;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
+  estado:
+    | 'pending'
+    | 'accepted'
+    | 'in_progress'
+    | 'completed'
+    | 'cancelled';
+  nombre_categoria?: string | null;
+  id_empleado?: number | null;
+  nombre_empleado?: string | null;
+  foto_empleado?: string | null;
+  id_reserva?: number | null;
+  id_resena?: number | null;
+  tiene_resena?: number | boolean;
+}
+
+interface HistorialResena {
+  id: number;
+  bookingId: number;
+  reviewerName: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
+interface HistorialRespuesta {
+  servicios: HistorialServicio[];
+  resenas: HistorialResena[];
+  total_servicios: number;
+  total_resenas: number;
+}
+
 export default function ClientProfileScreen() {
   const navigate = useNavigate();
   const { currentUser, setCurrentUser } = useApp();
@@ -33,10 +80,105 @@ export default function ClientProfileScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const myBookings: Array<any> = [];
-  const myReviews: Array<any> = [];
+  const [myBookings, setMyBookings] =
+  useState<HistorialServicio[]>([]);
 
-  
+  const [myReviews, setMyReviews] =
+    useState<HistorialResena[]>([]);
+
+  const [cargandoHistorial, setCargandoHistorial] =
+    useState(true);
+
+
+    useEffect(() => {
+  async function cargarHistorial() {
+    try {
+      setCargandoHistorial(true);
+      setErrorMessage('');
+
+      const idCliente = Number(
+        currentUser?.id,
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        throw new Error(
+          'No se encontró el identificador del cliente',
+        );
+      }
+
+      const respuesta = await fetch(
+        `http://localhost:3000/api/clientes/${idCliente}/historial`,
+        {
+          cache: 'no-store',
+        },
+      );
+
+      const texto =
+        await respuesta.text();
+
+      let datos: Partial<HistorialRespuesta> & {
+        mensaje?: string;
+        detalle?: string;
+      } = {};
+
+      if (texto.trim()) {
+        try {
+          datos = JSON.parse(texto);
+        } catch {
+          throw new Error(
+            `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`,
+          );
+        }
+      }
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo cargar el historial',
+        );
+      }
+
+      setMyBookings(
+        Array.isArray(datos.servicios)
+          ? datos.servicios
+          : [],
+      );
+
+      setMyReviews(
+        Array.isArray(datos.resenas)
+          ? datos.resenas
+          : [],
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar historial:',
+        error,
+      );
+
+      setMyBookings([]);
+      setMyReviews([]);
+
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo cargar el historial',
+      );
+    } finally {
+      setCargandoHistorial(false);
+    }
+  }
+
+  if (currentUser?.id) {
+    void cargarHistorial();
+  } else {
+    setCargandoHistorial(false);
+  }
+}, [currentUser?.id]);
+
   //agregado
   const handleCancelarServicio = (booking: any) => {
 
@@ -156,93 +298,152 @@ export default function ClientProfileScreen() {
         </div>
       </div>
 
-      {/* Bookings history */}
-      <div className="px-5 mt-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground">Historial de contrataciones</h2>
-        </div>
-        <div className="flex flex-col gap-3">
-          {myBookings.map((booking) => {
-            const cat = SERVICE_CATEGORIES_LOCAL.find((c) => c.id === booking.category);
-            return (
-              <motion.div
-                key={booking.id}
-                whileTap={{ scale: 0.98 }}
-                className="bg-card rounded-2xl border border-border p-4"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2.5">
-                    <ImageWithFallback
-                      src={booking.workerAvatar}
-                      alt={booking.workerName}
-                      className="w-9 h-9 rounded-xl object-cover"
-                    />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{booking.workerName}</p>
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: cat?.bgColor, color: cat?.color }}
-                      >
-                        {cat?.label}
-                      </span>
-                    </div>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[booking.status]}`}>
-                    {STATUS_LABELS[booking.status]}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">{booking.description}</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{booking.date} · {booking.timeSlot}</span>
-                  </div>
-                  <span className="text-sm font-bold text-[#1A56DB]">${booking.price.toLocaleString()}</span>
-                </div>
-                {booking.status === 'completed' && (
-                  <motion.button
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => navigate(`/home/review/${booking.id}`)}
-                    className="w-full mt-3 bg-secondary text-secondary-foreground rounded-xl py-2 text-xs font-semibold flex items-center justify-center gap-1.5"
-                  >
-                    <Star className="w-3.5 h-3.5" /> Calificar servicio
-                  </motion.button>
-                )}
-                {/* Botón para Cancelar Servicio (Solo visible si está Pendiente o Confirmado) */}
-                {(booking.status === 'pending' || booking.status === 'accepted') && (
-                  <motion.button
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => handleCancelarServicio(booking)}
-                    className="w-full mt-3 bg-red-50 border border-red-200 text-red-600 rounded-xl py-2 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors"
-                  >
-                    Cancelar servicio
-                  </motion.button>
-                )}
+      {/* Historial de contrataciones */}
+<div className="px-5 mt-5">
+  <div className="flex items-center justify-between mb-3">
+    <h2 className="text-base font-bold text-foreground">
+      Historial de contrataciones
+    </h2>
+  </div>
 
-              </motion.div>
-            );
-          })}
-        </div>
+  {cargandoHistorial ? (
+    <div className="rounded-2xl border border-border bg-card p-6 text-center">
+      <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-[#1A56DB] border-t-transparent" />
+
+      <p className="mt-3 text-sm text-muted-foreground">
+        Cargando historial...
+      </p>
+    </div>
+  ) : myBookings.length === 0 ? (
+    <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-8 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
+        <Briefcase className="h-6 w-6 text-[#1A56DB]" />
       </div>
 
-      {/* Reviews given */}
-      {myReviews.length > 0 && (
-        <div className="px-5 mt-5">
-          <h2 className="text-base font-bold text-foreground mb-3">Reseñas que dejé</h2>
-          <div className="flex flex-col gap-3">
-            {myReviews.map((r) => (
-              <div key={r.id} className="bg-card rounded-2xl border border-border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-foreground">{r.reviewerName}</span>
-                  <StarRating value={r.rating} size="xs" />
-                </div>
-                <p className="text-xs text-muted-foreground">{r.comment}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">{r.date}</p>
+      <h3 className="mt-4 text-sm font-bold text-foreground">
+        Aún no tienes contrataciones
+      </h3>
+
+      <p className="mx-auto mt-2 max-w-xs text-xs leading-5 text-muted-foreground">
+        Publica un trabajo para comenzar a recibir propuestas de trabajadores.
+      </p>
+
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        type="button"
+        onClick={() => navigate('/home')}
+        className="mt-5 rounded-xl bg-[#1A56DB] px-5 py-3 text-sm font-semibold text-white"
+      >
+        Crear un trabajo
+      </motion.button>
+    </div>
+  ) : (
+    <div className="flex flex-col gap-3">
+      {myBookings.map((booking) => (
+        <motion.button
+          key={booking.id_servicio}
+          type="button"
+          whileTap={{ scale: 0.98 }}
+          onClick={() =>
+            navigate(
+              `/home/contratacion/${booking.id_servicio}`,
+            )
+          }
+          className="w-full rounded-2xl border border-border bg-card p-4 text-left"
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <ImageWithFallback
+                src={
+                  booking.foto_empleado ||
+                  ''
+                }
+                alt={
+                  booking.nombre_empleado ||
+                  'Trabajador'
+                }
+                className="h-11 w-11 rounded-xl object-cover"
+              />
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {booking.nombre_empleado ||
+                    'Trabajador sin asignar'}
+                </p>
+
+                <p className="truncate text-xs text-muted-foreground">
+                  {booking.nombre_categoria ||
+                    booking.titulo ||
+                    'Servicio'}
+                </p>
               </div>
-            ))}
+            </div>
+
+            <span
+              className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${
+                STATUS_COLORS[
+                  booking.estado
+                ] ||
+                'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {STATUS_LABELS[
+                booking.estado
+              ] || booking.estado}
+            </span>
           </div>
-        </div>
-      )}
+
+          <p className="mb-3 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {booking.descripcion ||
+              'Sin descripción'}
+          </p>
+
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+
+                <span className="text-xs text-muted-foreground">
+                  {booking.fecha
+                    ? new Date(
+                        booking.fecha,
+                      ).toLocaleDateString(
+                        'es-HN',
+                      )
+                    : 'Fecha no disponible'}
+                </span>
+              </div>
+
+              
+            </div>
+
+            <span className="text-sm font-bold text-[#1A56DB]">
+              {new Intl.NumberFormat(
+                'es-HN',
+                {
+                  style: 'currency',
+                  currency: 'HNL',
+                },
+              ).format(
+                Number(
+                  booking.presupuesto ||
+                    0,
+                ),
+              )}
+            </span>
+          </div>
+
+          <div className="mt-3 flex items-center justify-end border-t border-border pt-3">
+            <span className="flex items-center gap-1 text-xs font-semibold text-[#1A56DB]">
+              Ver detalles
+              <ChevronRight className="h-4 w-4" />
+            </span>
+          </div>
+        </motion.button>
+      ))}
+    </div>
+  )}
+</div>
 
       {/* Account options */}
       <div className="px-5 mt-6">

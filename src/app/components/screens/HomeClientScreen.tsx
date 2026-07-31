@@ -2,7 +2,10 @@ import {
   useEffect,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router';
+import {
+  useLocation,
+  useNavigate,
+} from 'react-router';
 import { motion } from 'motion/react';
 import {
   Bell,
@@ -476,27 +479,17 @@ export default function HomeClientScreen() {
         </div>
 
         <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={() =>
-            navigate('/home/search')
-          }
-          className="w-full bg-white rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
-        >
-          <Search className="w-4 h-4 text-muted-foreground" />
+        type="button"
+        whileTap={{ scale: 0.98 }}
+        onClick={() => navigate('/home/search')}
+        className="w-full bg-white rounded-xl flex items-center gap-3 px-4 py-3 shadow-lg"
+      >
+        <Search className="w-5 h-5 text-muted-foreground" />
 
-          <span className="text-muted-foreground text-sm">
-            ¿Qué servicio necesitas?
-          </span>
-
-          <div className="ml-auto flex items-center gap-1 bg-[#EFF4FF] px-2 py-1 rounded-lg">
-            <MapPin className="w-3 h-3 text-[#1A56DB]" />
-
-            <span className="text-[11px] text-[#1A56DB] font-medium">
-              Condesa
-            </span>
-          </div>
-        </motion.button>
+        <span className="text-muted-foreground text-sm">
+          ¿Qué servicio necesitas?
+        </span>
+      </motion.button>
       </div>
 
       {/* Categorías */}

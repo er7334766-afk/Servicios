@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { ComponentProps } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import {
@@ -9,19 +8,22 @@ import {
   Calendar,
   Clock,
   X,
+  Star,
+  Briefcase,
+  ChevronRight,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { useApp } from '../../context/AppContext';
-import { WorkerCard } from '../shared/WorkerCard';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 import {
   crearSolicitud,
   obtenerCategoriasDB,
 } from '../../services/solicitudesApi';
 
-type SortBy = 'distance' | 'rating' | 'price';
+type SortBy = 'rating';
 
 interface PostJobForm {
   title: string;
@@ -51,6 +53,10 @@ interface EmpleadoDB {
   N_trabajos?: number | null;
   id_categoria?: number | string;
   categoria?: string;
+  foto?: string | null;
+  foto_url?: string | null;
+  calificacion?: number | null;
+  cantidad_resenas?: number | null;
 }
 
 interface ServicioDB {
@@ -69,8 +75,23 @@ interface ServicioDB {
   nombre_categoria?: string;
 }
 
-type WorkerCardData =
-  ComponentProps<typeof WorkerCard>['worker'];
+interface WorkerListItem {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  location: string;
+  rating: number;
+  reviewCount: number;
+  jobCount: number;
+  isAvailable: boolean;
+  services: string[];
+}
+
+interface ResumenEmpleado {
+  total_trabajos?: number;
+  total_resenas?: number;
+  promedio_calificacion?: number;
+}
 
 function formatearFecha(
   fecha?: string | null
@@ -176,6 +197,8 @@ export default function SearchScreen() {
   const [searchText, setSearchText] =
     useState('');
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const [postCat, setPostCat] =
     useState<number | null>(null);
 
@@ -251,6 +274,10 @@ export default function SearchScreen() {
     fetchCategorias();
   }, []);
 
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   // ==========================================
   // CARGAR EMPLEADOS DESDE MYSQL
   // ==========================================
@@ -264,19 +291,105 @@ export default function SearchScreen() {
         ? `http://localhost:3000/api/categorias/${idCategoria}/empleados`
         : 'http://localhost:3000/api/empleados';
 
-      const respuesta = await fetch(url);
+      const respuesta = await fetch(url, {
+        cache: 'no-store',
+      });
+
       const texto = await respuesta.text();
-      const datos = texto ? JSON.parse(texto) : null;
+
+      let datos: unknown = [];
+
+      if (texto.trim()) {
+        try {
+          datos = JSON.parse(texto);
+        } catch {
+          throw new Error(
+            `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+          );
+        }
+      }
 
       if (!respuesta.ok) {
+        const errorApi = datos as {
+          mensaje?: string;
+          detalle?: string;
+        };
+
         throw new Error(
-          datos?.mensaje ||
+          errorApi.detalle ||
+            errorApi.mensaje ||
             'No se pudieron cargar los trabajadores'
         );
       }
 
+      const empleadosBase = Array.isArray(datos)
+        ? (datos as EmpleadoDB[])
+        : [];
+
+      const empleadosConResumen = await Promise.all(
+        empleadosBase.map(async (empleado) => {
+          const idEmpleado = Number(
+            empleado.id_empleado
+          );
+
+          if (
+            !Number.isInteger(idEmpleado) ||
+            idEmpleado <= 0
+          ) {
+            return empleado;
+          }
+
+          try {
+            const respuestaResumen = await fetch(
+              `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+              {
+                cache: 'no-store',
+              }
+            );
+
+            const textoResumen =
+              await respuestaResumen.text();
+
+            let resumen: ResumenEmpleado = {};
+
+            if (textoResumen.trim()) {
+              resumen = JSON.parse(
+                textoResumen
+              ) as ResumenEmpleado;
+            }
+
+            if (!respuestaResumen.ok) {
+              return empleado;
+            }
+
+            return {
+              ...empleado,
+              N_trabajos:
+                Number(
+                  resumen.total_trabajos
+                ) || 0,
+              calificacion:
+                Number(
+                  resumen.promedio_calificacion
+                ) || 0,
+              cantidad_resenas:
+                Number(
+                  resumen.total_resenas
+                ) || 0,
+            };
+          } catch (error) {
+            console.error(
+              `No se pudo cargar el resumen del empleado ${idEmpleado}:`,
+              error
+            );
+
+            return empleado;
+          }
+        })
+      );
+
       setEmpleadosDb(
-        Array.isArray(datos) ? datos : []
+        empleadosConResumen
       );
     } catch (error) {
       console.error(
@@ -348,6 +461,23 @@ export default function SearchScreen() {
   }, [esTrabajador]);
 
   const trabajosFiltrados = serviciosDb.filter((servicio) => {
+    const estadoNormalizado = String(servicio.estado ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+
+    const estadosFinalizados = [
+      'completado',
+      'completada',
+      'completed',
+      'cancelado',
+      'cancelada',
+      'cancelled',
+    ];
+
+    const sigueActivo =
+      !estadosFinalizados.includes(estadoNormalizado);
+
     const coincideCategoria =
       selectedCat === null ||
       Number(servicio.fk_categoria) === Number(selectedCat);
@@ -356,55 +486,73 @@ export default function SearchScreen() {
 
     const coincideBusqueda =
       !texto ||
-      servicio.titulo?.toLowerCase().includes(texto) ||
-      servicio.descripcion?.toLowerCase().includes(texto) ||
-      servicio.direccion?.toLowerCase().includes(texto) ||
-      servicio.nombre_categoria?.toLowerCase().includes(texto) ||
-      servicio.nombre_cliente?.toLowerCase().includes(texto);
+      String(servicio.titulo ?? '')
+        .toLowerCase()
+        .includes(texto) ||
+      String(servicio.descripcion ?? '')
+        .toLowerCase()
+        .includes(texto) ||
+      String(servicio.direccion ?? '')
+        .toLowerCase()
+        .includes(texto) ||
+      String(servicio.nombre_categoria ?? '')
+        .toLowerCase()
+        .includes(texto) ||
+      String(servicio.nombre_cliente ?? '')
+        .toLowerCase()
+        .includes(texto);
 
-      ;
-
-    return coincideCategoria && Boolean(coincideBusqueda);
+    return (
+      sigueActivo &&
+      coincideCategoria &&
+      coincideBusqueda
+    );
   });
 
-      console.log('ROL:', role);
-      console.log('CATEGORÍA SELECCIONADA:', selectedCat);
-      console.log('SERVICIOS:', serviciosDb);
-      console.log('TRABAJOS FILTRADOS:', trabajosFiltrados)
 
   // ==========================================
-  // CONVERTIR EMPLEADOS DE MYSQL AL FORMATO
-  // QUE NECESITA WORKERCARD
+  // CONVERTIR EMPLEADOS AL FORMATO DE LA LISTA
   // ==========================================
- const trabajadoresConvertidos: WorkerCardData[] =
-  empleadosDb.map((empleado) => {
-    const worker: WorkerCardData = {
+  const trabajadoresConvertidos: WorkerListItem[] =
+    empleadosDb.map((empleado) => ({
       id: String(empleado.id_empleado),
-      name: empleado.nombre_E || 'Trabajador',
-      email: '',
-      phone: '',
-      avatarUrl: '',
-      role: 'worker',
-      location: empleado.direccion?.trim() || 'Dirección no especificada',
-      joinedDate: '',
-      categories: empleado.id_categoria
-        ? [String(empleado.id_categoria) as any]
-        : [],
-      rating: 0,
-      reviewCount: 0,
-      jobCount: Number(empleado.N_trabajos ?? 0),
-      bio: '',
-      distanceKm: 0,
-      pricePerHour: 0,
-      isAvailable: empleado.estado?.trim().toLowerCase() === 'disponible',
-      galleryUrls: [],
+      name:
+        empleado.nombre_E ||
+        'Trabajador',
+      avatarUrl:
+        empleado.foto_url ||
+        empleado.foto ||
+        '',
+      location:
+        empleado.direccion?.trim() ||
+        'Dirección no especificada',
+      rating:
+        Number(
+          empleado.calificacion
+        ) || 0,
+      reviewCount:
+        Number(
+          empleado.cantidad_resenas
+        ) || 0,
+      jobCount:
+        Number(
+          empleado.N_trabajos
+        ) || 0,
+      isAvailable:
+        empleado.estado
+          ?.trim()
+          .toLowerCase() ===
+          'disponible' ||
+        empleado.estado
+          ?.trim()
+          .toLowerCase() ===
+          'activo',
       services: [
-        empleado.titulo?.trim() || empleado.categoria || 'Servicios generales',
+        empleado.titulo?.trim() ||
+          empleado.categoria ||
+          'Servicios generales',
       ],
-    };
-
-    return worker;
-  });
+    }));
 
   // ==========================================
   // FILTRAR Y ORDENAR TRABAJADORES
@@ -443,20 +591,17 @@ export default function SearchScreen() {
         );
       })
       .sort((a, b) => {
-        if (sortBy === 'distance') {
-          return (
-            a.distanceKm - b.distanceKm
-          );
-        }
-
         if (sortBy === 'rating') {
-          return b.rating - a.rating;
-        }
+          const diferenciaRating =
+            b.rating - a.rating;
 
-        if (sortBy === 'price') {
+          if (diferenciaRating !== 0) {
+            return diferenciaRating;
+          }
+
           return (
-            a.pricePerHour -
-            b.pricePerHour
+            b.reviewCount -
+            a.reviewCount
           );
         }
 
@@ -602,6 +747,7 @@ export default function SearchScreen() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
 
                 <input
+                  ref={inputRef}
                   value={searchText}
                   onChange={(e) =>
                     setSearchText(
@@ -783,7 +929,56 @@ export default function SearchScreen() {
                         }}
                         className="cursor-pointer"
                       >
-                        <WorkerCard worker={worker} variant="full" />
+                        <div className="w-full rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-[#1A56DB]/40">
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                              <ImageWithFallback
+                                src={worker.avatarUrl}
+                                alt={worker.name}
+                                className="h-14 w-14 rounded-xl object-cover"
+                              />
+
+                              {worker.isAvailable && (
+                                <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-card bg-green-500" />
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-foreground">
+                                {worker.name}
+                              </p>
+
+                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <div className="flex items-center gap-1">
+                                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {worker.rating.toFixed(1)}
+                                  </span>
+
+                                  <span className="text-xs text-muted-foreground">
+                                    ({worker.reviewCount})
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <Briefcase className="h-4 w-4 text-[#1A56DB]" />
+
+                                  <span className="text-xs text-muted-foreground">
+                                    {worker.jobCount}{' '}
+                                    {worker.jobCount === 1
+                                      ? 'trabajo'
+                                      : 'trabajos'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              
+                            </div>
+
+                            <ChevronRight className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                          </div>
+                        </div>
                       </div>
                     ))}
 

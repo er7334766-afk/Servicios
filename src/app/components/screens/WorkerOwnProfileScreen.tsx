@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
@@ -20,89 +24,131 @@ import { useApp } from '../../context/AppContext';
 import EditProfileScreen from './EditProfileScreen';
 import EditServiceScreen from './EditServiceScreen';
 
+const API_URL = 'http://localhost:3000/api';
+
 interface Categoria {
   id_categoria: number | string;
   nombre: string;
   subCatgeoria?: string;
 }
 
+interface ResenaEmpleado {
+  id_resena: number;
+  id_reserva: number;
+  id_servicio: number;
+  calificacion_general: number;
+  puntualidad?: number | null;
+  calidad?: number | null;
+  comunicacion?: number | null;
+  comentario?: string | null;
+  fecha?: string | null;
+  nombre_cliente?: string | null;
+  foto_cliente?: string | null;
+}
+
+interface ResumenEmpleadoRespuesta {
+  total_trabajos: number;
+  total_resenas: number;
+  promedio_calificacion: number;
+  resenas: ResenaEmpleado[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface RespuestaCategorias {
+  categorias?: Categoria[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface RespuestaEvidencia {
+  url?: string;
+  mensaje?: string;
+  detalle?: string;
+}
+
+async function leerRespuestaJson<T>(
+  respuesta: Response,
+): Promise<T> {
+  const texto = await respuesta.text();
+
+  if (!texto.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error(
+      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`,
+    );
+  }
+}
+
+function formatearFecha(fecha?: string | null) {
+  if (!fecha) {
+    return '';
+  }
+
+  const fechaConvertida = new Date(fecha);
+
+  if (Number.isNaN(fechaConvertida.getTime())) {
+    return fecha;
+  }
+
+  return fechaConvertida.toLocaleDateString('es-HN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default function WorkerOwnProfileScreen() {
   const navigate = useNavigate();
   const { currentUser, setCurrentUser } = useApp();
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [isEditingServices, setIsEditingServices] = useState(false);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
-  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [isEditing, setIsEditing] =
+    useState(false);
+
+  const [isEditingServices, setIsEditingServices] =
+    useState(false);
+
+  const [categorias, setCategorias] =
+    useState<Categoria[]>([]);
+
+  const [errorMessage, setErrorMessage] =
+    useState('');
+
+  const [subiendoEvidencia, setSubiendoEvidencia] =
+    useState(false);
+
+  const [galleryUrls, setGalleryUrls] =
+    useState<string[]>([]);
+
   const [selectedImageUrl, setSelectedImageUrl] =
     useState<string | null>(null);
 
-  const idEmpleado = Number(currentUser?.id);
+  const [totalTrabajos, setTotalTrabajos] =
+    useState(0);
 
-  const worker = {
-    id: currentUser?.id ?? '',
-    name: currentUser?.name ?? 'Trabajador',
-    avatarUrl: currentUser?.avatarUrl ?? '',
-    location:
-      currentUser?.location &&
-      currentUser.location !== 'No especificada'
-        ? currentUser.location
-        : 'Ubicación no especificada',
-    rating: 0,
-    reviewCount: 0,
-    jobCount: Number(currentUser?.numeroTrabajos ?? 0),
-    pricePerHour: 0,
-  };
+  const [totalResenas, setTotalResenas] =
+    useState(0);
 
-  const reviews: Array<any> = [];
+  const [
+    promedioCalificacion,
+    setPromedioCalificacion,
+  ] = useState(0);
 
-  const cargarCategorias = async () => {
-    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
-      setCategorias([]);
-      return;
-    }
+  const [resenas, setResenas] =
+    useState<ResenaEmpleado[]>([]);
 
-    try {
-      const respuesta = await fetch(
-        `http://localhost:3000/api/empleados/${idEmpleado}/categorias`
-      );
+  const [cargandoResumen, setCargandoResumen] =
+    useState(true);
 
-      if (!respuesta.ok) {
-        const mensajeError = await respuesta.text();
-
-        throw new Error(
-          mensajeError || 'No se pudieron cargar las categorías'
-        );
-      }
-
-      const datos = await respuesta.json();
-
-      const categoriasRecibidas: Categoria[] = Array.isArray(datos)
-        ? datos
-        : datos?.categorias ?? [];
-
-      setCategorias(categoriasRecibidas);
-    } catch (error) {
-      console.error('Error al cargar categorías:', error);
-      setCategorias([]);
-    }
-  };
-
-  useEffect(() => {
-    cargarCategorias();
-  }, [idEmpleado]);
-
-  useEffect(() => {
-    const urls = Array.isArray(
-      (currentUser as any)?.galleryUrls
-    )
-      ? ((currentUser as any).galleryUrls as string[])
-      : [];
-
-    setGalleryUrls(urls);
-  }, [currentUser]);
+  const idEmpleado = Number(
+    currentUser?.idEmpleado ??
+      currentUser?.id,
+  );
 
   const mostrarError = (mensaje: string) => {
     setErrorMessage(mensaje);
@@ -112,15 +158,199 @@ export default function WorkerOwnProfileScreen() {
     }, 4000);
   };
 
+  const worker = {
+    id: String(
+      currentUser?.idEmpleado ??
+        currentUser?.id ??
+        '',
+    ),
+
+    name:
+      currentUser?.name ??
+      'Trabajador',
+
+    avatarUrl:
+      currentUser?.avatarUrl ??
+      '',
+
+    location:
+      currentUser?.location &&
+      currentUser.location !== 'No especificada'
+        ? currentUser.location
+        : 'Ubicación no especificada',
+
+    rating:
+      promedioCalificacion,
+
+    reviewCount:
+      totalResenas,
+
+    jobCount:
+      totalTrabajos,
+
+    pricePerHour: 0,
+  };
+
+  const cargarCategorias = async () => {
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setCategorias([]);
+      return;
+    }
+
+    try {
+      const respuesta = await fetch(
+        `${API_URL}/empleados/${idEmpleado}/categorias`,
+        {
+          cache: 'no-store',
+        },
+      );
+
+      const datos =
+        await leerRespuestaJson<
+          Categoria[] | RespuestaCategorias
+        >(respuesta);
+
+      if (!respuesta.ok) {
+        const respuestaError =
+          datos as RespuestaCategorias;
+
+        throw new Error(
+          respuestaError.detalle ||
+            respuestaError.mensaje ||
+            'No se pudieron cargar las categorías',
+        );
+      }
+
+      const categoriasRecibidas =
+        Array.isArray(datos)
+          ? datos
+          : Array.isArray(datos.categorias)
+            ? datos.categorias
+            : [];
+
+      setCategorias(categoriasRecibidas);
+    } catch (error) {
+      console.error(
+        'Error al cargar categorías:',
+        error,
+      );
+
+      setCategorias([]);
+    }
+  };
+
+  const cargarResumenEmpleado = async () => {
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setTotalTrabajos(0);
+      setTotalResenas(0);
+      setPromedioCalificacion(0);
+      setResenas([]);
+      setCargandoResumen(false);
+      return;
+    }
+
+    try {
+      setCargandoResumen(true);
+
+      const respuesta = await fetch(
+        `${API_URL}/empleados/${idEmpleado}/resumen-perfil`,
+        {
+          cache: 'no-store',
+        },
+      );
+
+      const datos =
+        await leerRespuestaJson<ResumenEmpleadoRespuesta>(
+          respuesta,
+        );
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo cargar el resumen del empleado',
+        );
+      }
+
+      setTotalTrabajos(
+        Number(datos.total_trabajos) ||
+          0,
+      );
+
+      setTotalResenas(
+        Number(datos.total_resenas) ||
+          0,
+      );
+
+      setPromedioCalificacion(
+        Number(
+          datos.promedio_calificacion,
+        ) || 0,
+      );
+
+      setResenas(
+        Array.isArray(datos.resenas)
+          ? datos.resenas
+          : [],
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar resumen del empleado:',
+        error,
+      );
+
+      setTotalTrabajos(0);
+      setTotalResenas(0);
+      setPromedioCalificacion(0);
+      setResenas([]);
+
+      mostrarError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo cargar el perfil del trabajador',
+      );
+    } finally {
+      setCargandoResumen(false);
+    }
+  };
+
+  useEffect(() => {
+    void cargarCategorias();
+  }, [idEmpleado]);
+
+  useEffect(() => {
+    void cargarResumenEmpleado();
+  }, [idEmpleado]);
+
+  useEffect(() => {
+    const urls = Array.isArray(
+      (currentUser as any)?.galleryUrls,
+    )
+      ? (
+          (currentUser as any)
+            .galleryUrls as string[]
+        )
+      : [];
+
+    setGalleryUrls(urls);
+  }, [currentUser]);
+
   const handleLogout = () => {
     setCurrentUser(null);
     navigate('/');
   };
 
   const handleSubirEvidencia = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
-    const archivo = event.target.files?.[0];
+    const archivo =
+      event.target.files?.[0];
 
     if (!archivo) {
       return;
@@ -131,16 +361,29 @@ export default function WorkerOwnProfileScreen() {
       'image/png',
     ];
 
-    if (!tiposPermitidos.includes(archivo.type)) {
-      mostrarError('Solo se permiten imágenes JPG o PNG');
+    if (
+      !tiposPermitidos.includes(
+        archivo.type,
+      )
+    ) {
+      mostrarError(
+        'Solo se permiten imágenes JPG o PNG',
+      );
+
       event.target.value = '';
       return;
     }
 
-    const tamanioMaximo = 5 * 1024 * 1024;
+    const tamanioMaximo =
+      5 * 1024 * 1024;
 
-    if (archivo.size > tamanioMaximo) {
-      mostrarError('La imagen no puede superar los 5 MB');
+    if (
+      archivo.size > tamanioMaximo
+    ) {
+      mostrarError(
+        'La imagen no puede superar los 5 MB',
+      );
+
       event.target.value = '';
       return;
     }
@@ -151,80 +394,106 @@ export default function WorkerOwnProfileScreen() {
 
       const reader = new FileReader();
 
-      const contenido = await new Promise<string>(
-        (resolve, reject) => {
-          reader.onload = () => {
-            resolve(String(reader.result ?? ''));
-          };
+      const contenido =
+        await new Promise<string>(
+          (resolve, reject) => {
+            reader.onload = () => {
+              resolve(
+                String(
+                  reader.result ?? '',
+                ),
+              );
+            };
 
-          reader.onerror = () => {
-            reject(
-              new Error('No se pudo leer el archivo')
+            reader.onerror = () => {
+              reject(
+                new Error(
+                  'No se pudo leer el archivo',
+                ),
+              );
+            };
+
+            reader.readAsDataURL(
+              archivo,
             );
-          };
+          },
+        );
 
-          reader.readAsDataURL(archivo);
-        }
-      );
-
-      const base64 = contenido.split(',')[1];
+      const base64 =
+        contenido.split(',')[1];
 
       if (!base64) {
         throw new Error(
-          'No se pudo convertir la imagen'
+          'No se pudo convertir la imagen',
         );
       }
 
       const respuesta = await fetch(
-        'http://localhost:3000/api/upload-evidencia',
+        `${API_URL}/upload-evidencia`,
         {
           method: 'POST',
+
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type':
+              'application/json',
           },
+
           body: JSON.stringify({
             base64,
             fileName: archivo.name,
             contentType: archivo.type,
           }),
-        }
+        },
       );
 
-      const datos = await respuesta
-        .json()
-        .catch(() => null);
+      const datos =
+        await leerRespuestaJson<RespuestaEvidencia>(
+          respuesta,
+        );
 
       if (!respuesta.ok) {
         throw new Error(
-          datos?.mensaje ||
-            'No se pudo subir la evidencia'
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo subir la evidencia',
         );
       }
 
-      const nuevaUrl = datos?.url as string | undefined;
+      const nuevaUrl =
+        datos.url;
 
       if (!nuevaUrl) {
         throw new Error(
-          'El servidor no devolvió la URL de la imagen'
+          'El servidor no devolvió la URL de la imagen',
         );
       }
 
-      setGalleryUrls((actuales) => [
-        ...actuales,
-        nuevaUrl,
-      ]);
+      setGalleryUrls(
+        (actuales) => [
+          ...actuales,
+          nuevaUrl,
+        ],
+      );
 
       if (currentUser) {
-        const galeriaActual = Array.isArray(
-          (currentUser as any)?.galleryUrls
-        )
-          ? ((currentUser as any)
-              .galleryUrls as string[])
-          : [];
+        const galeriaActual =
+          Array.isArray(
+            (currentUser as any)
+              ?.galleryUrls,
+          )
+            ? (
+                (currentUser as any)
+                  .galleryUrls as string[]
+              )
+            : [];
 
         setCurrentUser({
           ...currentUser,
-          role: currentUser.role ?? 'worker',
+
+          role:
+            currentUser.role ??
+            'worker',
+
           galleryUrls: [
             ...galeriaActual,
             nuevaUrl,
@@ -232,12 +501,16 @@ export default function WorkerOwnProfileScreen() {
         } as any);
       }
     } catch (error) {
-      const mensaje =
+      console.error(
+        'Error al subir evidencia:',
+        error,
+      );
+
+      mostrarError(
         error instanceof Error
           ? error.message
-          : 'Error al subir la evidencia';
-
-      mostrarError(mensaje);
+          : 'Error al subir la evidencia',
+      );
     } finally {
       setSubiendoEvidencia(false);
       event.target.value = '';
@@ -249,7 +522,9 @@ export default function WorkerOwnProfileScreen() {
       <EditProfileScreen
         usuarioActual={worker}
         rol="worker"
-        onBack={() => setIsEditing(false)}
+        onBack={() =>
+          setIsEditing(false)
+        }
       />
     );
   }
@@ -268,9 +543,11 @@ export default function WorkerOwnProfileScreen() {
           <button
             type="button"
             onClick={() =>
-              setIsEditingServices(false)
+              setIsEditingServices(
+                false,
+              )
             }
-            className="mt-4 bg-[#1A56DB] text-white px-4 py-2 rounded-xl"
+            className="mt-4 rounded-xl bg-[#1A56DB] px-4 py-2 text-white"
           >
             Volver
           </button>
@@ -283,7 +560,7 @@ export default function WorkerOwnProfileScreen() {
         idEmpleado={idEmpleado}
         onBack={() => {
           setIsEditingServices(false);
-          cargarCategorias();
+          void cargarCategorias();
         }}
       />
     );
@@ -301,8 +578,8 @@ export default function WorkerOwnProfileScreen() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-[#1A56DB] px-5 pt-10 pb-16">
+      {/* Encabezado */}
+      <div className="bg-[#1A56DB] px-5 pb-16 pt-10">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-white">
             Mi Perfil
@@ -310,86 +587,107 @@ export default function WorkerOwnProfileScreen() {
 
           <button
             type="button"
-            onClick={() => setIsEditing(true)}
-            className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center"
+            onClick={() =>
+              setIsEditing(true)
+            }
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20"
             aria-label="Editar perfil"
           >
-            <Settings className="w-4 h-4 text-white" />
+            <Settings className="h-4 w-4 text-white" />
           </button>
         </div>
       </div>
 
-      {/* Tarjeta de perfil */}
-      <div className="px-5 -mt-12">
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-lg">
+      {/* Tarjeta principal */}
+      <div className="-mt-12 px-5">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-lg">
           <div className="flex items-start gap-4">
             <div className="relative">
               <ImageWithFallback
-                src={worker.avatarUrl}
+                src={
+                  worker.avatarUrl
+                }
                 alt={worker.name}
-                className="w-16 h-16 rounded-2xl object-cover"
+                className="h-16 w-16 rounded-2xl object-cover"
               />
 
               <button
                 type="button"
-                onClick={() => setIsEditing(true)}
-                className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#1A56DB] rounded-full flex items-center justify-center"
+                onClick={() =>
+                  setIsEditing(true)
+                }
+                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#1A56DB]"
                 aria-label="Editar foto de perfil"
               >
-                <Edit2 className="w-3 h-3 text-white" />
+                <Edit2 className="h-3 w-3 text-white" />
               </button>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 className="text-base font-bold text-foreground">
                 {worker.name}
               </h2>
 
-              <div className="flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3 text-muted-foreground" />
+              <div className="mt-0.5 flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
 
-                <span className="text-xs text-muted-foreground">
+                <span className="truncate text-xs text-muted-foreground">
                   {worker.location}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 mt-1">
+              <div className="mt-1 flex items-center gap-1">
                 <StarRating
-                  value={worker.rating}
+                  value={
+                    worker.rating
+                  }
                   size="xs"
                 />
 
                 <span className="text-xs font-semibold text-foreground">
-                  {worker.rating}
+                  {cargandoResumen
+                    ? '...'
+                    : worker.rating.toFixed(
+                        1,
+                      )}
                 </span>
 
                 <span className="text-xs text-muted-foreground">
-                  ({worker.reviewCount})
+                  (
+                  {cargandoResumen
+                    ? '...'
+                    : worker.reviewCount}
+                  )
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-4 mt-4 pt-4 border-t border-border">
+          {/* Contadores reales */}
+          <div className="mt-4 flex gap-4 border-t border-border pt-4">
             <div className="flex-1 text-center">
-              <p className="font-bold text-foreground text-base">
-                {worker.jobCount}
+              <p className="text-base font-bold text-foreground">
+                {cargandoResumen
+                  ? '...'
+                  : worker.jobCount}
               </p>
 
               <p className="text-[11px] text-muted-foreground">
-                Trabajos
+                Trabajos completados
               </p>
             </div>
 
             <div className="w-px bg-border" />
 
             <div className="flex-1 text-center">
-              <p className="font-bold text-foreground text-base">
-                {worker.reviewCount}
+              <p className="text-base font-bold text-foreground">
+                {cargandoResumen
+                  ? '...'
+                  : worker.reviewCount}
               </p>
 
               <p className="text-[11px] text-muted-foreground">
-                Reseñas
+                Reseñas recibidas
               </p>
             </div>
           </div>
@@ -397,8 +695,8 @@ export default function WorkerOwnProfileScreen() {
       </div>
 
       {/* Servicios */}
-      <div className="px-5 mt-5">
-        <div className="flex items-center justify-between mb-2">
+      <div className="mt-5 px-5">
+        <div className="mb-2 flex items-center justify-between">
           <h2 className="text-base font-bold text-foreground">
             Mis servicios
           </h2>
@@ -407,18 +705,23 @@ export default function WorkerOwnProfileScreen() {
             type="button"
             onClick={() => {
               if (
-                !Number.isInteger(idEmpleado) ||
+                !Number.isInteger(
+                  idEmpleado,
+                ) ||
                 idEmpleado <= 0
               ) {
                 mostrarError(
-                  'No se encontró el ID del trabajador. Cierra sesión y vuelve a entrar.'
+                  'No se encontró el ID del trabajador. Cierra sesión y vuelve a entrar.',
                 );
+
                 return;
               }
 
-              setIsEditingServices(true);
+              setIsEditingServices(
+                true,
+              );
             }}
-            className="text-xs text-[#1A56DB] font-semibold"
+            className="text-xs font-semibold text-[#1A56DB]"
           >
             Editar
           </button>
@@ -426,16 +729,18 @@ export default function WorkerOwnProfileScreen() {
 
         <div className="flex flex-wrap gap-2">
           {categorias.length > 0 ? (
-            categorias.map((categoria) => (
-              <span
-                key={String(
-                  categoria.id_categoria
-                )}
-                className="text-xs bg-secondary text-secondary-foreground px-3 py-1.5 rounded-full border border-[#1A56DB]/20"
-              >
-                {categoria.nombre}
-              </span>
-            ))
+            categorias.map(
+              (categoria) => (
+                <span
+                  key={String(
+                    categoria.id_categoria,
+                  )}
+                  className="rounded-full border border-[#1A56DB]/20 bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+                >
+                  {categoria.nombre}
+                </span>
+              ),
+            )
           ) : (
             <p className="text-xs text-muted-foreground">
               No tienes servicios seleccionados.
@@ -445,8 +750,8 @@ export default function WorkerOwnProfileScreen() {
       </div>
 
       {/* Galería */}
-      <div className="px-5 mt-5">
-        <div className="flex items-center justify-between mb-2">
+      <div className="mt-5 px-5">
+        <div className="mb-2 flex items-center justify-between">
           <h2 className="text-base font-bold text-foreground">
             Galería
           </h2>
@@ -466,32 +771,42 @@ export default function WorkerOwnProfileScreen() {
               type="file"
               accept=".jpg,.jpeg,.png,image/jpeg,image/png"
               className="hidden"
-              disabled={subiendoEvidencia}
-              onChange={handleSubirEvidencia}
+              disabled={
+                subiendoEvidencia
+              }
+              onChange={
+                handleSubirEvidencia
+              }
             />
           </label>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           {galleryUrls.length > 0 ? (
-            galleryUrls.map((url, index) => (
-              <button
-                key={`${url}-${index}`}
-                type="button"
-                onClick={() =>
-                  setSelectedImageUrl(url)
-                }
-                className="aspect-square rounded-xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
-              >
-                <ImageWithFallback
-                  src={url}
-                  alt={`Trabajo ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ))
+            galleryUrls.map(
+              (url, index) => (
+                <button
+                  key={`${url}-${index}`}
+                  type="button"
+                  onClick={() =>
+                    setSelectedImageUrl(
+                      url,
+                    )
+                  }
+                  className="aspect-square overflow-hidden rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+                >
+                  <ImageWithFallback
+                    src={url}
+                    alt={`Trabajo ${
+                      index + 1
+                    }`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ),
+            )
           ) : (
-            <p className="text-xs text-muted-foreground col-span-3">
+            <p className="col-span-3 text-xs text-muted-foreground">
               Aún no tienes fotos en la galería.
             </p>
           )}
@@ -505,7 +820,9 @@ export default function WorkerOwnProfileScreen() {
             <button
               type="button"
               onClick={() =>
-                setSelectedImageUrl(null)
+                setSelectedImageUrl(
+                  null,
+                )
               }
               className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white"
               aria-label="Cerrar imagen"
@@ -515,7 +832,9 @@ export default function WorkerOwnProfileScreen() {
 
             <div className="overflow-hidden rounded-xl">
               <img
-                src={selectedImageUrl}
+                src={
+                  selectedImageUrl
+                }
                 alt="Vista previa de la galería"
                 className="max-h-[80vh] w-full object-contain"
               />
@@ -524,63 +843,163 @@ export default function WorkerOwnProfileScreen() {
         </div>
       )}
 
-      {/* Reseñas */}
-      <div className="px-5 mt-5">
-        <div className="flex items-center justify-between mb-3">
+      {/* Reseñas reales */}
+      <div className="mt-5 px-5">
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-bold text-foreground">
-            Reseñas ({worker.reviewCount})
+            Reseñas (
+            {cargandoResumen
+              ? '...'
+              : worker.reviewCount}
+            )
           </h2>
 
           <div className="flex items-center gap-1">
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+            <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
 
             <span className="text-sm font-bold">
-              {worker.rating}
+              {cargandoResumen
+                ? '...'
+                : worker.rating.toFixed(
+                    1,
+                  )}
             </span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
-          {reviews.length > 0 ? (
-            reviews.map((review) => (
-              <ReviewCard
-                key={review.id}
-                review={review}
-              />
-            ))
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Aún no tienes reseñas.
+        {cargandoResumen ? (
+          <div className="rounded-xl border border-border bg-card p-5 text-center">
+            <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-[#1A56DB] border-t-transparent" />
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Cargando reseñas...
             </p>
-          )}
-        </div>
+          </div>
+        ) : resenas.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {resenas.map(
+              (resena) => (
+                <ReviewCard
+                  key={
+                    resena.id_resena
+                  }
+                  review={{
+                    id: String(
+                      resena.id_resena,
+                    ),
+
+                    bookingId: String(
+                      resena.id_servicio,
+                    ),
+
+                    reviewerId: '',
+
+                    reviewerName:
+                      resena.nombre_cliente ||
+                      'Cliente',
+
+                    reviewerAvatarUrl:
+                      resena.foto_cliente ||
+                      '',
+
+                    targetId:
+                      String(
+                        idEmpleado,
+                      ),
+
+                    rating:
+                      Number(
+                        resena.calificacion_general,
+                      ) || 0,
+
+                    punctualityRating:
+                      Number(
+                        resena.puntualidad,
+                      ) || 0,
+
+                    qualityRating:
+                      Number(
+                        resena.calidad,
+                      ) || 0,
+
+                    communicationRating:
+                      Number(
+                        resena.comunicacion,
+                      ) || 0,
+
+                    comment:
+                      resena.comentario ||
+                      '',
+
+                    date:
+                      formatearFecha(
+                        resena.fecha,
+                      ),
+                  }}
+                />
+              ),
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-card px-5 py-6 text-center">
+            <Star className="mx-auto h-7 w-7 text-muted-foreground" />
+
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              Aún no tienes reseñas
+            </p>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Las opiniones de tus clientes aparecerán aquí.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Opciones de cuenta */}
-      <div className="px-5 mt-6">
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="mt-6 px-5">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           {[
             {
-              label: 'Editar perfil',
-              icon: Edit2,
-              action: () => setIsEditing(true),
-            },
-            {
-              label: 'Gestionar disponibilidad',
-              icon: Settings,
+              label:
+                'Editar perfil',
+
+              icon:
+                Edit2,
+
               action: () =>
-                navigate('/home/agenda'),
+                setIsEditing(true),
             },
+
+            {
+              label:
+                'Gestionar disponibilidad',
+
+              icon:
+                Settings,
+
+              action: () =>
+                navigate(
+                  '/home/agenda',
+                ),
+            },
+
             {
               label:
                 'Reportar problema de la aplicación',
-              icon: AlertTriangle,
+
+              icon:
+                AlertTriangle,
+
               action: () =>
-                navigate('/home/report', {
-                  state: {
-                    tipoReporte: 'aplicacion',
+                navigate(
+                  '/home/report',
+                  {
+                    state: {
+                      tipoReporte:
+                        'aplicacion',
+                    },
                   },
-                }),
+                ),
             },
           ].map(
             ({
@@ -592,27 +1011,31 @@ export default function WorkerOwnProfileScreen() {
                 type="button"
                 key={label}
                 onClick={action}
-                className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-border last:border-0 hover:bg-muted transition-colors"
+                className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 transition-colors last:border-0 hover:bg-muted"
               >
-                <Icon className="w-4 h-4 text-muted-foreground" />
+                <Icon className="h-4 w-4 text-muted-foreground" />
 
-                <span className="text-sm text-foreground flex-1 text-left">
+                <span className="flex-1 text-left text-sm text-foreground">
                   {label}
                 </span>
 
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
-            )
+            ),
           )}
         </div>
 
         <motion.button
           type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={handleLogout}
-          className="w-full mt-4 bg-red-50 border border-red-200 text-red-600 rounded-xl py-3 font-semibold flex items-center justify-center gap-2"
+          whileTap={{
+            scale: 0.97,
+          }}
+          onClick={
+            handleLogout
+          }
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-3 font-semibold text-red-600"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="h-4 w-4" />
           Cerrar sesión
         </motion.button>
       </div>

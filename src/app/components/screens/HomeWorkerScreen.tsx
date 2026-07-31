@@ -1,13 +1,11 @@
 import {
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
   Bell,
-  TrendingUp,
   Briefcase,
   Star,
   Calendar,
@@ -90,6 +88,18 @@ export default function HomeWorkerScreen() {
   const [errorServicios, setErrorServicios] =
     useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  const [totalTrabajos, setTotalTrabajos] =
+    useState(0);
+
+  const [
+    promedioCalificacion,
+    setPromedioCalificacion,
+  ] = useState(0);
+
+  const [cargandoResumen, setCargandoResumen] =
+    useState(true);
+
   const idEmpleado = Number(
     currentUser?.idEmpleado ?? currentUser?.id
   );
@@ -98,8 +108,6 @@ export default function HomeWorkerScreen() {
     currentUser?.name?.trim() || 'Empleado';
 
   const myBookings: any[] = [];
-
-  const weekEarnings = 0;
 
   const normalizarDisponibilidad = (
     valor: unknown
@@ -255,6 +263,78 @@ export default function HomeWorkerScreen() {
 
   useEffect(() => {
     cargarPostulacionesEmpleado();
+  }, [idEmpleado]);
+
+  useEffect(() => {
+    const cargarResumenEmpleado = async () => {
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        setTotalTrabajos(0);
+        setPromedioCalificacion(0);
+        setCargandoResumen(false);
+        return;
+      }
+
+      try {
+        setCargandoResumen(true);
+
+        const respuesta = await fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+          {
+            cache: 'no-store',
+          }
+        );
+
+        const texto = await respuesta.text();
+
+        let datos: {
+          total_trabajos?: number;
+          promedio_calificacion?: number;
+          mensaje?: string;
+          detalle?: string;
+        } = {};
+
+        if (texto.trim()) {
+          try {
+            datos = JSON.parse(texto);
+          } catch {
+            throw new Error(
+              `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+            );
+          }
+        }
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos.detalle ||
+              datos.mensaje ||
+              'No se pudo cargar el resumen del trabajador'
+          );
+        }
+
+        setTotalTrabajos(
+          Number(datos.total_trabajos) || 0
+        );
+
+        setPromedioCalificacion(
+          Number(datos.promedio_calificacion) || 0
+        );
+      } catch (error) {
+        console.error(
+          'Error al cargar resumen del trabajador:',
+          error
+        );
+
+        setTotalTrabajos(0);
+        setPromedioCalificacion(0);
+      } finally {
+        setCargandoResumen(false);
+      }
+    };
+
+    void cargarResumenEmpleado();
   }, [idEmpleado]);
 
   /*
@@ -558,60 +638,58 @@ export default function HomeWorkerScreen() {
 
       {/* Estadísticas */}
       <div className="px-5 mt-5">
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            {
-              icon: TrendingUp,
-              label: 'Esta semana',
-              value: `$${weekEarnings.toLocaleString()}`,
-              color: '#1A56DB',
-            },
-            {
-              icon: Briefcase,
-              label: 'Trabajos',
-              value: `${Number(currentUser?.numeroTrabajos ?? 0)}`,
-              color: '#16A34A',
-            },
-            {
-              icon: Star,
-              label: 'Calificación',
-              value: '0★',
-              color: '#D97706',
-            },
-          ].map(
-            ({
-              icon: Icon,
-              label,
-              value,
-              color,
-            }) => (
-              <div
-                key={label}
-                className="bg-card rounded-2xl border border-border p-3 text-center"
-              >
-                <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center mx-auto mb-1.5"
-                  style={{
-                    backgroundColor:
-                      color + '15',
-                  }}
-                >
-                  <Icon
-                    className="w-4 h-4"
-                    style={{ color }}
-                  />
-                </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center mx-auto mb-2"
+              style={{
+                backgroundColor: '#16A34A15',
+              }}
+            >
+              <Briefcase
+                className="w-4 h-4"
+                style={{
+                  color: '#16A34A',
+                }}
+              />
+            </div>
 
-                <p className="text-xs font-bold text-foreground">
-                  {value}
-                </p>
+            <p className="text-base font-bold text-foreground">
+              {cargandoResumen
+                ? '...'
+                : totalTrabajos}
+            </p>
 
-                <p className="text-[10px] text-muted-foreground">
-                  {label}
-                </p>
-              </div>
-            )
-          )}
+            <p className="text-[11px] text-muted-foreground">
+              Trabajos completados
+            </p>
+          </div>
+
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center mx-auto mb-2"
+              style={{
+                backgroundColor: '#D9770615',
+              }}
+            >
+              <Star
+                className="w-4 h-4"
+                style={{
+                  color: '#D97706',
+                }}
+              />
+            </div>
+
+            <p className="text-base font-bold text-foreground">
+              {cargandoResumen
+                ? '...'
+                : `${promedioCalificacion.toFixed(1)}★`}
+            </p>
+
+            <p className="text-[11px] text-muted-foreground">
+              Calificación
+            </p>
+          </div>
         </div>
       </div>
 

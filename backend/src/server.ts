@@ -5548,12 +5548,7 @@ app.get(
     }
   }
 );
-// ==========================================
-// INICIO DEL SERVIDOR
-// ==========================================
-app.listen(port, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${port}`);
-});
+
 
 // ==========================================
 // AGENDA / RESERVAS
@@ -5952,4 +5947,425 @@ app.post('/api/reservas', async (req, res) => {
     console.error('Error al crear reserva:', error);
     return res.status(500).json({ mensaje: 'Error al crear la reserva', detalle: error.message });
   }
+});
+
+// ==========================================
+// HISTORIAL DE CONTRATACIONES DEL CLIENTE
+// SOLO SERVICIOS COMPLETADOS
+// ==========================================
+app.get(
+  '/api/clientes/:idCliente/historial',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente,
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de cliente inválido',
+        });
+      }
+
+      const respuesta: any =
+        await database.query(`
+          SELECT
+            s.id_servicio,
+
+            COALESCE(
+              s.fk_cliente,
+              s.id_cliente
+            ) AS id_cliente,
+
+            COALESCE(
+              s.fk_categoria,
+              s.id_categoria
+            ) AS id_categoria,
+
+            s.fk_empleado,
+            s.titulo,
+            s.descripcion,
+            s.direccion,
+            s.presupuesto,
+            s.fecha,
+            s.hora_inicio,
+            s.hora_fin,
+
+            'completed' AS estado,
+
+            cat.nombre AS nombre_categoria,
+
+            e.id_empleado,
+            e.nombre AS nombre_empleado,
+            e.foto_url AS foto_empleado,
+
+            reserva.id_reserva,
+
+            resena.id_resena,
+            resena.calificacion_general,
+            resena.comentario AS comentario_resena,
+            resena.fecha AS fecha_resena,
+
+            CASE
+              WHEN resena.id_resena IS NULL
+                THEN 0
+              ELSE 1
+            END AS tiene_resena
+
+          FROM servicios AS s
+
+          LEFT JOIN categorias AS cat
+            ON cat.id_categoria =
+              COALESCE(
+                s.fk_categoria,
+                s.id_categoria
+              )
+
+          LEFT JOIN empleados AS e
+            ON e.id_empleado =
+              s.fk_empleado
+
+          OUTER APPLY (
+            SELECT TOP 1
+              r.id_reserva,
+              r.id_empleado
+            FROM reservas AS r
+            WHERE r.id_servicio =
+              s.id_servicio
+            ORDER BY
+              r.fecha_creacion DESC,
+              r.id_reserva DESC
+          ) AS reserva
+
+          OUTER APPLY (
+            SELECT TOP 1
+              re.id_resena,
+              re.calificacion_general,
+              re.comentario,
+              re.fecha
+            FROM resenas AS re
+            WHERE re.id_reserva =
+              reserva.id_reserva
+            ORDER BY
+              re.fecha DESC,
+              re.id_resena DESC
+          ) AS resena
+
+          WHERE COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) = ${idCliente}
+
+          AND LOWER(
+            LTRIM(
+              RTRIM(
+                COALESCE(
+                  s.estado,
+                  ''
+                )
+              )
+            )
+          ) IN (
+            'completado',
+            'completada',
+            'completed'
+          )
+
+          ORDER BY
+            s.fecha DESC,
+            s.hora_inicio DESC,
+            s.id_servicio DESC;
+        `);
+
+      const servicios: any[] =
+        Array.isArray(
+          respuesta?.recordset,
+        )
+          ? respuesta.recordset
+          : Array.isArray(
+                respuesta?.recordsets?.[0],
+              )
+            ? respuesta.recordsets[0]
+            : Array.isArray(
+                  respuesta?.[0],
+                )
+              ? respuesta[0]
+              : Array.isArray(
+                    respuesta?.rows,
+                  )
+                ? respuesta.rows
+                : Array.isArray(
+                      respuesta,
+                    )
+                  ? respuesta
+                  : [];
+
+      const resenas = servicios
+        .filter(
+          (servicio) =>
+            Number(
+              servicio.tiene_resena,
+            ) === 1,
+        )
+        .map((servicio) => ({
+          id:
+            servicio.id_resena,
+
+          bookingId:
+            servicio.id_servicio,
+
+          reviewerName:
+            servicio.nombre_empleado ||
+            'Trabajador',
+
+          rating:
+            Number(
+              servicio.calificacion_general,
+            ) || 0,
+
+          comment:
+            servicio.comentario_resena ||
+            '',
+
+          date:
+            servicio.fecha_resena ||
+            '',
+        }));
+
+      return res.status(200).json({
+        servicios,
+        resenas,
+        total_servicios:
+          servicios.length,
+        total_resenas:
+          resenas.length,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al consultar historial del cliente:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar el historial de contrataciones',
+
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  },
+);
+
+// ==========================================
+// RESUMEN DEL PERFIL DEL EMPLEADO
+// ==========================================
+app.get(
+  '/api/empleados/:idEmpleado/resumen-perfil',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const respuestaResumen: any =
+        await database.query(`
+          SELECT
+            e.id_empleado,
+
+            COUNT(
+              DISTINCT CASE
+                WHEN LOWER(
+                  LTRIM(
+                    RTRIM(
+                      COALESCE(s.estado, '')
+                    )
+                  )
+                ) IN (
+                  'completado',
+                  'completada',
+                  'completed'
+                )
+                THEN s.id_servicio
+              END
+            ) AS total_trabajos,
+
+            COUNT(
+              DISTINCT r.id_resena
+            ) AS total_resenas,
+
+            COALESCE(
+              AVG(
+                CAST(
+                  r.calificacion_general
+                  AS DECIMAL(10, 2)
+                )
+              ),
+              0
+            ) AS promedio_calificacion
+
+          FROM empleados AS e
+
+          LEFT JOIN servicios AS s
+            ON s.fk_empleado =
+              e.id_empleado
+
+          LEFT JOIN reservas AS re
+            ON re.id_servicio =
+              s.id_servicio
+
+          LEFT JOIN resenas AS r
+            ON r.id_reserva =
+              re.id_reserva
+            AND r.id_empleado =
+              e.id_empleado
+
+          WHERE e.id_empleado =
+            ${idEmpleado}
+
+          GROUP BY
+            e.id_empleado;
+        `);
+
+      const resumen =
+        respuestaResumen?.recordset?.[0] ??
+        respuestaResumen?.recordsets?.[0]?.[0] ??
+        respuestaResumen?.[0]?.[0] ??
+        respuestaResumen?.rows?.[0] ??
+        null;
+
+      if (!resumen) {
+        return res.status(404).json({
+          mensaje: 'Empleado no encontrado',
+        });
+      }
+
+      const respuestaResenas: any =
+        await database.query(`
+          SELECT
+            r.id_resena,
+            r.id_reserva,
+            r.calificacion_general,
+            r.puntualidad,
+            r.calidad,
+            r.comunicacion,
+            r.comentario,
+            r.fecha,
+
+            re.id_servicio,
+
+            COALESCE(
+              NULLIF(c.nombre, ''),
+              NULLIF(c.nombre_C, ''),
+              'Cliente'
+            ) AS nombre_cliente,
+
+            COALESCE(
+              c.foto_url,
+              c.foto
+            ) AS foto_cliente
+
+          FROM resenas AS r
+
+          INNER JOIN reservas AS re
+            ON re.id_reserva =
+              r.id_reserva
+
+          INNER JOIN servicios AS s
+            ON s.id_servicio =
+              re.id_servicio
+
+          LEFT JOIN clientes AS c
+            ON c.id_cliente =
+              COALESCE(
+                s.fk_cliente,
+                s.id_cliente
+              )
+
+          WHERE r.id_empleado =
+            ${idEmpleado}
+
+          ORDER BY
+            r.fecha DESC,
+            r.id_resena DESC;
+        `);
+
+      const resenas: any[] =
+        Array.isArray(
+          respuestaResenas?.recordset,
+        )
+          ? respuestaResenas.recordset
+          : Array.isArray(
+                respuestaResenas
+                  ?.recordsets?.[0],
+              )
+            ? respuestaResenas.recordsets[0]
+            : Array.isArray(
+                  respuestaResenas?.[0],
+                )
+              ? respuestaResenas[0]
+              : Array.isArray(
+                    respuestaResenas?.rows,
+                  )
+                ? respuestaResenas.rows
+                : Array.isArray(
+                      respuestaResenas,
+                    )
+                  ? respuestaResenas
+                  : [];
+
+      return res.status(200).json({
+        total_trabajos:
+          Number(
+            resumen.total_trabajos,
+          ) || 0,
+
+        total_resenas:
+          Number(
+            resumen.total_resenas,
+          ) || 0,
+
+        promedio_calificacion:
+          Number(
+            resumen.promedio_calificacion,
+          ) || 0,
+
+        resenas,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al consultar resumen del empleado:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar el perfil del empleado',
+
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  },
+);
+
+// ==========================================
+// INICIO DEL SERVIDOR
+// ==========================================
+app.listen(port, () => {
+  console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });

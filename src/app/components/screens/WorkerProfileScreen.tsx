@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import {
+  useNavigate,
+  useParams,
+} from 'react-router';
 import { motion } from 'motion/react';
 import {
   Briefcase,
   CheckCircle,
   ChevronLeft,
-  DollarSign,
   MapPin,
   MessageCircle,
   Share2,
@@ -14,6 +16,9 @@ import {
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { StarRating } from '../shared/StarRating';
+import { ReviewCard } from '../shared/ReviewCard';
+
+const API_URL = 'http://localhost:3000/api';
 
 interface CategoriaEmpleado {
   id_categoria: number;
@@ -45,40 +50,142 @@ interface Empleado {
   galeria?: string[];
 }
 
+interface ResenaEmpleado {
+  id_resena: number;
+  id_reserva: number;
+  id_servicio: number;
+  calificacion_general: number;
+  puntualidad?: number | null;
+  calidad?: number | null;
+  comunicacion?: number | null;
+  comentario?: string | null;
+  fecha?: string | null;
+  nombre_cliente?: string | null;
+  foto_cliente?: string | null;
+}
+
+interface ResumenEmpleadoRespuesta {
+  total_trabajos: number;
+  total_resenas: number;
+  promedio_calificacion: number;
+  resenas: ResenaEmpleado[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface RespuestaEmpleado {
+  empleado?: Empleado;
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface RespuestaCategorias {
+  categorias?: CategoriaEmpleado[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface RespuestaSubcategorias {
+  subcategorias?: SubcategoriaEmpleado[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+async function leerRespuestaJson<T>(
+  respuesta: Response,
+): Promise<T> {
+  const texto = await respuesta.text();
+
+  if (!texto.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error(
+      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`,
+    );
+  }
+}
+
+function formatearFecha(
+  fecha?: string | null,
+): string {
+  if (!fecha) {
+    return '';
+  }
+
+  const fechaConvertida = new Date(fecha);
+
+  if (
+    Number.isNaN(
+      fechaConvertida.getTime(),
+    )
+  ) {
+    return fecha;
+  }
+
+  return fechaConvertida.toLocaleDateString(
+    'es-HN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    },
+  );
+}
+
 export default function WorkerProfileScreen() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{
+    id: string;
+  }>();
+
   const navigate = useNavigate();
 
-  const [worker, setWorker] = useState<Empleado | null>(null);
-  const [categorias, setCategorias] = useState<CategoriaEmpleado[]>([]);
-  const [subcategorias, setSubcategorias] =
-    useState<SubcategoriaEmpleado[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
+  const [worker, setWorker] =
+    useState<Empleado | null>(null);
+
+  const [categorias, setCategorias] =
+    useState<CategoriaEmpleado[]>([]);
+
+  const [
+    subcategorias,
+    setSubcategorias,
+  ] = useState<SubcategoriaEmpleado[]>([]);
+
+  const [resenas, setResenas] =
+    useState<ResenaEmpleado[]>([]);
+
+  const [totalTrabajos, setTotalTrabajos] =
+    useState(0);
+
+  const [totalResenas, setTotalResenas] =
+    useState(0);
+
+  const [
+    promedioCalificacion,
+    setPromedioCalificacion,
+  ] = useState(0);
+
+  const [cargando, setCargando] =
+    useState(true);
+
+  const [error, setError] =
+    useState('');
 
   useEffect(() => {
-    const parsearJsonSeguro = async (respuesta: Response) => {
-      const texto = await respuesta.text();
-
-      if (!texto) {
-        return null;
-      }
-
-      try {
-        return JSON.parse(texto);
-      } catch {
-        return null;
-      }
-    };
-
-    const obtenerEmpleado = async () => {
+    async function obtenerPerfilCompleto() {
       const idEmpleado = Number(id);
 
       if (
         !Number.isInteger(idEmpleado) ||
         idEmpleado <= 0
       ) {
-        setError('No se recibió un ID de empleado válido');
+        setError(
+          'No se recibió un ID de empleado válido',
+        );
+
         setCargando(false);
         return;
       }
@@ -87,130 +194,218 @@ export default function WorkerProfileScreen() {
         setCargando(true);
         setError('');
 
-        const respuestaEmpleado = await fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}`,
-          {
-            cache: 'no-store',
-          }
-        );
-
-        if (!respuestaEmpleado.ok) {
-          const datosError =
-            await parsearJsonSeguro(respuestaEmpleado);
-
-          throw new Error(
-            datosError?.mensaje ||
-              `No se pudo obtener el empleado. Código: ${respuestaEmpleado.status}`
-          );
-        }
-
-        const datosEmpleado =
-          await parsearJsonSeguro(respuestaEmpleado);
-
-        const empleadoRecibido =
-          datosEmpleado?.empleado ??
-          datosEmpleado ??
-          null;
-
-        if (
-          !empleadoRecibido ||
-          typeof empleadoRecibido !== 'object'
-        ) {
-          throw new Error(
-            'No se pudo cargar la información del empleado'
-          );
-        }
-
-        setWorker(empleadoRecibido as Empleado);
-
         const [
+          respuestaEmpleado,
           respuestaCategorias,
           respuestaSubcategorias,
+          respuestaResumen,
         ] = await Promise.all([
           fetch(
-            `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+            `${API_URL}/empleados/${idEmpleado}`,
             {
               cache: 'no-store',
-            }
+            },
           ),
+
           fetch(
-            `http://localhost:3000/api/empleados/${idEmpleado}/subcategorias`,
+            `${API_URL}/empleados/${idEmpleado}/categorias`,
             {
               cache: 'no-store',
-            }
+            },
+          ),
+
+          fetch(
+            `${API_URL}/empleados/${idEmpleado}/subcategorias`,
+            {
+              cache: 'no-store',
+            },
+          ),
+
+          fetch(
+            `${API_URL}/empleados/${idEmpleado}/resumen-perfil`,
+            {
+              cache: 'no-store',
+            },
           ),
         ]);
 
+        const datosEmpleado =
+          await leerRespuestaJson<
+            Empleado | RespuestaEmpleado
+          >(respuestaEmpleado);
+
+        if (!respuestaEmpleado.ok) {
+          const datosError =
+            datosEmpleado as RespuestaEmpleado;
+
+          throw new Error(
+            datosError.detalle ||
+              datosError.mensaje ||
+              `No se pudo obtener el empleado. Código ${respuestaEmpleado.status}`,
+          );
+        }
+
+        const empleadoRecibido =
+          'empleado' in datosEmpleado
+            ? datosEmpleado.empleado
+            : datosEmpleado;
+
+        if (
+          !empleadoRecibido ||
+          typeof empleadoRecibido !==
+            'object'
+        ) {
+          throw new Error(
+            'No se pudo cargar la información del empleado',
+          );
+        }
+
+        setWorker(
+          empleadoRecibido as Empleado,
+        );
+
         if (respuestaCategorias.ok) {
           const datosCategorias =
-            await parsearJsonSeguro(
-              respuestaCategorias
-            );
+            await leerRespuestaJson<
+              | CategoriaEmpleado[]
+              | RespuestaCategorias
+            >(respuestaCategorias);
 
-          setCategorias(
+          const categoriasRecibidas =
             Array.isArray(datosCategorias)
               ? datosCategorias
               : Array.isArray(
-                    datosCategorias?.categorias
+                    datosCategorias.categorias,
                   )
                 ? datosCategorias.categorias
-                : []
+                : [];
+
+          setCategorias(
+            categoriasRecibidas,
           );
         } else {
           setCategorias(
             Array.isArray(
-              (empleadoRecibido as Empleado)
-                .categorias
+              (
+                empleadoRecibido as Empleado
+              ).categorias,
             )
-              ? (empleadoRecibido as Empleado)
-                  .categorias!
-              : []
+              ? (
+                  empleadoRecibido as Empleado
+                ).categorias!
+              : [],
           );
         }
 
-        if (respuestaSubcategorias.ok) {
+        if (
+          respuestaSubcategorias.ok
+        ) {
           const datosSubcategorias =
-            await parsearJsonSeguro(
-              respuestaSubcategorias
-            );
+            await leerRespuestaJson<
+              | SubcategoriaEmpleado[]
+              | RespuestaSubcategorias
+            >(respuestaSubcategorias);
 
-          setSubcategorias(
-            Array.isArray(datosSubcategorias)
+          const subcategoriasRecibidas =
+            Array.isArray(
+              datosSubcategorias,
+            )
               ? datosSubcategorias
               : Array.isArray(
                     datosSubcategorias
-                      ?.subcategorias
+                      .subcategorias,
                   )
-                ? datosSubcategorias
-                    .subcategorias
-                : []
+                ? datosSubcategorias.subcategorias
+                : [];
+
+          setSubcategorias(
+            subcategoriasRecibidas,
           );
         } else {
           setSubcategorias([]);
         }
-      } catch (error) {
+
+        if (respuestaResumen.ok) {
+          const datosResumen =
+            await leerRespuestaJson<ResumenEmpleadoRespuesta>(
+              respuestaResumen,
+            );
+
+          setTotalTrabajos(
+            Number(
+              datosResumen.total_trabajos,
+            ) || 0,
+          );
+
+          setTotalResenas(
+            Number(
+              datosResumen.total_resenas,
+            ) || 0,
+          );
+
+          setPromedioCalificacion(
+            Number(
+              datosResumen.promedio_calificacion,
+            ) || 0,
+          );
+
+          setResenas(
+            Array.isArray(
+              datosResumen.resenas,
+            )
+              ? datosResumen.resenas
+              : [],
+          );
+        } else {
+          const datosError =
+            await leerRespuestaJson<ResumenEmpleadoRespuesta>(
+              respuestaResumen,
+            );
+
+          console.error(
+            'No se pudo cargar el resumen:',
+            datosError.detalle ||
+              datosError.mensaje,
+          );
+
+          setTotalTrabajos(0);
+          setTotalResenas(0);
+          setPromedioCalificacion(0);
+          setResenas([]);
+        }
+      } catch (errorDesconocido) {
         console.error(
           'Error al cargar el empleado:',
-          error
+          errorDesconocido,
         );
 
+        setWorker(null);
+        setCategorias([]);
+        setSubcategorias([]);
+        setResenas([]);
+        setTotalTrabajos(0);
+        setTotalResenas(0);
+        setPromedioCalificacion(0);
+
         setError(
-          error instanceof Error
-            ? error.message
-            : 'No se pudo cargar la información del empleado'
+          errorDesconocido instanceof Error
+            ? errorDesconocido.message
+            : 'No se pudo cargar la información del empleado',
         );
       } finally {
         setCargando(false);
       }
-    };
+    }
 
-    obtenerEmpleado();
+    void obtenerPerfilCompleto();
   }, [id]);
 
   if (cargando) {
     return (
-      <div className="flex min-h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex min-h-full flex-col items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1A56DB] border-t-transparent" />
+
+        <p className="mt-3 text-sm text-muted-foreground">
           Cargando perfil...
         </p>
       </div>
@@ -221,7 +416,8 @@ export default function WorkerProfileScreen() {
     return (
       <div className="flex min-h-full flex-col items-center justify-center px-5">
         <p className="text-center text-sm text-red-500">
-          {error || 'Empleado no encontrado'}
+          {error ||
+            'Empleado no encontrado'}
         </p>
 
         <button
@@ -236,21 +432,29 @@ export default function WorkerProfileScreen() {
   }
 
   const estadoNormalizado =
-    worker.estado?.trim().toLowerCase();
+    worker.estado
+      ?.trim()
+      .toLowerCase();
 
   const estaDisponible =
-    estadoNormalizado === 'disponible' ||
+    estadoNormalizado ===
+      'disponible' ||
     estadoNormalizado === 'activo';
 
-  const galeria = Array.isArray(worker.galeria)
+  const galeria = Array.isArray(
+    worker.galeria,
+  )
     ? worker.galeria.filter(Boolean)
     : [];
 
   const imagenPrincipal =
-    galeria[0] || worker.foto || '';
+    galeria[0] ||
+    worker.foto ||
+    '';
 
   return (
     <div className="flex min-h-full flex-col">
+      {/* Imagen principal */}
       <div className="relative">
         <ImageWithFallback
           src={imagenPrincipal}
@@ -271,6 +475,20 @@ export default function WorkerProfileScreen() {
 
         <button
           type="button"
+          onClick={() => {
+            if (
+              navigator.share
+            ) {
+              void navigator.share({
+                title:
+                  worker.nombre_E,
+                text:
+                  `Mira el perfil de ${worker.nombre_E}`,
+                url:
+                  window.location.href,
+              });
+            }
+          }}
           className="absolute right-4 top-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
           aria-label="Compartir perfil"
         >
@@ -280,7 +498,10 @@ export default function WorkerProfileScreen() {
         <div className="absolute -bottom-10 left-5">
           <div className="relative">
             <ImageWithFallback
-              src={worker.foto || imagenPrincipal}
+              src={
+                worker.foto ||
+                imagenPrincipal
+              }
               alt={worker.nombre_E}
               className="h-20 w-20 rounded-2xl border-4 border-background object-cover shadow-lg"
             />
@@ -295,16 +516,17 @@ export default function WorkerProfileScreen() {
       </div>
 
       <div className="flex-1 px-5 pt-14">
+        {/* Nombre y estado */}
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-foreground">
               {worker.nombre_E}
             </h1>
 
             <div className="mt-0.5 flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
-              <span className="text-sm text-muted-foreground">
+              <span className="truncate text-sm text-muted-foreground">
                 {worker.direccion ||
                   'Dirección no disponible'}
               </span>
@@ -312,7 +534,7 @@ export default function WorkerProfileScreen() {
           </div>
 
           <span
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
               estaDisponible
                 ? 'bg-green-100 text-green-700'
                 : 'bg-slate-100 text-slate-500'
@@ -324,23 +546,24 @@ export default function WorkerProfileScreen() {
           </span>
         </div>
 
+        {/* Contadores reales */}
         <div className="mt-4 flex gap-4 border-y border-border py-4">
           <div className="flex-1 text-center">
             <div className="flex items-center justify-center gap-1">
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
 
               <span className="font-bold text-foreground">
-                {Number(
-                  worker.calificacion ?? 0
+                {promedioCalificacion.toFixed(
+                  1,
                 )}
               </span>
             </div>
 
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {Number(
-                worker.cantidad_resenas ?? 0
-              )}{' '}
-              reseñas
+              {totalResenas}{' '}
+              {totalResenas === 1
+                ? 'reseña'
+                : 'reseñas'}
             </p>
           </div>
 
@@ -351,38 +574,46 @@ export default function WorkerProfileScreen() {
               <Briefcase className="h-4 w-4 text-[#1A56DB]" />
 
               <span className="font-bold text-foreground">
-                {Number(worker.N_trabajos ?? 0)}
+                {totalTrabajos}
               </span>
             </div>
 
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              trabajos
+              Trabajos completados
             </p>
           </div>
-
-          
         </div>
 
+        {/* Categorías */}
         <div className="mt-4">
           <div className="flex flex-wrap gap-2">
             {categorias.length > 0 ? (
-              categorias.map((categoria) => (
-                <span
-                  key={categoria.id_categoria}
-                  className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
-                >
-                  {categoria.nombre.charAt(0).toUpperCase() + categoria.nombre.slice(1)}
-                </span>
-              ))
+              categorias.map(
+                (categoria) => (
+                  <span
+                    key={
+                      categoria.id_categoria
+                    }
+                    className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                  >
+                    {categoria.nombre
+                      .charAt(0)
+                      .toUpperCase() +
+                      categoria.nombre.slice(
+                        1,
+                      )}
+                  </span>
+                ),
+              )
             ) : (
               <p className="text-sm text-muted-foreground">
-                Este empleado no tiene categorías
-                asignadas.
+                Este empleado no tiene categorías asignadas.
               </p>
             )}
           </div>
         </div>
 
+        {/* Sobre mí */}
         <div className="mt-5">
           <h3 className="mb-2 text-sm font-bold text-foreground">
             Sobre mí
@@ -394,13 +625,15 @@ export default function WorkerProfileScreen() {
           </p>
         </div>
 
+        {/* Servicios */}
         <div className="mt-5">
           <h3 className="mb-2 text-sm font-bold text-foreground">
             Servicios que ofrezco
           </h3>
 
           <div className="flex flex-wrap gap-2">
-            {subcategorias.length > 0 ? (
+            {subcategorias.length >
+            0 ? (
               subcategorias.map(
                 (subcategoria) => (
                   <span
@@ -413,17 +646,17 @@ export default function WorkerProfileScreen() {
                       subcategoria.nombre_subcategoria ||
                       'Subcategoría sin nombre'}
                   </span>
-                )
+                ),
               )
             ) : (
               <p className="text-sm text-muted-foreground">
-                Este empleado todavía no tiene
-                subcategorías seleccionadas.
+                Este empleado todavía no tiene servicios específicos seleccionados.
               </p>
             )}
           </div>
         </div>
 
+        {/* Galería */}
         {galeria.length > 0 && (
           <div className="mt-5">
             <h3 className="mb-2 text-sm font-bold text-foreground">
@@ -431,87 +664,155 @@ export default function WorkerProfileScreen() {
             </h3>
 
             <div className="grid grid-cols-3 gap-2">
-              {galeria.map((url, index) => (
-                <motion.div
-                  key={`${url}-${index}`}
-                  whileTap={{ scale: 0.96 }}
-                  className="aspect-square overflow-hidden rounded-xl"
-                >
-                  <ImageWithFallback
-                    src={url}
-                    alt={`Trabajo ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                </motion.div>
-              ))}
+              {galeria.map(
+                (url, index) => (
+                  <motion.div
+                    key={`${url}-${index}`}
+                    whileTap={{
+                      scale: 0.96,
+                    }}
+                    className="aspect-square overflow-hidden rounded-xl"
+                  >
+                    <ImageWithFallback
+                      src={url}
+                      alt={`Trabajo ${
+                        index + 1
+                      }`}
+                      className="h-full w-full object-cover"
+                    />
+                  </motion.div>
+                ),
+              )}
             </div>
           </div>
         )}
 
+        {/* Reseñas reales */}
         <div className="mb-24 mt-5">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">
-              Reseñas (
-              {Number(
-                worker.cantidad_resenas ?? 0
-              )}
-              )
+              Reseñas ({totalResenas})
             </h3>
 
             <div className="flex items-center gap-1">
               <StarRating
-                value={Number(
-                  worker.calificacion ?? 0
-                )}
+                value={
+                  promedioCalificacion
+                }
                 size="xs"
               />
 
               <span className="text-xs font-semibold text-foreground">
-                {Number(
-                  worker.calificacion ?? 0
+                {promedioCalificacion.toFixed(
+                  1,
                 )}
               </span>
             </div>
           </div>
 
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            Sin reseñas disponibles.
-          </p>
+          {resenas.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {resenas.map(
+                (resena) => (
+                  <ReviewCard
+                    key={
+                      resena.id_resena
+                    }
+                    review={{
+                      id: String(
+                        resena.id_resena,
+                      ),
+
+                      bookingId: String(
+                        resena.id_servicio,
+                      ),
+
+                      reviewerId: '',
+
+                      reviewerName:
+                        resena.nombre_cliente ||
+                        'Cliente',
+
+                      reviewerAvatarUrl:
+                        resena.foto_cliente ||
+                        '',
+
+                      targetId: String(
+                        worker.id_empleado,
+                      ),
+
+                      rating:
+                        Number(
+                          resena.calificacion_general,
+                        ) || 0,
+
+                      punctualityRating:
+                        Number(
+                          resena.puntualidad,
+                        ) || 0,
+
+                      qualityRating:
+                        Number(
+                          resena.calidad,
+                        ) || 0,
+
+                      communicationRating:
+                        Number(
+                          resena.comunicacion,
+                        ) || 0,
+
+                      comment:
+                        resena.comentario ||
+                        '',
+
+                      date:
+                        formatearFecha(
+                          resena.fecha,
+                        ),
+                    }}
+                  />
+                ),
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-card px-5 py-6 text-center">
+              <Star className="mx-auto h-7 w-7 text-muted-foreground" />
+
+              <p className="mt-3 text-sm font-semibold text-foreground">
+                Aún no tiene reseñas
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Las opiniones de sus clientes aparecerán aquí.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="sticky bottom-0 flex gap-3 border-t border-border bg-card px-5 py-3">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={() =>
-            navigate(
-              `/home/chat/${worker.id_empleado}`
-            )
-          }
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#1A56DB] py-3 font-semibold text-[#1A56DB]"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Chat
-        </motion.button>
+      {/* Botones inferiores */}
+     <div className="sticky bottom-0 flex gap-3 border-t border-border bg-card px-5 py-3">
+  <motion.button
+    type="button"
+    whileTap={{ scale: 0.97 }}
+    onClick={() =>
+      navigate(`/home/chat/${worker.id_empleado}`)
+    }
+    className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#1A56DB] py-3 font-semibold text-[#1A56DB]"
+  >
+    <MessageCircle className="h-4 w-4" />
+    Chat
+  </motion.button>
 
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={() =>
-            navigate('/home/payment', {
-              state: {
-                workerId:
-                  worker.id_empleado,
-                workerName: worker.nombre_E,
-              },
-            })
-          }
-          className="flex-1 rounded-xl bg-[#1A56DB] px-6 py-3 font-semibold text-white shadow-lg shadow-[#1A56DB]/30"
-        >
-          Contratar ahora
-        </motion.button>
-      </div>
-    </div>
+  <motion.button
+    type="button"
+    whileTap={{ scale: 0.97 }}
+    onClick={() => navigate('/home/search')}
+    className="flex-1 rounded-xl bg-[#1A56DB] px-6 py-3 font-semibold text-white shadow-lg shadow-[#1A56DB]/30"
+  >
+    Solicitar servicio
+  </motion.button>
+</div>
+  </div>
   );
 }
