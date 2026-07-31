@@ -56,6 +56,7 @@ interface ServicioApi {
   nombre_cliente?: string | null;
   nombre_empleado?: string | null;
   nombre_E?: string | null;
+  total_resenas?: number | string | null;
 }
 const MOTIVOS_TRABAJADOR = [
   'Emergencia personal',
