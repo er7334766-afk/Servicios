@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -126,11 +126,13 @@ function formatearPrecio(precio: number): string {
 
 export default function ServiceManagementScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { idServicio } = useParams();
   const { role } = useApp();
 
   const esTrabajador = role === 'worker';
   const servicioId = Number(idServicio);
+  const pagoCompletado = location.state?.paymentCompleted === true;
 
   const [servicio, setServicio] = useState<ServicioGestion | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -711,6 +713,24 @@ export default function ServiceManagementScreen() {
             <motion.button
               whileTap={{ scale: 0.98 }}
               type="button"
+              onClick={() =>
+                navigate('/home/payment', {
+                  state: {
+                    returnTo: `/home/contratacion/${servicio.id_servicio}`,
+                    serviceId: servicio.id_servicio,
+                    serviceTitle: servicio.titulo,
+                    serviceTotal: servicio.presupuesto,
+                  },
+                })
+              }
+              className="w-full rounded-xl bg-[#1A56DB] px-4 py-3 text-sm font-bold text-white"
+            >
+              Proceder al pago
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              type="button"
               disabled={guardando}
               onClick={abrirModalCancelacion}
               className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 disabled:opacity-50"
@@ -720,30 +740,51 @@ export default function ServiceManagementScreen() {
           </section>
         )}
 
-      {/* Servicio completado */}
-      {servicio.estado === 'Completado' && (
+      {/* Servicio completado / pago realizado */}
+      {((servicio.estado === 'Completado' || pagoCompletado) && !esTrabajador) && (
         <section className="space-y-3 pb-4">
           <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-center">
             <CheckCircle className="mx-auto h-8 w-8 text-green-600" />
 
             <p className="mt-2 text-sm font-bold text-green-700">
-              Servicio completado
+              {pagoCompletado
+                ? 'Pago realizado correctamente'
+                : 'Servicio completado'}
             </p>
           </div>
 
-          {!esTrabajador && (
+          {!pagoCompletado && (
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.98 }}
               type="button"
               onClick={() =>
-                navigate(`/home/review/${servicio.id_servicio}`)
+                navigate('/home/payment', {
+                  state: {
+                    returnTo: `/home/contratacion/${servicio.id_servicio}`,
+                    serviceId: servicio.id_servicio,
+                    serviceTitle: servicio.titulo,
+                    serviceTotal: servicio.presupuesto,
+                  },
+                })
               }
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-white"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A56DB] px-4 py-3.5 text-sm font-bold text-white"
             >
-              <span className="text-lg">⭐</span>
-              Calificar servicio
+              <span className="text-lg">💳</span>
+              Proceder al pago
             </motion.button>
           )}
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            type="button"
+            onClick={() =>
+              navigate(`/home/review/${servicio.id_servicio}`)
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3.5 text-sm font-bold text-white"
+          >
+            <span className="text-lg">⭐</span>
+            Calificar servicio
+          </motion.button>
         </section>
       )}
       </main>
