@@ -1085,34 +1085,42 @@ export default function SearchScreen() {
 
             {/* Presupuesto */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-semibold text-foreground">
-                  Presupuesto
-                </label>
+              <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                Presupuesto
+              </label>
 
-                <span className="text-sm font-bold text-[#1A56DB]">
-                  L{' '}
-                  {Number(
-                    currentBudget
-                  ).toLocaleString()}
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  L
                 </span>
+
+                <input
+                  type="number"
+                  min={100}
+                  step={100}
+                  {...register('budget', {
+                    valueAsNumber: true,
+                    required: 'El presupuesto es obligatorio',
+                    min: {
+                      value: 100,
+                      message:
+                        'El presupuesto debe ser al menos L 100',
+                    },
+                  })}
+                  className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  placeholder="Ingresa el presupuesto"
+                />
               </div>
 
-              <input
-                type="range"
-                min={500}
-                max={5000}
-                step={500}
-                {...register('budget', {
-                  valueAsNumber: true,
-                })}
-                className="w-full accent-[#1A56DB]"
-              />
+              {errors.budget && (
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.budget.message}
+                </p>
+              )}
 
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>L 500</span>
-                <span>L 5000</span>
-              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Presupuesto mínimo L 100. Puedes ingresar cualquier valor numérico.
+              </p>
             </div>
 
             {/* Dirección */}
