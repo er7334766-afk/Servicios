@@ -237,6 +237,7 @@ app.get('/api/empleados', async (_req, res) => {
         direccion,
         estado,
         numero_trabajos AS N_trabajos,
+        foto_url,
         fecha_creacion AS fechaCreacion
       FROM empleados
       `,
