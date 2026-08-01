@@ -38,6 +38,14 @@ const STATUS_COLORS: Record<string, string> = {
   completed:
     'bg-green-100 text-green-700',
   cancelled: 'bg-red-100 text-red-700',
+  pendiente: 'bg-amber-100 text-amber-700',
+  asignado: 'bg-blue-100 text-[#1A56DB]',
+  aceptado: 'bg-blue-100 text-[#1A56DB]',
+  aceptada: 'bg-blue-100 text-[#1A56DB]',
+  'en proceso': 'bg-purple-100 text-purple-700',
+  en_proceso: 'bg-purple-100 text-purple-700',
+  completado: 'bg-green-100 text-green-700',
+  cancelado: 'bg-red-100 text-red-700',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -46,6 +54,14 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: 'En progreso',
   completed: 'Completado',
   cancelled: 'Cancelado',
+  pendiente: 'Pendiente',
+  asignado: 'Asignado',
+  aceptado: 'Confirmado',
+  aceptada: 'Confirmado',
+  'en proceso': 'En progreso',
+  en_proceso: 'En progreso',
+  completado: 'Completado',
+  cancelado: 'Cancelado',
 };
 
 // Categories loaded at runtime; keep a typed empty list to satisfy TypeScript
@@ -56,6 +72,67 @@ const SERVICE_CATEGORIES_RUNTIME: Array<{
   color?: string;
 }> = [];
 
+interface ProximoTrabajo {
+  id_servicio: number;
+  titulo?: string | null;
+  descripcion?: string | null;
+  fecha: string;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
+  estado: string;
+  nombre_cliente?: string | null;
+  nombre_categoria?: string | null;
+}
+
+function normalizarFecha(fecha: string): string {
+  return String(fecha ?? '').split('T')[0];
+}
+
+function crearFechaLocal(fecha: string): Date {
+  const [anio, mes, dia] = normalizarFecha(fecha)
+    .split('-')
+    .map(Number);
+
+  return new Date(anio, mes - 1, dia);
+}
+
+function formatearFechaTrabajo(fecha: string): string {
+  const valor = crearFechaLocal(fecha);
+
+  if (Number.isNaN(valor.getTime())) {
+    return 'Fecha no disponible';
+  }
+
+  return valor.toLocaleDateString('es-HN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatearHoraTrabajo(hora?: string | null): string {
+  if (!hora) {
+    return '--:--';
+  }
+
+  const partes = String(hora)
+    .split('T')
+    .pop()
+    ?.split(':');
+
+  if (!partes || partes.length < 2) {
+    return String(hora);
+  }
+
+  return `${partes[0]}:${partes[1]}`;
+}
+
+function normalizarEstadoTrabajo(estado: unknown): string {
+  return String(estado ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 
 export default function HomeWorkerScreen() {
   const navigate = useNavigate();
@@ -111,7 +188,14 @@ export default function HomeWorkerScreen() {
   const nombreEmpleado =
     currentUser?.name?.trim() || 'Empleado';
 
-  const myBookings: any[] = [];
+  const [myBookings, setMyBookings] =
+    useState<ProximoTrabajo[]>([]);
+
+  const [cargandoProximos, setCargandoProximos] =
+    useState(true);
+
+  const [errorProximos, setErrorProximos] =
+    useState('');
 
   const normalizarDisponibilidad = (
     valor: unknown
@@ -267,6 +351,200 @@ export default function HomeWorkerScreen() {
 
   useEffect(() => {
     cargarPostulacionesEmpleado();
+  }, [idEmpleado]);
+
+  useEffect(() => {
+    let activo = true;
+
+    const cargarProximosTrabajos = async () => {
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        if (activo) {
+          setMyBookings([]);
+          setCargandoProximos(false);
+        }
+
+        return;
+      }
+
+      try {
+        setCargandoProximos(true);
+        setErrorProximos('');
+
+        const respuesta = await fetch(
+          `http://localhost:3000/api/empleados/${idEmpleado}/servicios`,
+          {
+            cache: 'no-store',
+          }
+        );
+
+        const texto = await respuesta.text();
+
+        let datos: any = [];
+
+        if (texto.trim()) {
+          try {
+            datos = JSON.parse(texto);
+          } catch {
+            throw new Error(
+              `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+            );
+          }
+        }
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos?.detalle ||
+              datos?.mensaje ||
+              'No se pudieron cargar los próximos trabajos'
+          );
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const estadosPermitidos = [
+          'pendiente',
+          'asignado',
+          'aceptado',
+          'aceptada',
+          'confirmado',
+          'confirmada',
+          'en proceso',
+          'en_proceso',
+          'iniciado',
+          'pendiente de iniciar',
+        ];
+
+        const proximos = (
+          Array.isArray(datos)
+            ? datos
+            : Array.isArray(datos?.servicios)
+              ? datos.servicios
+              : []
+        )
+          .filter((trabajo: any) => {
+            const fechaTrabajo = crearFechaLocal(
+              String(trabajo.fecha ?? '')
+            );
+
+            const estado =
+              normalizarEstadoTrabajo(
+                trabajo.estado
+              );
+
+            return (
+              !Number.isNaN(
+                fechaTrabajo.getTime()
+              ) &&
+              fechaTrabajo >= hoy &&
+              estadosPermitidos.includes(
+                estado
+              )
+            );
+          })
+          .sort(
+            (a: any, b: any) =>
+              crearFechaLocal(
+                String(a.fecha ?? '')
+              ).getTime() -
+              crearFechaLocal(
+                String(b.fecha ?? '')
+              ).getTime()
+          )
+          .slice(0, 3)
+          .map(
+            (trabajo: any): ProximoTrabajo => ({
+              id_servicio: Number(
+                trabajo.id_servicio
+              ),
+              titulo:
+                trabajo.titulo ?? null,
+              descripcion:
+                trabajo.descripcion ?? null,
+              fecha: String(
+                trabajo.fecha ?? ''
+              ),
+              hora_inicio:
+                trabajo.hora_inicio ?? null,
+              hora_fin:
+                trabajo.hora_fin ?? null,
+              estado: String(
+                trabajo.estado ??
+                  'Pendiente'
+              ),
+              nombre_cliente:
+                trabajo.nombre_cliente ??
+                null,
+              nombre_categoria:
+                trabajo.nombre_categoria ??
+                null,
+            })
+          );
+
+        if (activo) {
+          setMyBookings(proximos);
+        }
+      } catch (error) {
+        console.error(
+          'Error al cargar próximos trabajos:',
+          error
+        );
+
+        if (activo) {
+          setMyBookings([]);
+          setErrorProximos(
+            error instanceof Error
+              ? error.message
+              : 'No se pudieron cargar los próximos trabajos'
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargandoProximos(false);
+        }
+      }
+    };
+
+    void cargarProximosTrabajos();
+
+    const intervalo = window.setInterval(
+      () => {
+        void cargarProximosTrabajos();
+      },
+      15000
+    );
+
+    const actualizarAlVolver = () => {
+      void cargarProximosTrabajos();
+    };
+
+    window.addEventListener(
+      'focus',
+      actualizarAlVolver
+    );
+
+    window.addEventListener(
+      'pageshow',
+      actualizarAlVolver
+    );
+
+    return () => {
+      activo = false;
+      window.clearInterval(intervalo);
+
+      window.removeEventListener(
+        'focus',
+        actualizarAlVolver
+      );
+
+      window.removeEventListener(
+        'pageshow',
+        actualizarAlVolver
+      );
+    };
   }, [idEmpleado]);
 
   useEffect(() => {
@@ -827,7 +1105,21 @@ export default function HomeWorkerScreen() {
           </button>
         </div>
 
-        {myBookings.length === 0 ? (
+        {cargandoProximos ? (
+          <div className="bg-muted rounded-2xl p-5 text-center">
+            <RefreshCw className="mx-auto mb-2 h-5 w-5 animate-spin text-[#1A56DB]" />
+
+            <p className="text-muted-foreground text-sm">
+              Cargando próximos trabajos...
+            </p>
+          </div>
+        ) : errorProximos ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center">
+            <p className="text-xs text-red-600">
+              {errorProximos}
+            </p>
+          </div>
+        ) : myBookings.length === 0 ? (
           <div className="bg-muted rounded-2xl p-5 text-center">
             <p className="text-muted-foreground text-sm">
               No tienes trabajos próximos
@@ -835,89 +1127,100 @@ export default function HomeWorkerScreen() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {myBookings.map(
-              (booking) => {
-                const categoria =
-                  SERVICE_CATEGORIES_RUNTIME.find(
-                    (item: { id: string }) =>
-                      item.id === booking.category
-                  );
+            {myBookings.map((booking) => {
+              const estadoClave =
+                normalizarEstadoTrabajo(
+                  booking.estado
+                );
 
-                return (
-                  <motion.div
-                    key={booking.id}
-                    whileTap={{
-                      scale: 0.98,
-                    }}
-                    className="bg-card rounded-2xl border border-border p-4"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {
-                            booking.clientName
-                          }
-                        </p>
+              const titulo =
+                String(
+                  booking.titulo ?? ''
+                ).trim() ||
+                String(
+                  booking.descripcion ?? ''
+                ).trim() ||
+                'Trabajo asignado';
 
-                        <span
-                          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                          style={{
-                            backgroundColor:
-                              categoria?.bgColor,
-                            color:
-                              categoria?.color,
-                          }}
-                        >
-                          {
-                            categoria?.label
-                          }
-                        </span>
-                      </div>
+              return (
+                <motion.button
+                  type="button"
+                  key={booking.id_servicio}
+                  whileTap={{
+                    scale: 0.98,
+                  }}
+                  onClick={() =>
+                    navigate(
+                      `/home/trabajo/${booking.id_servicio}`
+                    )
+                  }
+                  className="w-full bg-card rounded-2xl border border-border p-4 text-left"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {titulo}
+                      </p>
 
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          STATUS_COLORS[
-                            booking.status
-                          ]
-                        }`}
-                      >
-                        {
-                          STATUS_LABELS[
-                            booking.status
-                          ]
-                        }
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {booking.nombre_cliente ||
+                          'Cliente'}
+                        {' • '}
+                        {booking.nombre_categoria ||
+                          'Servicio'}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                        STATUS_COLORS[
+                          estadoClave
+                        ] ||
+                        'bg-blue-100 text-[#1A56DB]'
+                      }`}
+                    >
+                      {STATUS_LABELS[
+                        estadoClave
+                      ] || booking.estado}
+                    </span>
+                  </div>
+
+                  {booking.descripcion &&
+                    booking.descripcion.trim() !==
+                      titulo && (
+                      <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                        {booking.descripcion}
+                      </p>
+                    )}
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+
+                      <span className="text-xs text-muted-foreground">
+                        {formatearFechaTrabajo(
+                          booking.fecha
+                        )}
                       </span>
                     </div>
 
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {
-                        booking.description
-                      }
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
 
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-
-                        <span className="text-xs text-muted-foreground">
-                          {booking.date}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-
-                        <span className="text-xs text-muted-foreground">
-                          {
-                            booking.timeSlot
-                          }
-                        </span>
-                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatearHoraTrabajo(
+                          booking.hora_inicio
+                        )}
+                        {' - '}
+                        {formatearHoraTrabajo(
+                          booking.hora_fin
+                        )}
+                      </span>
                     </div>
-                  </motion.div>
-                );
-              }
-            )}
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
         )}
       </div>
