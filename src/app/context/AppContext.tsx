@@ -156,78 +156,179 @@ export function AppProvider({
   ] = useState<Notification[]>([]);
 
   useEffect(() => {
-    const rolUsuario = currentUser?.role ?? role;
+    const rolUsuario =
+      currentUser?.role ?? role;
 
-    if (!currentUser?.id || rolUsuario !== 'worker') {
+    if (
+      !currentUser ||
+      rolUsuario !== 'worker'
+    ) {
       setNotifications([]);
       return;
     }
 
-    const idEmpleado = Number(currentUser.id);
+    const usuarioActual =
+      currentUser as User & {
+        idEmpleado?: number | string;
+        id_empleado?: number | string;
+      };
 
-    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+    const idEmpleado = Number(
+      usuarioActual.idEmpleado ??
+        usuarioActual.id_empleado ??
+        usuarioActual.id
+    );
+
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
       console.error(
         'ID de empleado inválido para cargar notificaciones:',
-        currentUser.id
+        {
+          id: usuarioActual.id,
+          idEmpleado:
+            usuarioActual.idEmpleado,
+          id_empleado:
+            usuarioActual.id_empleado,
+        }
       );
+
       setNotifications([]);
       return;
     }
 
     let activo = true;
 
-    const cargarNotificaciones = async () => {
-      try {
-        const datos = await obtenerNotificacionesEmpleado(idEmpleado);
+    const cargarNotificaciones =
+      async () => {
+        try {
+          const datos =
+            await obtenerNotificacionesEmpleado(
+              idEmpleado
+            );
 
-        if (!activo) {
-          return;
+          if (!activo) {
+            return;
+          }
+
+          const notificacionesAdaptadas:
+            Notification[] = datos.map(
+              (notificacion) => {
+                const tipo = String(
+                  notificacion.tipo ?? ''
+                )
+                  .trim()
+                  .toLowerCase();
+
+                const idServicio = Number(
+                  notificacion.fk_servicio
+                );
+
+                let linkTo:
+                  | string
+                  | undefined;
+
+                if (
+                  Number.isInteger(
+                    idServicio
+                  ) &&
+                  idServicio > 0
+                ) {
+                  linkTo =
+                    tipo ===
+                    'nuevo_servicio'
+                      ? `/home/solicitud/${idServicio}`
+                      : `/home/trabajo/${idServicio}`;
+                }
+
+                return {
+                  id: String(
+                    notificacion.id_notificacion
+                  ),
+
+                  title:
+                    notificacion.titulo,
+
+                  body:
+                    notificacion.descripcion,
+
+                  type:
+                    tipo ===
+                    'nuevo_servicio'
+                      ? 'job_request'
+                      : tipo,
+
+                  read: Boolean(
+                    notificacion.leida
+                  ),
+
+                  timestamp:
+                    notificacion.fecha,
+
+                  linkTo,
+                } as Notification;
+              }
+            );
+
+          setNotifications(
+            notificacionesAdaptadas
+          );
+        } catch (error) {
+          console.error(
+            'No se pudieron cargar las notificaciones:',
+            error
+          );
+
+          if (activo) {
+            setNotifications([]);
+          }
         }
-
-        const notificacionesAdaptadas: Notification[] = datos.map(
-          (notificacion) => ({
-            id: String(notificacion.id_notificacion),
-            title: notificacion.titulo,
-            body: notificacion.descripcion,
-            type:
-              notificacion.tipo === 'nuevo_servicio'
-                ? 'job_request'
-                : notificacion.tipo,
-            read: Boolean(notificacion.leida),
-            timestamp: notificacion.fecha,
-            linkTo: notificacion.fk_servicio
-            ? `/home/solicitud/${notificacion.fk_servicio}`
-            : undefined,
-             
-          }) as Notification
-        );
-
-        setNotifications(notificacionesAdaptadas);
-      } catch (error) {
-        console.error(
-          'No se pudieron cargar las notificaciones:',
-          error
-        );
-
-        if (activo) {
-          setNotifications([]);
-        }
-      }
-    };
+      };
 
     void cargarNotificaciones();
+
+    const intervalo =
+      window.setInterval(() => {
+        void cargarNotificaciones();
+      }, 15000);
 
     const manejarFocus = () => {
       void cargarNotificaciones();
     };
 
-    window.addEventListener('focus', manejarFocus);
+    window.addEventListener(
+      'focus',
+      manejarFocus
+    );
+
+    window.addEventListener(
+      'pageshow',
+      manejarFocus
+    );
 
     return () => {
       activo = false;
-      window.removeEventListener('focus', manejarFocus);
+
+      window.clearInterval(
+        intervalo
+      );
+
+      window.removeEventListener(
+        'focus',
+        manejarFocus
+      );
+
+      window.removeEventListener(
+        'pageshow',
+        manejarFocus
+      );
     };
-  }, [currentUser?.id, currentUser?.role, role]);
+  }, [
+    currentUser?.id,
+    currentUser?.role,
+    role,
+  ]);
 
 
   const [

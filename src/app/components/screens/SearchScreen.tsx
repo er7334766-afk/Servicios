@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router';
+import {
+  useNavigate,
+  useSearchParams,
+} from 'react-router';
 import {
   Search,
   SlidersHorizontal,
@@ -11,6 +14,7 @@ import {
   Star,
   Briefcase,
   ChevronRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -23,7 +27,9 @@ import {
   obtenerCategoriasDB,
 } from '../../services/solicitudesApi';
 
-type SortBy = 'rating';
+
+
+type SortBy = 'rating' | null;
 
 interface PostJobForm {
   title: string;
@@ -177,8 +183,19 @@ function formatearHora(
 
 
 
+function normalizarCategoria(
+  valor: unknown
+): string {
+  return String(valor ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export default function SearchScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser, role } = useApp();
   const esCliente = role === 'client';
   const esTrabajador = role === 'worker';
@@ -192,12 +209,15 @@ export default function SearchScreen() {
     useState<number | null>(null);
 
   const [sortBy, setSortBy] =
-    useState<SortBy>('rating');
+    useState<SortBy>(null);
 
   const [searchText, setSearchText] =
     useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const empleadosRequestId =
+    useRef(0);
 
   const [postCat, setPostCat] =
     useState<number | null>(null);
@@ -275,6 +295,71 @@ export default function SearchScreen() {
   }, []);
 
   useEffect(() => {
+    if (
+      cargandoCats ||
+      categoriasDb.length === 0
+    ) {
+      return;
+    }
+
+    const categoriaRecibida =
+      searchParams.get('cat');
+
+    if (!categoriaRecibida) {
+      return;
+    }
+
+    const valorNormalizado =
+      normalizarCategoria(
+        categoriaRecibida
+      );
+
+    const encontrada =
+      categoriasDb.find(
+        (categoria) => {
+          const id = String(
+            categoria.id_categoria
+          );
+
+          const nombre =
+            normalizarCategoria(
+              categoria.nombre
+            );
+
+          return (
+            id === categoriaRecibida ||
+            nombre === valorNormalizado
+          );
+        }
+      );
+
+    if (!encontrada) {
+      console.warn(
+        'Categoría no encontrada:',
+        categoriaRecibida,
+        categoriasDb
+      );
+      return;
+    }
+
+    const idEncontrado = Number(
+      encontrada.id_categoria
+    );
+
+    if (
+      Number.isInteger(idEncontrado) &&
+      idEncontrado > 0
+    ) {
+      setSelectedCat(idEncontrado);
+      setTab('explore');
+    }
+  }, [
+    cargandoCats,
+    categoriasDb,
+    searchParams,
+  ]);
+
+  useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
@@ -284,6 +369,9 @@ export default function SearchScreen() {
   const cargarEmpleados = async (
     idCategoria: number | null
   ) => {
+    const requestId =
+      ++empleadosRequestId.current;
+
     try {
       setCargandoEmpleados(true);
 
@@ -388,6 +476,13 @@ export default function SearchScreen() {
         })
       );
 
+      if (
+        requestId !==
+        empleadosRequestId.current
+      ) {
+        return;
+      }
+
       setEmpleadosDb(
         empleadosConResumen
       );
@@ -403,9 +498,19 @@ export default function SearchScreen() {
           : 'No se pudieron cargar los trabajadores'
       );
 
-      setEmpleadosDb([]);
+      if (
+        requestId ===
+        empleadosRequestId.current
+      ) {
+        setEmpleadosDb([]);
+      }
     } finally {
-      setCargandoEmpleados(false);
+      if (
+        requestId ===
+        empleadosRequestId.current
+      ) {
+        setCargandoEmpleados(false);
+      }
     }
   };
 
@@ -683,30 +788,26 @@ export default function SearchScreen() {
   };
 
   const trabajadoresOrdenados =
-  sortBy === 'rating'
-    ? [...filteredWorkers].sort((a, b) => {
-        const diferenciaRating =
-          Number(b.rating ?? 0) -
-          Number(a.rating ?? 0);
-
-        if (diferenciaRating !== 0) {
-          return diferenciaRating;
-        }
-
-        return (
-          Number(b.reviewCount ?? 0) -
-          Number(a.reviewCount ?? 0)
-        );
-      })
-    : filteredWorkers;
+    filteredWorkers;
 
   return (
     <div className="flex flex-col h-full">
       {/* Encabezado */}
       <div className="bg-card px-5 pt-10 pb-4 border-b border-border">
-        <h1 className="text-lg font-bold text-foreground mb-3">
-          Buscar servicios
-        </h1>
+        <div className="mb-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/home')}
+            aria-label="Volver al inicio"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+
+          <h1 className="text-lg font-bold text-foreground">
+            Buscar servicios
+          </h1>
+        </div>
 
         {/* Pestañas */}
         <div className="flex bg-muted rounded-xl p-1">
@@ -778,7 +879,20 @@ export default function SearchScreen() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSortBy('rating');
+                      const activar =
+                        sortBy !== 'rating';
+
+                      setSortBy(
+                        activar
+                          ? 'rating'
+                          : null
+                      );
+
+                      if (activar) {
+                        setSelectedCat(null);
+                        setSearchText('');
+                      }
+
                       setMostrarFiltros(false);
                     }}
                     className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-all ${
@@ -805,7 +919,10 @@ export default function SearchScreen() {
               {selectedCat !== null && (
                 <button
                   type="button"
-                  onClick={() => setSelectedCat(null)}
+                  onClick={() => {
+                    setSelectedCat(null);
+                    setSortBy(null);
+                  }}
                   className="flex items-center gap-1 text-xs text-[#1A56DB]"
                 >
                   <X className="w-3 h-3" />
@@ -858,13 +975,14 @@ export default function SearchScreen() {
                     <button
                       type="button"
                       key={categoria.id_categoria}
-                      onClick={() =>
+                      onClick={() => {
+                        setSortBy(null);
                         setSelectedCat(
                           seleccionada
                             ? null
                             : idCategoria
-                        )
-                      }
+                        );
+                      }}
                       className={`rounded-2xl border bg-white py-4 px-3 transition-all ${
                         seleccionada
                           ? 'border-[#1A56DB] bg-[#EFF4FF] ring-1 ring-[#1A56DB]'
@@ -896,11 +1014,30 @@ export default function SearchScreen() {
           {/* Resultados para clientes */}
           {esCliente && (
             <div className="px-5 pb-6">
-              <p className="text-sm font-semibold text-foreground mb-3">
-                {cargandoEmpleados
-                  ? 'Buscando trabajadores...'
-                  : `${filteredWorkers.length} trabajadores encontrados`}
-              </p>
+              <div className="mb-3">
+  {cargandoEmpleados ? (
+    <p className="text-sm font-semibold text-foreground">
+      Buscando trabajadores...
+    </p>
+  ) : sortBy === 'rating' ? (
+    <>
+      <p className="text-sm font-semibold text-foreground">
+        Mejor valorados
+      </p>
+
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Ordenados de mayor a menor calificación y cantidad de reseñas.
+      </p>
+    </>
+  ) : (
+    <p className="text-sm font-semibold text-foreground">
+      {filteredWorkers.length}{' '}
+      {filteredWorkers.length === 1
+        ? 'trabajador encontrado'
+        : 'trabajadores encontrados'}
+    </p>
+  )}
+</div>
 
               <div className="flex flex-col gap-3">
                 {cargandoEmpleados ? (
@@ -992,6 +1129,7 @@ export default function SearchScreen() {
                           onClick={() => {
                             setSelectedCat(null);
                             setSearchText('');
+                            setSortBy(null);
                           }}
                           className="text-[#1A56DB] text-sm mt-1"
                         >

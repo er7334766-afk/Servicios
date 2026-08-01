@@ -126,13 +126,43 @@ function formatearPrecio(precio: number): string {
   }).format(precio);
 }
 
+async function leerRespuestaApi(
+  respuesta: Response
+): Promise<any> {
+  const texto = await respuesta.text();
+
+  if (!texto.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    throw new Error(
+      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+    );
+  }
+}
+
 export default function ServiceManagementScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { idServicio } = useParams();
-  const { role } = useApp();
+  const {
+    role,
+    currentUser,
+  } = useApp();
 
   const esTrabajador = role === 'worker';
+
+  const idUsuarioActual = Number(
+    esTrabajador
+      ? currentUser?.idEmpleado ??
+          currentUser?.idEmpleado ??
+          currentUser?.id
+      : currentUser?.id
+  );
+
   const servicioId = Number(idServicio);
   const pagoCompletado = location.state?.paymentCompleted === true;
   const [pagoPersistido, setPagoPersistido] = useState(false);
@@ -180,7 +210,9 @@ export default function ServiceManagementScreen() {
           `http://localhost:3000/api/servicios/${servicioId}`
         );
 
-        const datos = (await respuesta.json()) as ServicioApi & {
+        const datos = (await leerRespuestaApi(
+          respuesta
+        )) as ServicioApi & {
           mensaje?: string;
           detalle?: string;
         };
@@ -270,11 +302,28 @@ export default function ServiceManagementScreen() {
           },
           body: JSON.stringify({
             estado: nuevoEstado,
+            actualizado_por: esTrabajador
+              ? 'empleado'
+              : 'cliente',
+            id_empleado:
+              esTrabajador &&
+              Number.isInteger(idUsuarioActual) &&
+              idUsuarioActual > 0
+                ? idUsuarioActual
+                : undefined,
+            id_cliente:
+              !esTrabajador &&
+              Number.isInteger(idUsuarioActual) &&
+              idUsuarioActual > 0
+                ? idUsuarioActual
+                : undefined,
           }),
         }
       );
 
-      const datos = await respuesta.json();
+      const datos = await leerRespuestaApi(
+        respuesta
+      );
 
       if (!respuesta.ok) {
         throw new Error(
@@ -324,11 +373,25 @@ export default function ServiceManagementScreen() {
             estado: 'Cancelado',
             motivo_cancelacion: motivoFinal,
             cancelado_por: responsable,
+            id_empleado:
+              esTrabajador &&
+              Number.isInteger(idUsuarioActual) &&
+              idUsuarioActual > 0
+                ? idUsuarioActual
+                : undefined,
+            id_cliente:
+              !esTrabajador &&
+              Number.isInteger(idUsuarioActual) &&
+              idUsuarioActual > 0
+                ? idUsuarioActual
+                : undefined,
           }),
         }
       );
 
-      const datos = await respuesta.json();
+      const datos = await leerRespuestaApi(
+        respuesta
+      );
 
       if (!respuesta.ok) {
         throw new Error(

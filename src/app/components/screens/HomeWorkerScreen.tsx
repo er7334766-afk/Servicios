@@ -65,7 +65,6 @@ export default function HomeWorkerScreen() {
     setCurrentUser,
     workerAvailability,
     setWorkerAvailability,
-    unreadNotifications,
   } = useApp();
 
   const [servicios, setServicios] =
@@ -103,6 +102,11 @@ export default function HomeWorkerScreen() {
   const idEmpleado = Number(
     currentUser?.idEmpleado ?? currentUser?.id
   );
+
+  const [
+    notificacionesSinLeer,
+    setNotificacionesSinLeer,
+  ] = useState(0);
 
   const nombreEmpleado =
     currentUser?.name?.trim() || 'Empleado';
@@ -353,6 +357,113 @@ export default function HomeWorkerScreen() {
     };
   }, []);
 
+  const cargarNotificacionesSinLeer = async () => {
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setNotificacionesSinLeer(0);
+      return;
+    }
+
+    try {
+      const respuesta = await fetch(
+        `http://localhost:3000/api/empleados/${idEmpleado}/notificaciones`,
+        {
+          cache: 'no-store',
+        }
+      );
+
+      const texto = await respuesta.text();
+
+      if (!texto.trim()) {
+        setNotificacionesSinLeer(0);
+        return;
+      }
+
+      let datos: any;
+
+      try {
+        datos = JSON.parse(texto);
+      } catch {
+        throw new Error(
+          `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+        );
+      }
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.detalle ||
+            datos?.mensaje ||
+            'No se pudieron cargar las notificaciones'
+        );
+      }
+
+      const lista = Array.isArray(datos)
+        ? datos
+        : Array.isArray(datos?.notificaciones)
+          ? datos.notificaciones
+          : [];
+
+      const cantidad = Number(
+        datos?.no_leidas ??
+          lista.filter(
+            (notificacion: any) =>
+              !Boolean(notificacion.leida)
+          ).length
+      );
+
+      setNotificacionesSinLeer(
+        Number.isFinite(cantidad)
+          ? cantidad
+          : 0
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar notificaciones del empleado:',
+        error
+      );
+
+      setNotificacionesSinLeer(0);
+    }
+  };
+
+  useEffect(() => {
+    void cargarNotificacionesSinLeer();
+
+    const intervalo = window.setInterval(() => {
+      void cargarNotificacionesSinLeer();
+    }, 15000);
+
+    const actualizarAlVolver = () => {
+      void cargarNotificacionesSinLeer();
+    };
+
+    window.addEventListener(
+      'focus',
+      actualizarAlVolver
+    );
+
+    window.addEventListener(
+      'pageshow',
+      actualizarAlVolver
+    );
+
+    return () => {
+      window.clearInterval(intervalo);
+
+      window.removeEventListener(
+        'focus',
+        actualizarAlVolver
+      );
+
+      window.removeEventListener(
+        'pageshow',
+        actualizarAlVolver
+      );
+    };
+  }, [idEmpleado]);
+
   const handleToggle = async () => {
     const nuevoEstado =
       !workerAvailability;
@@ -585,9 +696,12 @@ export default function HomeWorkerScreen() {
           >
             <Bell className="w-5 h-5 text-white" />
 
-            {unreadNotifications >
-              0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-[#1A56DB]" />
+            {notificacionesSinLeer > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-[#1A56DB] flex items-center justify-center">
+                {notificacionesSinLeer > 99
+                  ? '99+'
+                  : notificacionesSinLeer}
+              </span>
             )}
           </motion.button>
         </div>
