@@ -6695,9 +6695,164 @@ app.get(
   },
 );
 
+
 // ==========================================
-// INICIO DEL SERVIDOR
+// PERFIL PÚBLICO DEL CLIENTE
 // ==========================================
+app.get(
+  '/api/clientes/:idCliente/perfil-publico',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de cliente inválido',
+        });
+      }
+
+      // ======================================
+      // OBTENER INFORMACIÓN BÁSICA DEL CLIENTE
+      // ======================================
+      const resultadoCliente: any =
+        await database.query(`
+          SELECT TOP 1
+            c.id_cliente,
+            c.nombre AS nombre_C,
+            c.foto_url AS foto,
+            c.direccion,
+            c.fecha_creacion,
+
+            (
+              SELECT COUNT(*)
+              FROM servicios AS s
+              WHERE COALESCE(
+                s.fk_cliente,
+                s.id_cliente
+              ) = c.id_cliente
+            ) AS total_servicios,
+
+            CAST(
+              0 AS DECIMAL(10, 2)
+            ) AS promedio_calificacion,
+
+            0 AS cantidad_resenas
+
+          FROM clientes AS c
+          WHERE c.id_cliente =
+            ${idCliente};
+        `);
+
+      const resultadoClienteReal =
+        Array.isArray(resultadoCliente)
+          ? resultadoCliente[0]
+          : resultadoCliente;
+
+      const clientes =
+        obtenerFilas(
+          resultadoClienteReal
+        );
+
+      if (clientes.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'El cliente no existe',
+        });
+      }
+
+      // ======================================
+      // OBTENER ÚLTIMOS SERVICIOS PUBLICADOS
+      // ======================================
+      const resultadoServicios: any =
+        await database.query(`
+          SELECT TOP 3
+            s.id_servicio,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(s.titulo)),
+                ''
+              ),
+              NULLIF(
+                LTRIM(RTRIM(s.descripcion)),
+                ''
+              ),
+              'Solicitud de servicio'
+            ) AS titulo,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(cat.nombre)),
+                ''
+              ),
+              'Sin categoría'
+            ) AS categoria,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(s.estado)),
+                ''
+              ),
+              'Pendiente'
+            ) AS estado,
+
+            s.fecha
+
+          FROM servicios AS s
+
+          LEFT JOIN categorias AS cat
+            ON cat.id_categoria =
+              COALESCE(
+                s.fk_categoria,
+                s.id_categoria
+              )
+
+          WHERE COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) = ${idCliente}
+
+          ORDER BY
+            s.fecha DESC,
+            s.id_servicio DESC;
+        `);
+
+      const resultadoServiciosReal =
+        Array.isArray(resultadoServicios)
+          ? resultadoServicios[0]
+          : resultadoServicios;
+
+      const ultimosServicios =
+        obtenerFilas(
+          resultadoServiciosReal
+        );
+
+      return res.status(200).json({
+        ...clientes[0],
+        ultimosServicios,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al obtener perfil público del cliente:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo cargar el perfil público del cliente',
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
 
 // ==========================================
 // RESPUESTA JSON PARA RUTAS NO ENCONTRADAS
