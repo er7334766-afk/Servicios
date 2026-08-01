@@ -2,15 +2,14 @@ import {
   useEffect,
   useState,
 } from 'react';
-import {
-  useLocation,
-  useNavigate,
-} from 'react-router';
+import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
   Bell,
   Search,
   MapPin,
+  Star,
+  Briefcase,
   ChevronRight,
   Plus,
   RefreshCw,
@@ -18,10 +17,10 @@ import {
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
+import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
 
 import { obtenerCategoriasDB } from '../../services/solicitudesApi';
-import { obtenerEmpleados } from '../../services/empleadosApi';
 
 import type {
   ServiceCategory,
@@ -137,10 +136,49 @@ interface EmpleadoDisponible {
   direccion: string | null;
   estado: string;
   numero_trabajos: number;
+  rating: number;
+  cantidad_resenas?: number;
   sobre_mi: string | null;
   foto_url?: string | null;
   fecha_creacion?: string | null;
   ultima_actividad?: string | null;
+}
+
+interface EmpleadoDB {
+  id_empleado: number | string;
+  nombre_E: string;
+  correo?: string;
+  celular?: string;
+  titulo?: string | null;
+  direccion?: string | null;
+  estado?: string | null;
+  N_trabajos?: number | null;
+  categoria?: string;
+  foto?: string | null;
+  foto_url?: string | null;
+  calificacion?: number | null;
+  cantidad_resenas?: number | null;
+}
+
+interface EmpleadoDB {
+  id_empleado: number | string;
+  nombre_E: string;
+  correo?: string;
+  celular?: string;
+  titulo?: string | null;
+  direccion?: string | null;
+  estado?: string | null;
+  N_trabajos?: number | null;
+  foto?: string | null;
+  foto_url?: string | null;
+  calificacion?: number | null;
+  cantidad_resenas?: number | null;
+}
+
+interface ResumenEmpleado {
+  total_trabajos?: number;
+  total_resenas?: number;
+  promedio_calificacion?: number;
 }
 
 export default function HomeClientScreen() {
@@ -153,12 +191,12 @@ export default function HomeClientScreen() {
 
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState<
     EmpleadoDisponible[]
-    >([]); //agregado
-    const [empleadosDestacados, setEmpleadosDestacados] = useState<
+    >([]);
+  const [empleadosDestacados, setEmpleadosDestacados] = useState<
     EmpleadoDisponible[]
-    >([]); //agregado
+    >([]);
 
-    const [cargandoDestacados, setCargandoDestacados] = useState(true);
+  const [cargandoDestacados, setCargandoDestacados] = useState(true);
 
    const [cargandoEmpleados, setCargandoEmpleados] = useState(true);
 
@@ -287,16 +325,81 @@ export default function HomeClientScreen() {
       try {
         setCargandoDestacados(true);
 
-        const empleados = await obtenerEmpleados();
+        const respuesta = await fetch('http://localhost:3000/api/empleados', {
+          cache: 'no-store',
+        });
 
-        const empleadosFiltrados = (empleados || []).filter(
-          (e: any) =>
-            String(e.estado ?? '').trim().toLowerCase() === 'disponible'
+        const texto = await respuesta.text();
+        let datos: unknown = [];
+
+        if (texto.trim()) {
+          try {
+            datos = JSON.parse(texto);
+          } catch {
+            throw new Error(
+              `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+            );
+          }
+        }
+
+        if (!respuesta.ok) {
+          const errorApi = datos as {
+            mensaje?: string;
+            detalle?: string;
+          };
+
+          throw new Error(
+            errorApi.detalle ||
+              errorApi.mensaje ||
+              'No se pudieron cargar empleados'
+          );
+        }
+
+        const empleadosBase: EmpleadoDB[] = Array.isArray(datos) ? (datos as EmpleadoDB[]) : [];
+
+        const empleadosConResumen = await Promise.all(
+          empleadosBase.map(async (empleado) => {
+            const idEmpleado = Number(empleado.id_empleado ?? empleado.id ?? empleado._id);
+
+            if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+              return empleado;
+            }
+
+            try {
+              const respuestaResumen = await fetch(
+                `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+                { cache: 'no-store' }
+              );
+
+              const textoResumen = await respuestaResumen.text();
+              let resumen: ResumenEmpleado = {};
+
+              if (textoResumen.trim()) {
+                resumen = JSON.parse(textoResumen) as ResumenEmpleado;
+              }
+
+              if (!respuestaResumen.ok) {
+                return empleado;
+              }
+
+              return {
+                ...empleado,
+                N_trabajos: Number(resumen.total_trabajos) || 0,
+                calificacion: Number(resumen.promedio_calificacion) || 0,
+                cantidad_resenas: Number(resumen.total_resenas) || 0,
+              };
+            } catch (error) {
+              console.error(
+                `No se pudo cargar el resumen del empleado ${idEmpleado}:`,
+                error
+              );
+
+              return empleado;
+            }
+          })
         );
 
-
-        const mapped: EmpleadoDisponible[] = (empleados || [])
-          .slice(0, 8)
+        const mapped: EmpleadoDisponible[] = empleadosConResumen
           .map((e: any) => ({
             id_empleado: Number(e.id_empleado ?? e.id ?? e._id),
             nombre: String(e.nombre ?? e.nombre_E ?? 'Trabajador'),
@@ -307,16 +410,21 @@ export default function HomeClientScreen() {
             antecedentes: e.antecedentes ?? null,
             direccion: e.direccion ?? null,
             estado: String(e.estado ?? 'Disponible'),
-            numero_trabajos: Number(
-              e.numero_trabajos ?? e.N_trabajos ?? e.numeroTrabajos ?? 0
-            ),
+            numero_trabajos: Number(e.N_trabajos ?? e.numero_trabajos ?? 0),
+            rating: Number(e.calificacion ?? e.promedio_calificacion ?? 0),
+            cantidad_resenas: Number(e.cantidad_resenas ?? 0),
             sobre_mi: e.sobre_mi ?? e.descripcion ?? null,
             foto_url: e.foto_url ?? e.foto ?? e.avatarUrl ?? null,
             fecha_creacion: e.fecha_creacion ?? e.fechaCreacion ?? null,
             ultima_actividad: e.ultima_actividad ?? null,
-          }));
+          }))
+          .sort((a, b) => {
+            const ratingDiff = Number(b.rating ?? 0) - Number(a.rating ?? 0);
+            if (ratingDiff !== 0) return ratingDiff;
+            return Number(b.numero_trabajos ?? 0) - Number(a.numero_trabajos ?? 0);
+          });
 
-        setEmpleadosDestacados(mapped);
+        setEmpleadosDestacados(mapped.slice(0, 5));
       } catch (err) {
         console.error('No se pudieron cargar empleados destacados:', err);
         setEmpleadosDestacados([]);
@@ -553,38 +661,71 @@ export default function HomeClientScreen() {
           </div>
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-none">
-          {empleadosDestacados.map((worker) => (
-            <motion.button
-              key={worker.id_empleado}
-              type="button"
-              whileTap={{ scale: 0.97 }}
-              onClick={() =>
-                navigate(`/home/worker/${worker.id_empleado}`)
-              }
-              className="min-w-[180px] bg-card rounded-2xl border border-border p-4 text-left shadow-sm"
-            >
-              <div className="flex justify-center mb-3">
-                <div className="w-16 h-16 rounded-full bg-[#EFF4FF] flex items-center justify-center">
-                  <span className="text-2xl font-bold text-[#1A56DB]">
-                    {worker.nombre?.charAt(0).toUpperCase() ?? '?'}
-                  </span>
+        <div className="px-5 pb-6">
+          <p className="text-sm font-semibold text-foreground mb-3">
+            {empleadosDestacados.length} trabajadores destacados
+          </p>
+
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+            {empleadosDestacados.map((worker) => (
+              <div
+                key={worker.id_empleado}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/home/worker/${worker.id_empleado}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    navigate(`/home/worker/${worker.id_empleado}`);
+                  }
+                }}
+                className="w-[220px] flex-shrink-0 cursor-pointer"
+              >
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-[#1A56DB]/40">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-shrink-0">
+                      <ImageWithFallback
+                        src={worker.foto_url ?? ''}
+                        alt={worker.nombre}
+                        className="h-14 w-14 rounded-xl object-cover"
+                      />
+
+                      {String(worker.estado ?? '').trim().toLowerCase() === 'disponible' && (
+                        <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-card bg-green-500" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-foreground">
+                        {worker.nombre}
+                      </p>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                          <span className="text-xs font-semibold text-foreground">
+                            {worker.rating.toFixed(1)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({worker.cantidad_resenas ?? 0})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Briefcase className="h-4 w-4 text-[#1A56DB]" />
+                          <span className="text-xs text-muted-foreground">
+                            {worker.numero_trabajos ?? 0}{' '}
+                            {worker.numero_trabajos === 1 ? 'trabajo' : 'trabajos'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <ChevronRight className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                  </div>
                 </div>
               </div>
-
-              <h3 className="font-semibold text-center text-sm">
-                {worker.nombre ?? 'Trabajador'}
-              </h3>
-
-              <p className="text-xs text-center text-muted-foreground mt-1">
-                {worker.numero_trabajos ?? 0} Trabajos realizados
-              </p>
-
-              <p className="text-xs text-center text-green-600 font-medium mt-2">
-                {worker.estado || 'Disponible'}
-              </p>
-            </motion.button>
-          ))}
+            ))}
+          </div>
         </div>
       )}
         

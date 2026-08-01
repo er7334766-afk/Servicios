@@ -300,27 +300,46 @@ app.get('/api/empleados/disponibles', async (_req, res) => {
 //empleados destacados
 app.get('/api/empleados/destacados', async (_req, res) => {
   try {
-    const [empleados] = await database.execute(
+    const [empleados]: any = await database.query(
       `
-      SELECT
-        id_empleado,
-        nombre_E,
-        correo,
-        celular,
-        titulo,
-        direccion,
-        fk_categoria,
-        estado,
-        N_trabajos,
-        sobre_mi,
-        fechaCreacion
-      FROM empleados
-      ORDER BY N_trabajos DESC, nombre_E ASC
-      LIMIT 5
+      SELECT TOP 5
+        e.id_empleado,
+        e.nombre_E,
+        e.correo,
+        e.celular,
+        e.titulo,
+        e.direccion,
+        e.fk_categoria,
+        e.estado,
+        e.numero_trabajos AS N_trabajos,
+        COALESCE(AVG(r.calificacion_general), 0) AS promedio_calificacion,
+        e.sobre_mi,
+        e.fechaCreacion
+      FROM empleados AS e
+      LEFT JOIN servicios AS s
+        ON s.fk_empleado = e.id_empleado
+      LEFT JOIN reservas AS re
+        ON re.id_servicio = s.id_servicio
+      LEFT JOIN resenas AS r
+        ON r.id_reserva = re.id_reserva
+        AND r.id_empleado = e.id_empleado
+      GROUP BY
+        e.id_empleado,
+        e.nombre_E,
+        e.correo,
+        e.celular,
+        e.titulo,
+        e.direccion,
+        e.fk_categoria,
+        e.estado,
+        e.numero_trabajos,
+        e.sobre_mi,
+        e.fechaCreacion
+      ORDER BY promedio_calificacion DESC, N_trabajos DESC, nombre_E ASC
       `
     );
 
-    res.json(empleados);
+    res.json(Array.isArray(empleados) ? empleados : []);
   } catch (error) {
     console.error('Error al consultar empleados destacados:', error);
 
