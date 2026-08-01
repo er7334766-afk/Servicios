@@ -445,16 +445,15 @@ const guardar = async () => {
     );
 
     const respuesta = await fetch(
-      `http://localhost:3000/api/empleados/${idEmpleado}/servicios`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type':
-            'application/json',
-        },
-        body: JSON.stringify(cuerpo),
-      }
-    );
+  `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+  {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(cuerpo),
+  }
+);
 
     const texto = await respuesta.text();
 

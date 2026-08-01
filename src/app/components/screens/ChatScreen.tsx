@@ -82,6 +82,42 @@ function leerUsuarioLocal(): UsuarioGuardado | null {
   return null;
 }
 
+
+const MARCADOR_IMAGEN = '[IMAGEN]';
+
+function archivoABase64(archivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+
+    lector.onload = () => {
+      const contenido = String(lector.result ?? '');
+      const base64 = contenido.split(',')[1];
+
+      if (!base64) {
+        reject(new Error('No se pudo convertir la imagen'));
+        return;
+      }
+
+      resolve(base64);
+    };
+
+    lector.onerror = () => {
+      reject(new Error('No se pudo leer la imagen'));
+    };
+
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function obtenerUrlImagen(mensaje: string): string | null {
+  if (!mensaje.startsWith(MARCADOR_IMAGEN)) {
+    return null;
+  }
+
+  const url = mensaje.slice(MARCADOR_IMAGEN.length).trim();
+  return url || null;
+}
+
 export default function ChatScreen() {
   const parametros = useParams<{
     id?: string;
@@ -105,6 +141,8 @@ export default function ChatScreen() {
     useState(true);
   const [enviando, setEnviando] =
     useState(false);
+  const [subiendoImagen, setSubiendoImagen] =
+    useState(false);
   const [error, setError] = useState('');
 
   const bottomRef =
@@ -112,6 +150,9 @@ export default function ChatScreen() {
 
   const mensajesContainerRef =
     useRef<HTMLDivElement>(null);
+
+  const inputImagenRef =
+    useRef<HTMLInputElement>(null);
 
   const primeraCargaRef = useRef(true);
   const usuarioEstaAbajoRef = useRef(true);
@@ -475,8 +516,10 @@ if (texto) {
       ultimoMensajeId;
   }, [mensajes]);
 
-  const handleEnviar = async () => {
-    const mensajeLimpio = texto.trim();
+  const enviarContenido = async (
+    contenido: string,
+  ) => {
+    const mensajeLimpio = contenido.trim();
 
     if (!mensajeLimpio || enviando) {
       return;
@@ -486,58 +529,74 @@ if (texto) {
       !Number.isInteger(idCliente) ||
       idCliente <= 0
     ) {
-      setError('ID de cliente inválido');
-      return;
+      throw new Error('ID de cliente inválido');
     }
 
     if (
       !Number.isInteger(idEmpleado) ||
       idEmpleado <= 0
     ) {
-      setError('ID de empleado inválido');
+      throw new Error('ID de empleado inválido');
+    }
+
+    const respuesta = await fetch(
+      'http://localhost:3000/api/chat',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fk_cliente: idCliente,
+          fk_empleado: idEmpleado,
+          remitente: esEmpleado
+            ? 'empleado'
+            : 'cliente',
+          mensaje: mensajeLimpio,
+        }),
+      },
+    );
+
+    const textoRespuesta =
+      await respuesta.text();
+
+    let datos: any = null;
+
+    if (textoRespuesta.trim()) {
+      try {
+        datos = JSON.parse(textoRespuesta);
+      } catch {
+        throw new Error(
+          'El servidor devolvió una respuesta inválida',
+        );
+      }
+    }
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos?.detalle ||
+          datos?.mensaje ||
+          'No se pudo enviar el mensaje',
+      );
+    }
+
+    usuarioEstaAbajoRef.current = true;
+    await cargarMensajes();
+  };
+
+  const handleEnviar = async () => {
+    const mensajeLimpio = texto.trim();
+
+    if (!mensajeLimpio || enviando) {
       return;
     }
 
     try {
       setEnviando(true);
+      setError('');
 
-      const respuesta = await fetch(
-        'http://localhost:3000/api/chat',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({
-            fk_cliente: idCliente,
-            fk_empleado: idEmpleado,
-            remitente: esEmpleado
-              ? 'empleado'
-              : 'cliente',
-            mensaje: mensajeLimpio,
-          }),
-        }
-      );
-
-      const textoRespuesta = await respuesta.text();
-      const datos = textoRespuesta ? JSON.parse(textoRespuesta) : null;
-
-      if (!respuesta.ok) {
-        throw new Error(
-          datos?.detalle ||
-            datos?.mensaje ||
-            'No se pudo enviar el mensaje'
-        );
-      }
-
+      await enviarContenido(mensajeLimpio);
       setTexto('');
-
-      // Al enviar un mensaje propio, llevar al usuario
-      // al final del chat.
-      usuarioEstaAbajoRef.current = true;
-
-      await cargarMensajes();
     } catch (error) {
       const mensaje =
         error instanceof Error
@@ -546,12 +605,114 @@ if (texto) {
 
       console.error(
         'Error al enviar mensaje:',
-        error
+        error,
       );
 
       setError(mensaje);
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const seleccionarImagen = async (
+    evento: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const archivo = evento.target.files?.[0];
+
+    if (!archivo) {
+      return;
+    }
+
+    try {
+      setError('');
+
+      const tiposPermitidos = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ];
+
+      if (!tiposPermitidos.includes(archivo.type)) {
+        throw new Error(
+          'Selecciona una imagen JPG, PNG o WEBP',
+        );
+      }
+
+      if (archivo.size > 5 * 1024 * 1024) {
+        throw new Error(
+          'La imagen no puede superar los 5 MB',
+        );
+      }
+
+      setSubiendoImagen(true);
+
+      const base64 = await archivoABase64(archivo);
+
+      const respuestaSubida = await fetch(
+        'http://localhost:3000/api/upload-foto',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            base64,
+            fileName: archivo.name,
+            contentType: archivo.type,
+          }),
+        },
+      );
+
+      const textoRespuesta =
+        await respuestaSubida.text();
+
+      let datosSubida: any = {};
+
+      if (textoRespuesta.trim()) {
+        try {
+          datosSubida = JSON.parse(textoRespuesta);
+        } catch {
+          throw new Error(
+            'El servidor devolvió una respuesta inválida al subir la imagen',
+          );
+        }
+      }
+
+      if (!respuestaSubida.ok) {
+        throw new Error(
+          datosSubida.detalle ||
+            datosSubida.mensaje ||
+            'No se pudo subir la imagen',
+        );
+      }
+
+      const url = String(datosSubida.url ?? '').trim();
+
+      if (!url) {
+        throw new Error(
+          'El servidor no devolvió la URL de la imagen',
+        );
+      }
+
+      await enviarContenido(
+        `${MARCADOR_IMAGEN}${url}`,
+      );
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo enviar la imagen';
+
+      console.error(
+        'Error al enviar imagen:',
+        error,
+      );
+
+      setError(mensaje);
+      window.alert(mensaje);
+    } finally {
+      setSubiendoImagen(false);
+      evento.target.value = '';
     }
   };
 
@@ -783,7 +944,35 @@ if (texto) {
                       : 'bg-card border border-border text-foreground rounded-tr-2xl rounded-tl-sm rounded-br-2xl rounded-bl-2xl'
                   }`}
                 >
-                  {mensaje.mensaje}
+                  {obtenerUrlImagen(
+                    mensaje.mensaje,
+                  ) ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.open(
+                          obtenerUrlImagen(
+                            mensaje.mensaje,
+                          ) ?? '',
+                          '_blank',
+                          'noopener,noreferrer',
+                        )
+                      }
+                      className="block overflow-hidden rounded-xl"
+                    >
+                      <img
+                        src={
+                          obtenerUrlImagen(
+                            mensaje.mensaje,
+                          ) ?? ''
+                        }
+                        alt="Imagen enviada"
+                        className="max-h-64 w-full max-w-[240px] object-cover"
+                      />
+                    </button>
+                  ) : (
+                    mensaje.mensaje
+                  )}
                 </div>
 
                 <span className="text-[10px] text-muted-foreground px-1">
@@ -816,10 +1005,29 @@ if (texto) {
       <div className="bg-card border-t border-border px-4 py-3 flex items-center gap-2 flex-shrink-0">
         <button
           type="button"
-          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
+          onClick={() =>
+            inputImagenRef.current?.click()
+          }
+          disabled={
+            subiendoImagen || enviando
+          }
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Enviar imagen"
         >
-          <Image className="w-5 h-5 text-muted-foreground" />
+          {subiendoImagen ? (
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#1A56DB] border-t-transparent" />
+          ) : (
+            <Image className="w-5 h-5 text-muted-foreground" />
+          )}
         </button>
+
+        <input
+          ref={inputImagenRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={seleccionarImagen}
+        />
 
         <div className="flex-1 flex items-center bg-input-background rounded-2xl px-4 py-2 gap-2">
           <input
