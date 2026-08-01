@@ -312,7 +312,8 @@ export async function obtenerEstadoPostulacion(
 
 export async function postularEmpleadoServicio(
   idServicio: number,
-  idEmpleado: number
+  idEmpleado: number,
+  tipoPostulacion: 'aceptar' | 'negociar' //agregado
 ): Promise<RespuestaPostulacion> {
   if (
     !Number.isInteger(idServicio) ||
@@ -342,6 +343,7 @@ export async function postularEmpleadoServicio(
       },
       body: JSON.stringify({
         fk_empleado: idEmpleado,
+        tipo_postulacion: tipoPostulacion, //agregado
       }),
     }
   );

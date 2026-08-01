@@ -637,6 +637,12 @@ export default function SearchScreen() {
       return;
     }
 
+    const capitalizar = (texto?: string | null) => {
+      if (!texto) return '';
+
+      return texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
+    };
+
     try {
       setPublicando(true);
 

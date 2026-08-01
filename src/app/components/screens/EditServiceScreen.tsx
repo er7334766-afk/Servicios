@@ -538,91 +538,91 @@ const guardar = async () => {
           </p>
         ) : (
           <div className="space-y-3">
-  {categorias.map((categoria) => {
-    const idCategoria = Number(categoria.id_categoria);
-    const categoriaSeleccionada =
-      seleccionadas.includes(idCategoria);
+            {categorias.map((categoria) => {
+              const idCategoria = Number(categoria.id_categoria);
+              const categoriaSeleccionada =
+                seleccionadas.includes(idCategoria);
 
-    const subcategorias =
-      subcategoriasPorCategoria[idCategoria] ?? [];
+              const subcategorias =
+                subcategoriasPorCategoria[idCategoria] ?? [];
 
-    return (
-      <div
-        key={idCategoria}
-        className="overflow-hidden rounded-xl border border-border"
-      >
-        <label className="flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-secondary">
-          <span className="font-medium">
-            {categoria.nombre}
-          </span>
+              return (
+                <div
+                  key={idCategoria}
+                  className="overflow-hidden rounded-xl border border-border"
+                >
+                  <label className="flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-secondary">
+                    <span className="font-medium">
+                      {categoria.nombre.charAt(0).toUpperCase() + categoria.nombre.slice(1)}
+                    </span>
 
-          <input
-            type="checkbox"
-            checked={categoriaSeleccionada}
-            onChange={() => toggleCategoria(idCategoria)}
-            className="h-5 w-5 accent-[#1A56DB]"
-          />
-        </label>
+                    <input
+                      type="checkbox"
+                      checked={categoriaSeleccionada}
+                      onChange={() => toggleCategoria(idCategoria)}
+                      className="h-5 w-5 accent-[#1A56DB]"
+                    />
+                  </label>
 
-        {categoriaSeleccionada && (
-          <div className="border-t border-border bg-slate-50 px-4 py-3">
-            {cargandoSubcategorias[idCategoria] ? (
-              <p className="text-sm text-muted-foreground">
-                Cargando subcategorías...
-              </p>
-            ) : subcategorias.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Esta categoría no tiene subcategorías.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
-                  Selecciona las subcategorías
-                </p>
-
-                {subcategorias.map((subcategoria) => {
-                  const idSubcategoria = Number(
-                    subcategoria.id_subcategoria
-                  );
-
-                  return (
-                    <label
-                      key={idSubcategoria}
-                      className="flex cursor-pointer items-start gap-3 rounded-lg bg-white p-3"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={subcategoriasSeleccionadas.includes(
-                          idSubcategoria
-                        )}
-                        onChange={() =>
-                          toggleSubcategoria(idSubcategoria)
-                        }
-                        className="mt-0.5 h-4 w-4 accent-[#1A56DB]"
-                      />
-
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">
-                          {subcategoria.nombre}
+                  {categoriaSeleccionada && (
+                    <div className="border-t border-border bg-slate-50 px-4 py-3">
+                      {cargandoSubcategorias[idCategoria] ? (
+                        <p className="text-sm text-muted-foreground">
+                          Cargando subcategorías...
                         </p>
-
-                        {subcategoria.descripcion && (
-                          <p className="mt-1 text-xs text-slate-500">
-                            {subcategoria.descripcion}
+                      ) : subcategorias.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Esta categoría no tiene subcategorías.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="mb-2 text-xs font-semibold uppercase text-slate-500">
+                            Selecciona las subcategorías
                           </p>
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  })}
-</div>
+
+                          {subcategorias.map((subcategoria) => {
+                            const idSubcategoria = Number(
+                              subcategoria.id_subcategoria
+                            );
+
+                            return (
+                              <label
+                                key={idSubcategoria}
+                                className="flex cursor-pointer items-start gap-3 rounded-lg bg-white p-3"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={subcategoriasSeleccionadas.includes(
+                                    idSubcategoria
+                                  )}
+                                  onChange={() =>
+                                    toggleSubcategoria(idSubcategoria)
+                                  }
+                                  className="mt-0.5 h-4 w-4 accent-[#1A56DB]"
+                                />
+
+                                <div>
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {subcategoria.nombre}
+                                  </p>
+
+                                  {subcategoria.descripcion && (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {subcategoria.descripcion}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
         )}
       </div>
 

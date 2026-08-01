@@ -558,7 +558,7 @@ export default function HomeWorkerScreen() {
 
             <div>
               <p className="text-white/70 text-xs">
-                Hola,
+                Hola bienvenido(a),
                 {successMessage && (
                   <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 p-3 text-center">
                     <p className="text-sm text-green-700">{successMessage}</p>

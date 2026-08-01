@@ -224,6 +224,10 @@ export default function WorkerServiceDetailScreen() {
       usuarioSesion?.id
   );
 
+  const [tipoPostulacion, setTipoPostulacion] = useState<
+    'aceptar' | 'negociar'
+  >('aceptar');
+
   useEffect(() => {
     async function cargarDetalle() {
       if (
@@ -303,13 +307,14 @@ export default function WorkerServiceDetailScreen() {
       const respuesta =
         await postularEmpleadoServicio(
           servicioId,
-          empleadoId
+          empleadoId,
+          tipoPostulacion
         );
 
-      setEstadoPostulacion('Pendiente');
-      setMensaje(
-        respuesta.mensaje ||
-          'Tu postulación fue registrada correctamente.'
+        setEstadoPostulacion('Pendiente');
+        setMensaje(
+          respuesta.mensaje ||
+            'Tu postulación fue registrada correctamente.'
       );
     } catch (errorDesconocido) {
       const mensajeError =
@@ -616,10 +621,53 @@ export default function WorkerServiceDetailScreen() {
               </p>
             </div>
           ) : (
-            <p className="text-sm leading-6 text-gray-500">
-              Todavía no te has postulado para realizar
-              este servicio.
-            </p>
+            <div className="mx-5 mb-4 rounded-2xl border border-border bg-card p-4">
+              <p className="mb-3 text-sm font-semibold text-foreground">
+                ¿Cómo deseas postularte?
+              </p>
+
+              <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
+                <input
+                  type="radio"
+                  name="tipoPostulacion"
+                  checked={tipoPostulacion === 'aceptar'}
+                  onChange={() => setTipoPostulacion('aceptar')}
+                  className="mt-1 accent-[#1A56DB]"
+                />
+
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Acepto el presupuesto publicado
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Te postularás con el monto indicado en la solicitud.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
+                <input
+                  type="radio"
+                  name="tipoPostulacion"
+                  checked={tipoPostulacion === 'negociar'}
+                  onChange={() => setTipoPostulacion('negociar')}
+                  className="mt-1 accent-[#1A56DB]"
+                />
+
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Quiero negociar el precio
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    El cliente verá que deseas negociar y podrán acordar el monto por chat.
+                  </p>
+                </div>
+              </label>
+            </div>
+            // <p className="text-sm leading-6 text-gray-500">
+            //   Todavía no te has postulado para realizar
+            //   este servicio.
+            // </p>
           )}
         </section>
 
