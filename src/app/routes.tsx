@@ -2,11 +2,13 @@ import {
   createBrowserRouter,
   Navigate,
 } from 'react-router';
+
 import {
   lazy,
   Suspense,
   type ReactNode,
 } from 'react';
+
 import { MobileShell } from './components/layout/MobileShell';
 
 import ServiceManagementScreen from './components/screens/ServiceManagementScreen';
@@ -50,6 +52,13 @@ const WorkerProfileScreen = lazy(
   () =>
     import(
       './components/screens/WorkerProfileScreen'
+    )
+);
+
+const ClientPublicProfileScreen = lazy(
+  () =>
+    import(
+      './components/screens/ClientPublicProfileScreen'
     )
 );
 
@@ -146,6 +155,7 @@ export const router =
         </S>
       ),
     },
+
     {
       path: '/auth',
       element: (
@@ -154,152 +164,158 @@ export const router =
         </S>
       ),
     },
-    
-
-      {
-  path: '/home',
-  Component: MobileShell,
-  children: [
-    {
-      index: true,
-      element: (
-        <S>
-          <HomeRouter />
-        </S>
-      ),
-    },
-    {
-      path: 'search',
-      element: (
-        <S>
-          <SearchScreen />
-        </S>
-      ),
-    },
-    {
-      path: 'worker/:id',
-      element: (
-        <S>
-          <WorkerProfileScreen />
-        </S>
-      ),
-    },
 
     {
-      path: 'solicitud/:idServicio',
-      element: (
-        <S>
-          <WorkerServiceDetailScreen />
-        </S>
-      ),
+      path: '/home',
+      Component: MobileShell,
+
+      children: [
+        {
+          index: true,
+          element: (
+            <S>
+              <HomeRouter />
+            </S>
+          ),
+        },
+
+        {
+          path: 'search',
+          element: (
+            <S>
+              <SearchScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'worker/:id',
+          element: (
+            <S>
+              <WorkerProfileScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'client/:id',
+          element: (
+            <S>
+              <ClientPublicProfileScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'solicitud/:idServicio',
+          element: (
+            <S>
+              <WorkerServiceDetailScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'mis-solicitudes/:idServicio',
+          element: (
+            <S>
+              <ClientServiceDetailScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'trabajo/:idServicio',
+          element: (
+            <S>
+              <ServiceManagementScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'contratacion/:idServicio',
+          element: (
+            <S>
+              <ServiceManagementScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'profile',
+          element: (
+            <S>
+              <ProfileRouter />
+            </S>
+          ),
+        },
+
+        {
+          path: 'chat',
+          element: (
+            <S>
+              <ChatListScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'chat/:id',
+          element: (
+            <S>
+              <ChatScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'agenda',
+          element: (
+            <S>
+              <AgendaScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'review/:bookingId',
+          element: (
+            <S>
+              <ReviewScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'report',
+          element: (
+            <S>
+              <ReportScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'notifications',
+          element: (
+            <S>
+              <NotificationsScreen />
+            </S>
+          ),
+        },
+
+        {
+          path: 'payment',
+          element: (
+            <S>
+              <PaymentMethodScreen />
+            </S>
+          ),
+        },
+      ],
     },
 
-    {
-      path: 'mis-solicitudes/:idServicio',
-      element: (
-        <S>
-          <ClientServiceDetailScreen />
-        </S>
-      ),
-    },
-
-    // ===============================
-    // NUEVAS RUTAS
-    // ===============================
-
-    {
-      path: 'trabajo/:idServicio',
-      element: (
-        <S>
-          <ServiceManagementScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'contratacion/:idServicio',
-      element: (
-        <S>
-          <ServiceManagementScreen />
-        </S>
-      ),
-    },
-
-    // ===============================
-
-    {
-      path: 'profile',
-      element: (
-        <S>
-          <ProfileRouter />
-        </S>
-      ),
-    },
-
-    {
-      path: 'chat',
-      element: (
-        <S>
-          <ChatListScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'chat/:id',
-      element: (
-        <S>
-          <ChatScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'agenda',
-      element: (
-        <S>
-          <AgendaScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'review/:bookingId',
-      element: (
-        <S>
-          <ReviewScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'report',
-      element: (
-        <S>
-          <ReportScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'notifications',
-      element: (
-        <S>
-          <NotificationsScreen />
-        </S>
-      ),
-    },
-
-    {
-      path: 'payment',
-      element: (
-        <S>
-          <PaymentMethodScreen />
-        </S>
-      ),
-    },
-  ],
-},
     {
       path: '*',
       element: (

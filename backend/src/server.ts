@@ -69,6 +69,8 @@ async function subirArchivoAzure(base64: string, fileName: string, contentType: 
   return blockBlobClient.url;
 }
 
+
+
 app.use(cors());
 // Aumentar límite para permitir subir imágenes/documentos en base64 grandes
 app.use(express.json({ limit: "50mb" }));
@@ -163,6 +165,8 @@ app.post("/api/upload-evidencia", async (req, res) => {
     return res.status(500).json({ mensaje: "No se pudo subir la evidencia" });
   }
 });
+
+
 
 // ==========================================
 // RUTAS DE EMPLEADOS
@@ -911,225 +915,90 @@ app.get("/api/clientes/:id", async (req, res) => {
 // ==========================================
 // OBTENER EMPLEADOS POR CATEGORÍA
 // ==========================================
-app.get("/api/categorias/:id/empleados", async (req, res) => {
-  try {
-    const idCategoria = Number(req.params.id);
-
-    if (!Number.isInteger(idCategoria) || idCategoria <= 0) {
-      return res.status(400).json({
-        mensaje: "ID de categoría inválido",
-      });
-    }
-
-    const [empleados]: any = await database.execute(
-      `
-      SELECT
-        e.id_empleado,
-        e.nombre AS nombre_E,
-        e.correo,
-        e.telefono AS celular,
-        e.titulo,
-        e.direccion,
-        e.estado,
-        e.numero_trabajos AS N_trabajos,
-        c.id_categoria,
-        c.nombre AS categoria
-      FROM empleados e
-      INNER JOIN empleado_categorias ec
-        ON ec.id_empleado = e.id_empleado
-      INNER JOIN categorias c
-        ON c.id_categoria = ec.id_categoria
-      WHERE c.id_categoria = ?
-      ORDER BY e.nombre ASC
-      `,
-      [idCategoria]
-    );
-
-    return res.status(200).json(empleados);
-  } catch (error) {
-    console.error("Error al consultar empleados por categoría:", error);
-
-    return res.status(500).json({
-      mensaje: "Error al consultar los trabajadores",
-    });
-  }
-});
 
 // ==========================================
-// RUTAS DE REPORTES
+// OBTENER EMPLEADOS POR CATEGORÍA
 // ==========================================
-app.post('/api/reportes', async (req, res) => {
-  try {
-    const {
-      tipoReporte,
-      idReportante,
-      tipoReportante,
-      idServicio = null,
-      idReportado = null,
-      tipoReportado = null,
-      categoria,
-      descripcion,
-      fotos = [],
-    } = req.body;
-
-    const idReportanteNumero = Number(idReportante);
-
-    if (
-      !Number.isInteger(idReportanteNumero) ||
-      idReportanteNumero <= 0
-    ) {
-      return res.status(400).json({
-        mensaje: 'El usuario que realiza el reporte no es válido',
-      });
-    }
-
-    if (
-      tipoReporte !== 'aplicacion' &&
-      tipoReporte !== 'usuario'
-    ) {
-      return res.status(400).json({
-        mensaje: 'El tipo de reporte no es válido',
-      });
-    }
-
-    if (!tipoReportante) {
-      return res.status(400).json({
-        mensaje: 'El tipo de usuario que reporta es obligatorio',
-      });
-    }
-
-    if (!categoria || typeof categoria !== 'string') {
-      return res.status(400).json({
-        mensaje: 'La categoría es obligatoria',
-      });
-    }
-
-    if (
-      !descripcion ||
-      typeof descripcion !== 'string' ||
-      descripcion.trim().length < 20
-    ) {
-      return res.status(400).json({
-        mensaje:
-          'La descripción debe tener al menos 20 caracteres',
-      });
-    }
-
-    if (!Array.isArray(fotos)) {
-      return res.status(400).json({
-        mensaje: 'El formato de las fotos no es válido',
-      });
-    }
-
-    if (fotos.length > 4) {
-      return res.status(400).json({
-        mensaje: 'Solo se permiten un máximo de 4 fotos',
-      });
-    }
-
-    if (tipoReporte === 'usuario') {
-      const idReportadoNumero = Number(idReportado);
-      const idServicioNumero = Number(idServicio);
+app.get(
+  '/api/categorias/:id/empleados',
+  async (req, res) => {
+    try {
+      const idCategoria = Number(
+        req.params.id
+      );
 
       if (
-        !Number.isInteger(idReportadoNumero) ||
-        idReportadoNumero <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'El usuario reportado no es válido',
-        });
-      }
-
-      if (!tipoReportado) {
-        return res.status(400).json({
-          mensaje: 'El tipo de usuario reportado es obligatorio',
-        });
-      }
-
-      if (
-        !Number.isInteger(idServicioNumero) ||
-        idServicioNumero <= 0
+        !Number.isInteger(idCategoria) ||
+        idCategoria <= 0
       ) {
         return res.status(400).json({
           mensaje:
-            'El servicio relacionado con el reporte no es válido',
+            'ID de categoría inválido',
         });
       }
 
-      if (
-        idReportanteNumero === idReportadoNumero &&
-        tipoReportante === tipoReportado
-      ) {
-        return res.status(400).json({
-          mensaje: 'No puedes reportarte a ti mismo',
-        });
-      }
+      const resultado: any =
+        await database.execute(
+          `
+          SELECT DISTINCT
+            e.id_empleado,
+            e.nombre AS nombre_E,
+            e.correo,
+            e.telefono AS celular,
+            e.titulo,
+            e.direccion,
+            e.estado,
+            e.numero_trabajos AS N_trabajos,
+            e.foto_url,
+            c.id_categoria,
+            c.nombre AS categoria
+          FROM empleados AS e
+          INNER JOIN empleado_categorias AS ec
+            ON ec.id_empleado =
+              e.id_empleado
+          INNER JOIN categorias AS c
+            ON c.id_categoria =
+              ec.id_categoria
+          WHERE ec.id_categoria = ?
+          ORDER BY e.nombre ASC
+          `,
+          [idCategoria]
+        );
+
+      const empleados = obtenerFilas(
+        Array.isArray(resultado)
+          ? resultado[0]
+          : resultado
+      );
+
+      console.log(
+        `Categoría ${idCategoria}:`,
+        empleados.length,
+        'trabajadores encontrados'
+      );
+
+      return res.status(200).json(
+        empleados
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al consultar empleados por categoría:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar los trabajadores',
+        detalle:
+          error?.message ||
+          String(error),
+      });
     }
-
-    const fotosJson = JSON.stringify(fotos);
-
-    const idServicioFinal =
-      tipoReporte === 'usuario'
-        ? Number(idServicio)
-        : null;
-
-    const idReportadoFinal =
-      tipoReporte === 'usuario'
-        ? Number(idReportado)
-        : null;
-
-    const tipoReportadoFinal =
-      tipoReporte === 'usuario'
-        ? tipoReportado
-        : null;
-
-    const [resultado] = await database.execute(
-      `
-      INSERT INTO reportes
-      (
-        fk_usuario,
-        tipo_reportante,
-        fk_usuario_reportado,
-        tipo_reportado,
-        fk_servicio,
-        tipo_reporte,
-        categoria,
-        descripcion,
-        fotos,
-        fecha,
-        estado
-      )
-      VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?);
-
-      SELECT SCOPE_IDENTITY() AS insertId;
-      `,
-      [
-        idReportanteNumero,
-        tipoReportante,
-        idReportadoFinal,
-        tipoReportadoFinal,
-        idServicioFinal,
-        tipoReporte,
-        categoria.trim(),
-        descripcion.trim(),
-        fotosJson,
-        'pendiente',
-      ],
-    );
-
-    return res.status(201).json({
-      mensaje: 'Reporte enviado correctamente',
-      resultado,
-    });
-  } catch (error) {
-    console.error('Error al guardar el reporte:', error);
-
-    return res.status(500).json({
-      mensaje: 'Error interno al guardar el reporte',
-    });
   }
-});
+);
+
+
+
 // ==========================================
 // RUTA DE LOGIN (NUEVA)
 // ==========================================
@@ -1361,6 +1230,43 @@ if (filas.length > 0) {
 });
 
 // ==========================================
+// AUXILIAR PARA LEER RESULTADOS DE SQL SERVER
+// ==========================================
+function obtenerFilas(resultado: any): any[] {
+  if (!resultado) {
+    return [];
+  }
+
+  if (Array.isArray(resultado.recordset)) {
+    return resultado.recordset;
+  }
+
+  if (
+    Array.isArray(
+      resultado.recordsets?.[0],
+    )
+  ) {
+    return resultado.recordsets[0];
+  }
+
+  if (Array.isArray(resultado.rows)) {
+    return resultado.rows;
+  }
+
+  if (Array.isArray(resultado[0])) {
+    return resultado[0];
+  }
+
+  if (Array.isArray(resultado)) {
+    return resultado;
+  }
+
+  return [];
+}
+
+
+
+// ==========================================
 // CREAR SERVICIO Y NOTIFICAR EMPLEADOS
 // ==========================================
 app.post('/api/servicios', async (req, res) => {
@@ -1369,6 +1275,7 @@ app.post('/api/servicios', async (req, res) => {
       fk_cliente,
       fk_categoria,
       fk_evidencia,
+      titulo,
       descripcion,
       direccion,
       presupuesto,
@@ -1381,15 +1288,30 @@ app.post('/api/servicios', async (req, res) => {
     const idCategoria = Number(fk_categoria);
     const presupuestoNumero = Number(presupuesto);
 
+    const tituloLimpio =
+      typeof titulo === 'string' && titulo.trim()
+        ? titulo.trim()
+        : typeof descripcion === 'string' && descripcion.trim()
+          ? descripcion.trim().slice(0, 80)
+          : 'Solicitud de servicio';
+
+    const descripcionLimpia =
+      typeof descripcion === 'string'
+        ? descripcion.trim()
+        : '';
+
+    const direccionLimpia =
+      typeof direccion === 'string'
+        ? direccion.trim()
+        : '';
+
     if (
       !Number.isInteger(idCliente) ||
       idCliente <= 0 ||
       !Number.isInteger(idCategoria) ||
       idCategoria <= 0 ||
-      typeof descripcion !== 'string' ||
-      !descripcion.trim() ||
-      typeof direccion !== 'string' ||
-      !direccion.trim() ||
+      !descripcionLimpia ||
+      !direccionLimpia ||
       !Number.isFinite(presupuestoNumero) ||
       presupuestoNumero <= 0 ||
       !fecha ||
@@ -1409,29 +1331,31 @@ app.post('/api/servicios', async (req, res) => {
       });
     }
 
-    // Crear servicio y recuperar su ID
+    // Crear servicio.
     const [resultadoServicio]: any =
       await database.execute(
         `
-        INSERT INTO servicios
-        (
+        INSERT INTO servicios (
           id_cliente,
           id_categoria,
           fk_cliente,
           fk_categoria,
           fk_evidencia,
+          titulo,
           descripcion,
           direccion,
           presupuesto,
           fecha,
           hora_inicio,
-          hora_fin
+          hora_fin,
+          estado
         )
-        OUTPUT INSERTED.id_servicio
-        VALUES
-        (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-        );
+        OUTPUT
+          INSERTED.id_servicio
+        VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          'Pendiente'
+        )
         `,
         [
           idCliente,
@@ -1439,22 +1363,21 @@ app.post('/api/servicios', async (req, res) => {
           idCliente,
           idCategoria,
           fk_evidencia || null,
-          descripcion.trim(),
-          direccion.trim(),
+          tituloLimpio,
+          descripcionLimpia,
+          direccionLimpia,
           presupuestoNumero,
           fecha,
           hora_inicio,
           hora_fin,
-        ]
+        ],
       );
 
     const filasServicio =
-      resultadoServicio.recordset ??
-      resultadoServicio.recordsets?.[0] ??
-      [];
+      obtenerFilas(resultadoServicio);
 
     const idServicio = Number(
-      filasServicio[0]?.id_servicio
+      filasServicio[0]?.id_servicio,
     );
 
     if (
@@ -1462,40 +1385,32 @@ app.post('/api/servicios', async (req, res) => {
       idServicio <= 0
     ) {
       throw new Error(
-        'No se pudo obtener el ID del servicio creado'
+        'No se pudo obtener el ID del servicio creado',
       );
     }
 
-    /*
-      Ajusta únicamente esta consulta si tu tabla puente
-      tiene nombres diferentes.
-
-      Según tu explorador parece existir una tabla parecida a:
-      empleado_categoria
-      o empleado_categorias.
-    */
+    // Obtener empleados relacionados con la categoría.
     const [resultadoEmpleados]: any =
       await database.execute(
         `
         SELECT DISTINCT
           ec.id_empleado
-        FROM empleado_categorias ec
-        WHERE ec.id_categoria = ?;
+        FROM empleado_categorias AS ec
+        INNER JOIN empleados AS e
+          ON e.id_empleado = ec.id_empleado
+        WHERE ec.id_categoria = ?
         `,
-        [idCategoria]
+        [idCategoria],
       );
-      
 
     const empleados =
-      resultadoEmpleados.recordset ??
-      resultadoEmpleados.recordsets?.[0] ??
-      [];
+      obtenerFilas(resultadoEmpleados);
 
     let notificacionesCreadas = 0;
 
     for (const empleado of empleados) {
       const idEmpleado = Number(
-        empleado.id_empleado
+        empleado.id_empleado,
       );
 
       if (
@@ -1505,164 +1420,392 @@ app.post('/api/servicios', async (req, res) => {
         continue;
       }
 
-      await database.execute(
-        `
-        INSERT INTO notificaciones
-        (
-          id_cliente,
-          id_empleado,
-          titulo,
-          descripcion,
-          tipo,
-          leida,
-          fecha,
-          fk_servicio
-        )
-        VALUES
-        (
-          NULL,
-          ?,
-          ?,
-          ?,
-          ?,
-          0,
-          SYSDATETIME(),
-          ?
+      const [resultadoNotificacion]: any =
+        await database.execute(
+          `
+          INSERT INTO notificaciones (
+            id_cliente,
+            id_empleado,
+            titulo,
+            descripcion,
+            tipo,
+            leida,
+            fecha,
+            fk_servicio
+          )
+          OUTPUT
+            INSERTED.id_notificacion
+          VALUES (
+            NULL,
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            SYSDATETIME(),
+            ?
+          )
+          `,
+          [
+            idEmpleado,
+            'Nuevo trabajo disponible',
+            `Se publicó el trabajo "${tituloLimpio}" en una de tus categorías.`,
+            'nuevo_servicio',
+            idServicio,
+          ],
         );
-        `,
-        [
-          idEmpleado,
-          'Nuevo trabajo disponible',
-          'Se publicó un trabajo relacionado con una de tus categorías.',
-          'nuevo_servicio',
-          idServicio,
-        ]
-      );
 
-      notificacionesCreadas += 1;
+      const filasNotificacion =
+        obtenerFilas(resultadoNotificacion);
+
+      if (filasNotificacion.length > 0) {
+        notificacionesCreadas += 1;
+      }
     }
+
+    console.log('Servicio creado:', {
+      idServicio,
+      idCliente,
+      idCategoria,
+      empleadosEncontrados: empleados.length,
+      notificacionesCreadas,
+    });
 
     return res.status(201).json({
       mensaje:
         'Solicitud publicada correctamente',
       idServicio,
+      empleadosEncontrados: empleados.length,
       notificacionesCreadas,
     });
-  } catch (error) {
-    console.error(
-      'Error al registrar servicio:',
-      error
-    );
-
-    return res.status(500).json({
-      mensaje:
-        error instanceof Error
-          ? error.message
-          : 'Error al publicar la solicitud',
-    });
-  }
-});
-
-// ==========================================
-// OBTENER TODOS LOS SERVICIOS
-// ==========================================
-app.get('/api/servicios', async (_req, res) => {
-  try {
-    const [resultado]: any =
-      await database.execute(
-        `
-        SELECT
-          s.id_servicio,
-
-          COALESCE(
-            s.fk_cliente,
-            s.id_cliente
-          ) AS fk_cliente,
-
-          COALESCE(
-            s.fk_categoria,
-            s.id_categoria
-          ) AS fk_categoria,
-
-          s.fk_empleado,
-          s.fk_evidencia,
-          s.titulo,
-          s.descripcion,
-          s.direccion,
-          s.presupuesto,
-          s.fecha,
-          s.hora_inicio,
-          s.hora_fin,
-          COALESCE(
-            NULLIF(LTRIM(RTRIM(s.estado)), ''),
-            'Pendiente'
-          ) AS estado,
-
-          c.nombre AS nombre_cliente,
-          c.foto_url AS foto_cliente,
-
-          cat.nombre AS nombre_categoria
-
-        FROM servicios AS s
-
-        LEFT JOIN clientes AS c
-          ON c.id_cliente = COALESCE(
-            s.fk_cliente,
-            s.id_cliente
-          )
-
-        LEFT JOIN categorias AS cat
-          ON cat.id_categoria = COALESCE(
-            s.fk_categoria,
-            s.id_categoria
-          )
-
-        ORDER BY
-          s.fecha DESC,
-          s.hora_inicio DESC;
-        `
-      );
-
-    const servicios =
-      resultado?.recordset ??
-      resultado?.recordsets?.[0] ??
-      (Array.isArray(resultado)
-        ? resultado
-        : []);
-
-    return res.status(200).json(servicios);
   } catch (error: any) {
     console.error(
-      'Error al consultar servicios:',
-      error
+      'Error al registrar servicio:',
+      error,
     );
 
     return res.status(500).json({
       mensaje:
-        'Error al consultar los servicios',
+        'Error al publicar la solicitud',
       detalle:
-        error?.message ??
-        String(error),
+        error?.message || String(error),
+      numero: error?.number ?? null,
+      codigo: error?.code ?? null,
     });
   }
 });
+
 // ==========================================
-// OBTENER NOTIFICACIONES DEL EMPLEADO
+// POSTULARSE Y NOTIFICAR AL CLIENTE
 // ==========================================
-app.get(
-  '/api/notificaciones/empleado/:idEmpleado',
+app.post(
+  '/api/servicios/:idServicio/postular',
   async (req, res) => {
     try {
-      const idEmpleado = Number(
-        req.params.idEmpleado
+      const idServicio = Number(
+        req.params.idServicio,
       );
+
+      const idEmpleado = Number(
+        req.body?.fk_empleado,
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
 
       if (
         !Number.isInteger(idEmpleado) ||
         idEmpleado <= 0
       ) {
         return res.status(400).json({
-          mensaje: 'Empleado inválido',
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      // Obtener servicio y cliente.
+      const [resultadoServicio]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            s.id_servicio,
+            s.titulo,
+            s.estado,
+            COALESCE(
+              s.fk_cliente,
+              s.id_cliente
+            ) AS id_cliente
+          FROM servicios AS s
+          WHERE s.id_servicio = ?
+          `,
+          [idServicio],
+        );
+
+      const servicios =
+        obtenerFilas(resultadoServicio);
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El servicio no existe',
+        });
+      }
+
+      const servicio = servicios[0];
+
+      const estadoServicio = String(
+        servicio.estado ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        ![
+          'pendiente',
+          'pending',
+        ].includes(estadoServicio)
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Este servicio ya no acepta postulaciones',
+        });
+      }
+
+      const idCliente = Number(
+        servicio.id_cliente,
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El servicio no tiene un cliente válido',
+        });
+      }
+
+      // Obtener empleado.
+      const [resultadoEmpleado]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_empleado,
+            nombre
+          FROM empleados
+          WHERE id_empleado = ?
+          `,
+          [idEmpleado],
+        );
+
+      const empleados =
+        obtenerFilas(resultadoEmpleado);
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'El empleado no existe',
+        });
+      }
+
+      const empleado = empleados[0];
+
+      // Evitar postulación duplicada.
+      const [resultadoExistente]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_postulacion,
+            estado,
+            fecha
+          FROM postulaciones
+          WHERE fk_servicio = ?
+            AND fk_empleado = ?
+          `,
+          [
+            idServicio,
+            idEmpleado,
+          ],
+        );
+
+      const existentes =
+        obtenerFilas(resultadoExistente);
+
+      if (existentes.length > 0) {
+        return res.status(409).json({
+          mensaje:
+            'Ya te postulaste a este servicio',
+          postulacion: existentes[0],
+        });
+      }
+
+      // Crear postulación.
+      const [resultadoPostulacion]: any =
+        await database.execute(
+          `
+          INSERT INTO postulaciones (
+            fk_servicio,
+            fk_empleado,
+            estado,
+            fecha
+          )
+          OUTPUT
+            INSERTED.id_postulacion,
+            INSERTED.fk_servicio,
+            INSERTED.fk_empleado,
+            INSERTED.estado,
+            INSERTED.fecha
+          VALUES (
+            ?,
+            ?,
+            'Pendiente',
+            SYSDATETIME()
+          )
+          `,
+          [
+            idServicio,
+            idEmpleado,
+          ],
+        );
+
+      const postulaciones =
+        obtenerFilas(resultadoPostulacion);
+
+      const postulacion =
+        postulaciones[0] ?? {
+          fk_servicio: idServicio,
+          fk_empleado: idEmpleado,
+          estado: 'Pendiente',
+        };
+
+      const nombreEmpleado = String(
+        empleado.nombre ||
+          'Un trabajador',
+      ).trim();
+
+      const tituloServicio = String(
+        servicio.titulo ||
+          'Solicitud de servicio',
+      ).trim();
+
+      // Notificar al cliente.
+      const [resultadoNotificacion]: any =
+        await database.execute(
+          `
+          INSERT INTO notificaciones (
+            id_cliente,
+            id_empleado,
+            titulo,
+            descripcion,
+            tipo,
+            leida,
+            fecha,
+            fk_servicio
+          )
+          OUTPUT
+            INSERTED.id_notificacion,
+            INSERTED.id_cliente,
+            INSERTED.id_empleado,
+            INSERTED.titulo,
+            INSERTED.descripcion,
+            INSERTED.tipo,
+            INSERTED.leida,
+            INSERTED.fecha,
+            INSERTED.fk_servicio
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            SYSDATETIME(),
+            ?
+          )
+          `,
+          [
+            idCliente,
+            null,
+            'Nueva postulación',
+            `${nombreEmpleado} se postuló a tu solicitud "${tituloServicio}".`,
+            'postulacion',
+            idServicio,
+          ],
+        );
+
+      const notificaciones =
+        obtenerFilas(resultadoNotificacion);
+
+      console.log(
+        'Postulación y notificación creadas:',
+        {
+          idServicio,
+          idEmpleado,
+          idCliente,
+          idPostulacion:
+            postulacion?.id_postulacion ??
+            null,
+          idNotificacion:
+            notificaciones[0]
+              ?.id_notificacion ?? null,
+        },
+      );
+
+      return res.status(201).json({
+        mensaje:
+          'Postulación registrada correctamente',
+        postulacion,
+        notificacion:
+          notificaciones[0] ?? null,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al registrar postulación:',
+        error,
+      );
+
+      if (
+        error?.number === 2601 ||
+        error?.number === 2627
+      ) {
+        return res.status(409).json({
+          mensaje:
+            'Ya te postulaste a este servicio',
+        });
+      }
+
+      return res.status(500).json({
+        mensaje:
+          'Error al registrar la postulación',
+        detalle:
+          error?.message || String(error),
+        numero: error?.number ?? null,
+        codigo: error?.code ?? null,
+      });
+    }
+  },
+);
+
+// ==========================================
+// NOTIFICACIONES DEL CLIENTE
+// ==========================================
+app.get(
+  '/api/clientes/:idCliente/notificaciones',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente,
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de cliente inválido',
         });
       }
 
@@ -1679,59 +1822,127 @@ app.get(
             n.leida,
             n.fecha,
             n.fk_servicio,
-
-            s.descripcion AS descripcion_servicio,
-            s.direccion,
-            s.presupuesto,
-            s.fecha AS fecha_servicio,
-            s.hora_inicio,
-            s.hora_fin,
-
-            cat.nombre AS nombre_categoria
-
-          FROM notificaciones n
-
-          LEFT JOIN servicios s
-            ON s.id_servicio = n.fk_servicio
-
-          LEFT JOIN categorias cat
-            ON cat.id_categoria = s.fk_categoria
-
-          WHERE n.id_empleado = ?
-
-          ORDER BY n.fecha DESC;
+            e.nombre AS nombre_empleado,
+            e.foto_url AS foto_empleado
+          FROM notificaciones AS n
+          LEFT JOIN empleados AS e
+            ON e.id_empleado =
+              n.id_empleado
+          WHERE n.id_cliente = ?
+          ORDER BY
+            n.fecha DESC,
+            n.id_notificacion DESC
           `,
-          [idEmpleado]
+          [idCliente],
         );
 
       const notificaciones =
-        resultado.recordset ??
-        resultado.recordsets?.[0] ??
-        [];
+        obtenerFilas(resultado);
 
-      return res.json(notificaciones);
-    } catch (error) {
+      return res.status(200).json({
+        notificaciones,
+        total: notificaciones.length,
+        no_leidas:
+          notificaciones.filter(
+            (item) =>
+              !Boolean(item.leida),
+          ).length,
+      });
+    } catch (error: any) {
       console.error(
-        'Error al obtener notificaciones:',
-        error
+        'Error al obtener notificaciones del cliente:',
+        error,
       );
 
       return res.status(500).json({
         mensaje:
           'Error al obtener las notificaciones',
+        detalle:
+          error?.message || String(error),
       });
     }
-  }
+  },
 );
+
 // ==========================================
-// MARCAR NOTIFICACIÓN COMO LEÍDA
+// NOTIFICACIONES DEL EMPLEADO
 // ==========================================
-app.patch(
-  '/api/notificaciones/:idNotificacion/leida',
+app.get(
+  '/api/empleados/:idEmpleado/notificaciones',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const [resultado]: any =
+        await database.execute(
+          `
+          SELECT
+            n.id_notificacion,
+            n.id_cliente,
+            n.id_empleado,
+            n.titulo,
+            n.descripcion,
+            n.tipo,
+            n.leida,
+            n.fecha,
+            n.fk_servicio
+          FROM notificaciones AS n
+          WHERE n.id_empleado = ?
+          ORDER BY
+            n.fecha DESC,
+            n.id_notificacion DESC
+          `,
+          [idEmpleado],
+        );
+
+      const notificaciones =
+        obtenerFilas(resultado);
+
+      return res.status(200).json({
+        notificaciones,
+        total: notificaciones.length,
+        no_leidas:
+          notificaciones.filter(
+            (item) =>
+              !Boolean(item.leida),
+          ).length,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al obtener notificaciones del empleado:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al obtener las notificaciones',
+        detalle:
+          error?.message || String(error),
+      });
+    }
+  },
+);
+
+// ==========================================
+// MARCAR UNA NOTIFICACIÓN COMO LEÍDA
+// ==========================================
+app.put(
+  '/api/notificaciones/:idNotificacion/leer',
   async (req, res) => {
     try {
       const idNotificacion = Number(
-        req.params.idNotificacion
+        req.params.idNotificacion,
       );
 
       if (
@@ -1739,7 +1950,8 @@ app.patch(
         idNotificacion <= 0
       ) {
         return res.status(400).json({
-          mensaje: 'Notificación inválida',
+          mensaje:
+            'ID de notificación inválido',
         });
       }
 
@@ -1748,38 +1960,212 @@ app.patch(
           `
           UPDATE notificaciones
           SET leida = 1
-          WHERE id_notificacion = ?;
+          OUTPUT
+            INSERTED.id_notificacion,
+            INSERTED.leida
+          WHERE id_notificacion = ?
           `,
-          [idNotificacion]
+          [idNotificacion],
         );
 
-      const filasAfectadas =
-        resultado.rowsAffected?.[0] ?? 0;
+      const filas = obtenerFilas(resultado);
 
-      if (filasAfectadas === 0) {
+      if (filas.length === 0) {
         return res.status(404).json({
           mensaje:
-            'No se encontró la notificación',
+            'La notificación no existe',
         });
       }
 
-      return res.json({
+      return res.status(200).json({
         mensaje:
           'Notificación marcada como leída',
+        notificacion: filas[0],
       });
-    } catch (error) {
+    } catch (error: any) {
+      return res.status(500).json({
+        mensaje:
+          'No se pudo actualizar la notificación',
+        detalle:
+          error?.message || String(error),
+      });
+    }
+  },
+);
+
+
+// ==========================================
+// MARCAR TODAS LAS NOTIFICACIONES DEL CLIENTE
+// ==========================================
+app.put(
+  '/api/clientes/:idCliente/notificaciones/leer-todas',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de cliente inválido',
+        });
+      }
+
+      await database.execute(
+        `
+        UPDATE notificaciones
+        SET leida = 1
+        WHERE id_cliente = ?
+        `,
+        [idCliente]
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Notificaciones marcadas como leídas',
+      });
+    } catch (error: any) {
       console.error(
-        'Error al actualizar notificación:',
+        'Error al marcar notificaciones del cliente:',
         error
       );
 
       return res.status(500).json({
         mensaje:
-          'Error al actualizar la notificación',
+          'No se pudieron actualizar las notificaciones',
+        detalle: error?.message || String(error),
       });
     }
   }
 );
+
+// ==========================================
+// MARCAR TODAS LAS DEL EMPLEADO COMO LEÍDAS
+// ==========================================
+app.put(
+  '/api/empleados/:idEmpleado/notificaciones/leer-todas',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de empleado inválido',
+        });
+      }
+
+      await database.execute(
+        `
+        UPDATE notificaciones
+        SET leida = 1
+        WHERE id_empleado = ?
+        `,
+        [idEmpleado],
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Notificaciones marcadas como leídas',
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        mensaje:
+          'No se pudieron actualizar las notificaciones',
+        detalle:
+          error?.message || String(error),
+      });
+    }
+  },
+);
+
+
+
+
+
+
+
+// ==========================================
+// OBTENER SERVICIOS / SOLICITUDES DISPONIBLES
+// ==========================================
+app.get('/api/servicios', async (_req, res) => {
+  try {
+    const respuesta: any = await database.query(`
+      SELECT
+        s.id_servicio,
+        COALESCE(s.fk_cliente, s.id_cliente) AS fk_cliente,
+        COALESCE(s.fk_categoria, s.id_categoria) AS fk_categoria,
+        s.id_cliente,
+        s.id_categoria,
+        s.id_subcategoria,
+        s.fk_empleado,
+        s.fk_evidencia,
+        s.titulo,
+        s.descripcion,
+        s.direccion,
+        s.presupuesto,
+        s.fecha,
+        s.hora_inicio,
+        s.hora_fin,
+        COALESCE(
+          NULLIF(LTRIM(RTRIM(s.estado)), ''),
+          'Pendiente'
+        ) AS estado,
+        COALESCE(
+          NULLIF(LTRIM(RTRIM(cat.nombre)), ''),
+          'Sin categoría'
+        ) AS nombre_categoria,
+        COALESCE(
+          NULLIF(LTRIM(RTRIM(c.nombre)), ''),
+          'Cliente'
+        ) AS nombre_cliente,
+        c.foto_url AS foto_cliente,
+        (
+          SELECT COUNT(*)
+          FROM postulaciones AS p
+          WHERE p.fk_servicio = s.id_servicio
+        ) AS total_postulaciones
+      FROM servicios AS s
+      LEFT JOIN categorias AS cat
+        ON cat.id_categoria = COALESCE(
+          s.fk_categoria,
+          s.id_categoria
+        )
+      LEFT JOIN clientes AS c
+        ON c.id_cliente = COALESCE(
+          s.fk_cliente,
+          s.id_cliente
+        )
+      ORDER BY
+        s.fecha DESC,
+        s.hora_inicio DESC,
+        s.id_servicio DESC
+    `);
+
+    const servicios = obtenerFilas(respuesta);
+
+    return res.status(200).json(servicios);
+  } catch (error: any) {
+    console.error(
+      'Error al consultar servicios:',
+      error
+    );
+
+    return res.status(500).json({
+      mensaje: 'Error al consultar los servicios',
+      detalle: error?.message || String(error),
+    });
+  }
+});
+
 // ==========================================
 // RUTAS DE SERVICIOS / SOLICITUDES lectura id 
 // ==========================================
@@ -4103,212 +4489,6 @@ app.put(
   }
 );
 
-app.post(
-  '/api/servicios/:idServicio/postular',
-  async (req, res) => {
-    try {
-      const idServicio = Number(req.params.idServicio);
-      const idEmpleado = Number(req.body?.fk_empleado);
-
-      if (
-        !Number.isInteger(idServicio) ||
-        idServicio <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de servicio inválido',
-        });
-      }
-
-      if (
-        !Number.isInteger(idEmpleado) ||
-        idEmpleado <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de empleado inválido',
-        });
-      }
-
-      // Comprobar que el servicio existe y sigue pendiente.
-      const respuestaServicio: any =
-        await database.query(
-          `
-          SELECT TOP 1
-            id_servicio,
-            estado
-          FROM servicios
-          WHERE id_servicio = ${idServicio}
-          `
-        );
-
-      const servicios: any[] =
-        Array.isArray(respuestaServicio?.recordset)
-          ? respuestaServicio.recordset
-          : Array.isArray(
-                respuestaServicio?.recordsets?.[0]
-              )
-            ? respuestaServicio.recordsets[0]
-            : Array.isArray(respuestaServicio?.[0])
-              ? respuestaServicio[0]
-              : [];
-
-      if (servicios.length === 0) {
-        return res.status(404).json({
-          mensaje: 'El servicio no existe',
-        });
-      }
-
-      if (
-        String(servicios[0].estado).trim() !==
-        'Pendiente'
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'Este servicio ya no acepta postulaciones',
-        });
-      }
-
-      // Comprobar que el empleado existe.
-      const respuestaEmpleado: any =
-        await database.query(
-          `
-          SELECT TOP 1
-            id_empleado
-          FROM empleados
-          WHERE id_empleado = ${idEmpleado}
-          `
-        );
-
-      const empleados: any[] =
-        Array.isArray(respuestaEmpleado?.recordset)
-          ? respuestaEmpleado.recordset
-          : Array.isArray(
-                respuestaEmpleado?.recordsets?.[0]
-              )
-            ? respuestaEmpleado.recordsets[0]
-            : Array.isArray(respuestaEmpleado?.[0])
-              ? respuestaEmpleado[0]
-              : [];
-
-      if (empleados.length === 0) {
-        return res.status(404).json({
-          mensaje: 'El empleado no existe',
-        });
-      }
-
-      // Evitar que el mismo empleado se postule dos veces.
-      const respuestaExistente: any =
-        await database.query(
-          `
-          SELECT TOP 1
-            id_postulacion,
-            estado
-          FROM postulaciones
-          WHERE fk_servicio = ${idServicio}
-            AND fk_empleado = ${idEmpleado}
-          `
-        );
-
-      const postulacionesExistentes: any[] =
-        Array.isArray(
-          respuestaExistente?.recordset
-        )
-          ? respuestaExistente.recordset
-          : Array.isArray(
-                respuestaExistente?.recordsets?.[0]
-              )
-            ? respuestaExistente.recordsets[0]
-            : Array.isArray(
-                  respuestaExistente?.[0]
-                )
-              ? respuestaExistente[0]
-              : [];
-
-      if (postulacionesExistentes.length > 0) {
-        return res.status(409).json({
-          mensaje:
-            'Ya te postulaste a este servicio',
-          postulacion:
-            postulacionesExistentes[0],
-        });
-      }
-
-      const respuestaInsertar: any =
-        await database.query(
-          `
-          INSERT INTO postulaciones (
-            fk_servicio,
-            fk_empleado,
-            estado,
-            fecha
-          )
-          OUTPUT
-            INSERTED.id_postulacion,
-            INSERTED.fk_servicio,
-            INSERTED.fk_empleado,
-            INSERTED.estado,
-            INSERTED.fecha
-          VALUES (
-            ${idServicio},
-            ${idEmpleado},
-            'Pendiente',
-            GETDATE()
-          )
-          `
-        );
-
-      const postulacionesInsertadas: any[] =
-        Array.isArray(
-          respuestaInsertar?.recordset
-        )
-          ? respuestaInsertar.recordset
-          : Array.isArray(
-                respuestaInsertar?.recordsets?.[0]
-              )
-            ? respuestaInsertar.recordsets[0]
-            : Array.isArray(
-                  respuestaInsertar?.[0]
-                )
-              ? respuestaInsertar[0]
-              : [];
-
-      return res.status(201).json({
-        mensaje:
-          'Postulación registrada correctamente',
-        postulacion:
-          postulacionesInsertadas[0] ?? {
-            fk_servicio: idServicio,
-            fk_empleado: idEmpleado,
-            estado: 'Pendiente',
-          },
-      });
-    } catch (error: any) {
-      console.error(
-        'Error al registrar postulación:',
-        error
-      );
-
-      if (
-        error?.number === 2601 ||
-        error?.number === 2627
-      ) {
-        return res.status(409).json({
-          mensaje:
-            'Ya te postulaste a este servicio',
-        });
-      }
-
-      return res.status(500).json({
-        mensaje:
-          'Error al registrar la postulación',
-        detalle:
-          error?.message || String(error),
-        numero: error?.number ?? null,
-        codigo: error?.code ?? null,
-      });
-    }
-  }
-);
-
 // ==========================================
 // POSTULACIONES DE UN EMPLEADO
 // ==========================================
@@ -5123,6 +5303,7 @@ app.get(
 
 // ==========================================
 // ACEPTAR EMPLEADO PARA UN SERVICIO
+// Y NOTIFICAR AL EMPLEADO
 // ==========================================
 app.put(
   '/api/servicios/:idServicio/aceptar',
@@ -5176,7 +5357,13 @@ app.put(
               SELECT 1
               FROM servicios
               WHERE id_servicio = ${idServicio}
-                AND estado <> 'Pendiente'
+                AND LOWER(
+                  LTRIM(
+                    RTRIM(
+                      COALESCE(estado, '')
+                    )
+                  )
+                ) <> 'pendiente'
             )
             BEGIN
               THROW 50002,
@@ -5189,7 +5376,13 @@ app.put(
               FROM postulaciones
               WHERE fk_servicio = ${idServicio}
                 AND fk_empleado = ${idEmpleado}
-                AND LOWER(estado) = 'pendiente'
+                AND LOWER(
+                  LTRIM(
+                    RTRIM(
+                      COALESCE(estado, '')
+                    )
+                  )
+                ) = 'pendiente'
             )
             BEGIN
               THROW 50003,
@@ -5199,10 +5392,16 @@ app.put(
 
             UPDATE servicios
             SET
-                fk_empleado = ${idEmpleado},
-                estado = 'En proceso'
+              fk_empleado = ${idEmpleado},
+              estado = 'En proceso'
             WHERE id_servicio = ${idServicio}
-              AND estado = 'Pendiente';
+              AND LOWER(
+                LTRIM(
+                  RTRIM(
+                    COALESCE(estado, '')
+                  )
+                )
+              ) = 'pendiente';
 
             UPDATE postulaciones
             SET estado =
@@ -5217,29 +5416,126 @@ app.put(
             SET estado = 'Ocupado'
             WHERE id_empleado = ${idEmpleado};
 
-            INSERT INTO reservas (
-              id_servicio,
-              id_empleado,
-              descripcion,
-              fecha,
-              hora,
-              fecha_creacion
+            -- Crear reserva solo si todavía no existe.
+            IF NOT EXISTS (
+              SELECT 1
+              FROM reservas
+              WHERE id_servicio = ${idServicio}
             )
-            SELECT
-              id_servicio,
-              fk_empleado,
-              COALESCE(titulo, descripcion, 'Trabajo aceptado'),
-              fecha,
-              hora_inicio,
-              GETDATE()
-            FROM servicios
-            WHERE id_servicio = ${idServicio};
+            BEGIN
+              INSERT INTO reservas (
+                id_servicio,
+                id_empleado,
+                descripcion,
+                fecha,
+                hora,
+                fecha_creacion
+              )
+              SELECT
+                id_servicio,
+                ${idEmpleado},
+                COALESCE(
+                  NULLIF(
+                    LTRIM(
+                      RTRIM(titulo)
+                    ),
+                    ''
+                  ),
+                  NULLIF(
+                    LTRIM(
+                      RTRIM(descripcion)
+                    ),
+                    ''
+                  ),
+                  'Trabajo aceptado'
+                ),
+                fecha,
+                hora_inicio,
+                GETDATE()
+              FROM servicios
+              WHERE id_servicio = ${idServicio};
+            END;
+
+            -- Crear notificación solo si todavía no existe.
+            IF NOT EXISTS (
+              SELECT 1
+              FROM notificaciones
+              WHERE id_empleado = ${idEmpleado}
+                AND fk_servicio = ${idServicio}
+                AND tipo = 'postulacion_aceptada'
+            )
+            BEGIN
+              INSERT INTO notificaciones (
+                id_cliente,
+                id_empleado,
+                titulo,
+                descripcion,
+                tipo,
+                leida,
+                fecha,
+                fk_servicio
+              )
+              SELECT
+                NULL,
+                ${idEmpleado},
+                '¡Postulación aceptada!',
+                CONCAT(
+                  'Has sido seleccionado para realizar el trabajo "',
+                  COALESCE(
+                    NULLIF(
+                      LTRIM(
+                        RTRIM(titulo)
+                      ),
+                      ''
+                    ),
+                    NULLIF(
+                      LTRIM(
+                        RTRIM(descripcion)
+                      ),
+                      ''
+                    ),
+                    'Servicio'
+                  ),
+                  '".'
+                ),
+                'postulacion_aceptada',
+                0,
+                GETDATE(),
+                id_servicio
+              FROM servicios
+              WHERE id_servicio = ${idServicio};
+            END;
 
             COMMIT TRANSACTION;
 
             SELECT
-              ${idServicio} AS id_servicio,
-              ${idEmpleado} AS fk_empleado;
+              s.id_servicio,
+              s.fk_empleado,
+              s.estado,
+              p.id_postulacion,
+              p.estado AS estado_postulacion,
+              n.id_notificacion,
+              n.titulo AS titulo_notificacion,
+              n.descripcion AS descripcion_notificacion
+            FROM servicios AS s
+
+            LEFT JOIN postulaciones AS p
+              ON p.fk_servicio =
+                s.id_servicio
+              AND p.fk_empleado =
+                ${idEmpleado}
+
+            LEFT JOIN notificaciones AS n
+              ON n.fk_servicio =
+                s.id_servicio
+              AND n.id_empleado =
+                ${idEmpleado}
+              AND n.tipo =
+                'postulacion_aceptada'
+
+            WHERE s.id_servicio =
+              ${idServicio};
+
           END TRY
           BEGIN CATCH
             IF @@TRANCOUNT > 0
@@ -5249,16 +5545,29 @@ app.put(
           END CATCH;
         `);
 
+      const resultado =
+        respuesta?.recordset ??
+        respuesta?.recordsets?.[
+          respuesta.recordsets.length - 1
+        ] ??
+        respuesta?.[0] ??
+        [];
+
+      console.log(
+        'Empleado aceptado y notificado:',
+        {
+          idServicio,
+          idEmpleado,
+          resultado,
+        }
+      );
+
       return res.status(200).json({
         mensaje:
           'Empleado seleccionado correctamente',
         id_servicio: idServicio,
         fk_empleado: idEmpleado,
-        resultado:
-          respuesta?.recordset ??
-          respuesta?.recordsets?.[0] ??
-          respuesta?.[0] ??
-          [],
+        resultado,
       });
     } catch (error: any) {
       console.error(
@@ -5266,9 +5575,10 @@ app.put(
         error
       );
 
-      const mensajeError =
+      const mensajeError = String(
         error?.message ||
-        'Error al seleccionar al empleado';
+          'Error al seleccionar al empleado'
+      );
 
       if (
         mensajeError.includes(
@@ -5306,6 +5616,8 @@ app.put(
         mensaje:
           'Error al seleccionar al empleado',
         detalle: mensajeError,
+        numero: error?.number ?? null,
+        codigo: error?.code ?? null,
       });
     }
   }
@@ -6383,9 +6695,181 @@ app.get(
   },
 );
 
+
 // ==========================================
-// INICIO DEL SERVIDOR
+// PERFIL PÚBLICO DEL CLIENTE
 // ==========================================
+app.get(
+  '/api/clientes/:idCliente/perfil-publico',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de cliente inválido',
+        });
+      }
+
+      // ======================================
+      // OBTENER INFORMACIÓN BÁSICA DEL CLIENTE
+      // ======================================
+      const resultadoCliente: any =
+        await database.query(`
+          SELECT TOP 1
+            c.id_cliente,
+            c.nombre AS nombre_C,
+            c.foto_url AS foto,
+            c.direccion,
+            c.fecha_creacion,
+
+            (
+              SELECT COUNT(*)
+              FROM servicios AS s
+              WHERE COALESCE(
+                s.fk_cliente,
+                s.id_cliente
+              ) = c.id_cliente
+            ) AS total_servicios,
+
+            CAST(
+              0 AS DECIMAL(10, 2)
+            ) AS promedio_calificacion,
+
+            0 AS cantidad_resenas
+
+          FROM clientes AS c
+          WHERE c.id_cliente =
+            ${idCliente};
+        `);
+
+      const resultadoClienteReal =
+        Array.isArray(resultadoCliente)
+          ? resultadoCliente[0]
+          : resultadoCliente;
+
+      const clientes =
+        obtenerFilas(
+          resultadoClienteReal
+        );
+
+      if (clientes.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'El cliente no existe',
+        });
+      }
+
+      // ======================================
+      // OBTENER ÚLTIMOS SERVICIOS PUBLICADOS
+      // ======================================
+      const resultadoServicios: any =
+        await database.query(`
+          SELECT TOP 3
+            s.id_servicio,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(s.titulo)),
+                ''
+              ),
+              NULLIF(
+                LTRIM(RTRIM(s.descripcion)),
+                ''
+              ),
+              'Solicitud de servicio'
+            ) AS titulo,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(cat.nombre)),
+                ''
+              ),
+              'Sin categoría'
+            ) AS categoria,
+
+            COALESCE(
+              NULLIF(
+                LTRIM(RTRIM(s.estado)),
+                ''
+              ),
+              'Pendiente'
+            ) AS estado,
+
+            s.fecha
+
+          FROM servicios AS s
+
+          LEFT JOIN categorias AS cat
+            ON cat.id_categoria =
+              COALESCE(
+                s.fk_categoria,
+                s.id_categoria
+              )
+
+          WHERE COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) = ${idCliente}
+
+          ORDER BY
+            s.fecha DESC,
+            s.id_servicio DESC;
+        `);
+
+      const resultadoServiciosReal =
+        Array.isArray(resultadoServicios)
+          ? resultadoServicios[0]
+          : resultadoServicios;
+
+      const ultimosServicios =
+        obtenerFilas(
+          resultadoServiciosReal
+        );
+
+      return res.status(200).json({
+        ...clientes[0],
+        ultimosServicios,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al obtener perfil público del cliente:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo cargar el perfil público del cliente',
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  }
+);
+
+// ==========================================
+// RESPUESTA JSON PARA RUTAS NO ENCONTRADAS
+// ==========================================
+app.use((req, res) => {
+  return res.status(404).json({
+    mensaje: 'Ruta no encontrada',
+    metodo: req.method,
+    ruta: req.originalUrl,
+  });
+});
+
+
+console.log(
+  'NOTIFICACIONES CORREGIDAS: cliente y empleado separados'
+);
+
 app.listen(port, () => {
   console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });

@@ -17,7 +17,6 @@ import {
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { ServiceCategoryGrid } from '../shared/ServiceCategoryGrid';
-import { StarRating } from '../shared/StarRating';
 import { useApp } from '../../context/AppContext';
 
 import { obtenerCategoriasDB } from '../../services/solicitudesApi';
@@ -160,21 +159,6 @@ interface EmpleadoDB {
   cantidad_resenas?: number | null;
 }
 
-interface EmpleadoDB {
-  id_empleado: number | string;
-  nombre_E: string;
-  correo?: string;
-  celular?: string;
-  titulo?: string | null;
-  direccion?: string | null;
-  estado?: string | null;
-  N_trabajos?: number | null;
-  foto?: string | null;
-  foto_url?: string | null;
-  calificacion?: number | null;
-  cantidad_resenas?: number | null;
-}
-
 interface ResumenEmpleado {
   total_trabajos?: number;
   total_resenas?: number;
@@ -186,7 +170,6 @@ export default function HomeClientScreen() {
 
   const {
     currentUser,
-    unreadNotifications,
   } = useApp();
 
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState<
@@ -221,6 +204,11 @@ export default function HomeClientScreen() {
   ] = useState('');
 
   const idCliente = Number(currentUser?.id);
+
+  const [
+    notificacionesSinLeer,
+    setNotificacionesSinLeer,
+  ] = useState(0);
 
   const [categories, setCategories] = useState<ServiceCategoryItem[]>([]);
   useEffect(() => {
@@ -302,7 +290,7 @@ export default function HomeClientScreen() {
           };
 
           return {
-            id: String(c.id) as any,
+            id: String(c.id_categoria ?? c.id) as any,
             label: c.nombre ?? c.label ?? 'Categoría',
             icon: 'Wrench',
             color: estilo.color,
@@ -359,7 +347,9 @@ export default function HomeClientScreen() {
 
         const empleadosConResumen = await Promise.all(
           empleadosBase.map(async (empleado) => {
-            const idEmpleado = Number(empleado.id_empleado ?? empleado.id ?? empleado._id);
+           const idEmpleado = Number(
+              empleado.id_empleado
+            );
 
             if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
               return empleado;
@@ -479,10 +469,42 @@ export default function HomeClientScreen() {
   }, [idCliente]);
 
   const handleCategorySelect = (
-    categoria: ServiceCategory
+    categoria:
+      | ServiceCategory
+      | ServiceCategoryItem
+      | string
   ) => {
+    const valorRecibido =
+      typeof categoria === 'object' &&
+      categoria !== null
+        ? String(
+            (categoria as ServiceCategoryItem).id ??
+              (categoria as ServiceCategoryItem).label ??
+              ''
+          )
+        : String(categoria ?? '');
+
+    const categoriaEncontrada =
+      categories.find((item) => {
+        return (
+          String(item.id) === valorRecibido ||
+          String(item.label)
+            .trim()
+            .toLowerCase() ===
+            valorRecibido
+              .trim()
+              .toLowerCase()
+        );
+      });
+
+    const parametro =
+      categoriaEncontrada?.id ??
+      valorRecibido;
+
     navigate(
-      `/home/search?cat=${categoria}`
+      `/home/search?cat=${encodeURIComponent(
+        String(parametro)
+      )}`
     );
   };
 
@@ -502,28 +524,112 @@ export default function HomeClientScreen() {
 
         const datos = await respuesta.json();
 
-        const empleadosNormalizados: EmpleadoDisponible[] = (
-          Array.isArray(datos) ? datos : []
-        ).map((e: any) => ({
-          id_empleado: Number(e.id_empleado ?? e.id),
-          nombre: String(e.nombre ?? e.nombre_E ?? 'Trabajador'),
-          correo: String(e.correo ?? ''),
-          telefono: String(e.telefono ?? e.celular ?? ''),
-          dni: e.dni ?? null,
-          titulo: e.titulo ?? null,
-          antecedentes: e.antecedentes ?? null,
-          direccion: e.direccion ?? null,
-          estado: String(e.estado ?? 'Disponible'),
-          numero_trabajos: Number(
-            e.numero_trabajos ?? e.N_trabajos ?? e.numeroTrabajos ?? 0
-          ),
-          sobre_mi: e.sobre_mi ?? e.descripcion ?? null,
-          foto_url: e.foto_url ?? e.foto ?? null,
-          fecha_creacion: e.fecha_creacion ?? e.fechaCreacion ?? null,
-          ultima_actividad: e.ultima_actividad ?? null,
-        }));
+        const empleadosNormalizados: EmpleadoDisponible[] =
+          (Array.isArray(datos) ? datos : [])
+            .map(
+              (e: any): EmpleadoDisponible => ({
+                id_empleado: Number(
+                  e.id_empleado ??
+                    e.id ??
+                    0
+                ),
 
-        setEmpleadosDisponibles(empleadosNormalizados);
+                nombre: String(
+                  e.nombre ??
+                    e.nombre_E ??
+                    'Trabajador'
+                ),
+
+                correo: String(
+                  e.correo ?? ''
+                ),
+
+                telefono: String(
+                  e.telefono ??
+                    e.celular ??
+                    ''
+                ),
+
+                dni:
+                  e.dni != null
+                    ? String(e.dni)
+                    : null,
+
+                titulo:
+                  e.titulo != null
+                    ? String(e.titulo)
+                    : null,
+
+                antecedentes:
+                  e.antecedentes != null
+                    ? String(e.antecedentes)
+                    : null,
+
+                direccion:
+                  e.direccion != null
+                    ? String(e.direccion)
+                    : null,
+
+                estado: String(
+                  e.estado ??
+                    'Disponible'
+                ),
+
+                numero_trabajos: Number(
+                  e.numero_trabajos ??
+                    e.N_trabajos ??
+                    e.numeroTrabajos ??
+                    0
+                ),
+
+                rating: Number(
+                  e.rating ??
+                    e.calificacion ??
+                    e.promedio_calificacion ??
+                    0
+                ),
+
+                cantidad_resenas: Number(
+                  e.cantidad_resenas ??
+                    e.total_resenas ??
+                    0
+                ),
+
+                sobre_mi:
+                  e.sobre_mi != null
+                    ? String(e.sobre_mi)
+                    : e.descripcion != null
+                      ? String(e.descripcion)
+                      : null,
+
+                foto_url:
+                  e.foto_url != null
+                    ? String(e.foto_url)
+                    : e.foto != null
+                      ? String(e.foto)
+                      : null,
+
+                fecha_creacion:
+                  e.fecha_creacion ??
+                  e.fechaCreacion ??
+                  null,
+
+                ultima_actividad:
+                  e.ultima_actividad ??
+                  null,
+              })
+            )
+            .filter(
+              (empleado) =>
+                Number.isInteger(
+                  empleado.id_empleado
+                ) &&
+                empleado.id_empleado > 0
+            );
+
+        setEmpleadosDisponibles(
+          empleadosNormalizados
+        );
       } catch (error) {
         console.error('Error al cargar empleados disponibles:', error);
         setEmpleadosDisponibles([]);
@@ -534,6 +640,111 @@ export default function HomeClientScreen() {
 
     cargarEmpleadosDisponibles();
   }, []);
+
+  const cargarCantidadNotificaciones = async () => {
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0
+    ) {
+      setNotificacionesSinLeer(0);
+      return;
+    }
+
+    try {
+      const respuesta = await fetch(
+        `http://localhost:3000/api/clientes/${idCliente}/notificaciones`,
+        {
+          cache: 'no-store',
+        }
+      );
+
+      const texto = await respuesta.text();
+
+      if (!texto.trim()) {
+        setNotificacionesSinLeer(0);
+        return;
+      }
+
+      let datos: any;
+
+      try {
+        datos = JSON.parse(texto);
+      } catch {
+        throw new Error(
+          `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+        );
+      }
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.detalle ||
+            datos?.mensaje ||
+            'No se pudieron cargar las notificaciones'
+        );
+      }
+
+      const cantidad = Number(
+        datos?.no_leidas ??
+          (
+            Array.isArray(datos?.notificaciones)
+              ? datos.notificaciones.filter(
+                  (notificacion: any) =>
+                    !Boolean(notificacion.leida)
+                ).length
+              : 0
+          )
+      );
+
+      setNotificacionesSinLeer(
+        Number.isFinite(cantidad)
+          ? cantidad
+          : 0
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar cantidad de notificaciones:',
+        error
+      );
+
+      setNotificacionesSinLeer(0);
+    }
+  };
+
+  useEffect(() => {
+    void cargarCantidadNotificaciones();
+
+    const intervalo = window.setInterval(() => {
+      void cargarCantidadNotificaciones();
+    }, 15000);
+
+    const actualizarAlVolver = () => {
+      void cargarCantidadNotificaciones();
+    };
+
+    window.addEventListener(
+      'focus',
+      actualizarAlVolver
+    );
+
+    window.addEventListener(
+      'pageshow',
+      actualizarAlVolver
+    );
+
+    return () => {
+      window.clearInterval(intervalo);
+
+      window.removeEventListener(
+        'focus',
+        actualizarAlVolver
+      );
+
+      window.removeEventListener(
+        'pageshow',
+        actualizarAlVolver
+      );
+    };
+  }, [idCliente]);
 
   return (
     <div className="pb-4">
@@ -566,9 +777,12 @@ export default function HomeClientScreen() {
             >
               <Bell className="w-5 h-5 text-white" />
 
-              {unreadNotifications >
-                0 && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 rounded-full border-2 border-[#1A56DB]" />
+              {notificacionesSinLeer > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-[#1A56DB] flex items-center justify-center">
+                  {notificacionesSinLeer > 99
+                    ? '99+'
+                    : notificacionesSinLeer}
+                </span>
               )}
             </motion.button>
 

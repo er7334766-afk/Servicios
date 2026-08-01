@@ -616,6 +616,7 @@ export default function AgendaScreen() {
                   date.toDateString() === currentDate.toDateString();
                 const bookingCount = getBookingsCount(date);
                 const hasBooking = bookingCount > 0;
+
                 return (
                   <motion.button
                     type="button"
@@ -631,6 +632,7 @@ export default function AgendaScreen() {
                     }`}
                   >
                     {day}
+
                     {hasBooking && (
                       <span
                         className={`mt-1 rounded-full px-1 text-[9px] font-bold ${
@@ -645,6 +647,90 @@ export default function AgendaScreen() {
                   </motion.button>
                 );
               })}
+            </div>
+
+            <div className="mb-5">
+              <p className="mb-2 text-sm font-semibold text-foreground">
+                {role === 'worker'
+                  ? 'Trabajos del día'
+                  : 'Servicios del día'}{' '}
+                — {currentDate.getDate()}{' '}
+                {MONTHS[currentDate.getMonth()]}
+              </p>
+
+              {cargando ? (
+                <div className="flex justify-center py-6">
+                  <Loader className="h-6 w-6 animate-spin text-[#1A56DB]" />
+                </div>
+              ) : selectedDayBookings.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {selectedDayBookings.map((servicio) => (
+                    <div
+                      key={
+                        isAgendaReserva(servicio)
+                          ? servicio.id_reserva
+                          : servicio.id_servicio
+                      }
+                      onClick={() => {
+                        navigate(
+                          role === 'worker'
+                            ? `/home/trabajo/${servicio.id_servicio}`
+                            : `/home/contratacion/${servicio.id_servicio}`
+                        );
+                      }}
+                      className="cursor-pointer rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-4 transition-all hover:border-[#1A56DB]/40"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {obtenerDescripcion(servicio)}
+                          </p>
+
+                          <p className="text-xs text-muted-foreground">
+                            {obtenerClienteLabel(servicio)} •{' '}
+                            {obtenerCategoriaLabel(servicio)}
+                          </p>
+                        </div>
+
+                        <span className="rounded-full bg-[#E0E7FF] px-3 py-1 text-xs font-semibold text-[#1A56DB]">
+                          {STATUS_LABELS[
+                            String(obtenerEstado(servicio))
+                              .trim()
+                              .toLowerCase()
+                          ] ?? obtenerEstado(servicio)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {crearFechaLocal(
+                            servicio.fecha
+                          ).toLocaleDateString('es-HN')}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5" />
+                          {obtenerRangoHorario(servicio)}
+                        </div>
+
+                        {!isAgendaReserva(servicio) && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {servicio.direccion}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No hay servicios para esta fecha.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
