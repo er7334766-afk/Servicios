@@ -21,6 +21,7 @@ export async function iniciarSesion(
 ): Promise<RespuestaLogin> {
   // NOTA: Ajusta esta URL según cómo esté configurado tu backend.
   // Si tu backend tiene rutas separadas, podrías hacer un if (credenciales.rol === 'worker') aquí.
+  const respuesta = await fetch('/api/login', {
     method: 'POST',
     credentials: 'include',
     headers: {
