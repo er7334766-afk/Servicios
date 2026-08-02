@@ -1376,6 +1376,33 @@ export default function WorkerOwnProfileScreen() {
           <LogOut className="h-4 w-4" />
           Cerrar sesión
         </motion.button>
+
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.97 }}
+          onClick={async () => {
+            const ok = window.confirm('¿Eliminar tu cuenta? Esta acción es irreversible.');
+            if (!ok) return;
+            try {
+              const res = await fetch('http://localhost:3000/api/account', {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+              });
+              const body = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(body.mensaje || 'No se pudo eliminar la cuenta');
+              alert('Cuenta eliminada');
+              setCurrentUser(null);
+              navigate('/');
+            } catch (e) {
+              console.error(e);
+              alert(e instanceof Error ? e.message : 'Error');
+            }
+          }}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white py-3 font-semibold text-red-600"
+        >
+          Eliminar cuenta
+        </motion.button>
       </div>
     </div>
   );

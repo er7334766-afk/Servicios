@@ -212,6 +212,36 @@ export default function ClientProfileScreen() {
     navigate('/');
   };
 
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    const ok = window.confirm('¿Estás seguro de que deseas eliminar tu cuenta? Esta acción es irreversible.');
+    if (!ok) return;
+
+    try {
+      setDeletingAccount(true);
+      const resp = await fetch('http://localhost:3000/api/account', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data.mensaje || 'Error al eliminar la cuenta');
+      }
+
+      alert('Cuenta eliminada correctamente');
+      setCurrentUser(null);
+      navigate('/');
+    } catch (error) {
+      console.error('Eliminar cuenta:', error);
+      alert(error instanceof Error ? error.message : 'No se pudo eliminar la cuenta');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   //agregado
   if (isEditing) {
     return (
@@ -482,6 +512,14 @@ export default function ClientProfileScreen() {
         >
           <LogOut className="w-4 h-4" />
           Cerrar sesión
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleDeleteAccount}
+          disabled={deletingAccount}
+          className="w-full mt-3 bg-white border border-red-200 text-red-600 rounded-xl py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+        >
+          {deletingAccount ? 'Eliminando...' : 'Eliminar cuenta'}
         </motion.button>
       </div>
     </div>

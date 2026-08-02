@@ -53,6 +53,10 @@ export default function AuthScreen() {
   const navigate = useNavigate();
   const { role, setCurrentUser } = useApp();
 
+  const termsUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3000/public/terminos.html'
+    : '/public/terminos.html';
+
   const loginForm = useForm<LoginForm>();
   const registerForm = useForm<RegisterForm>();
 
@@ -320,6 +324,17 @@ export default function AuthScreen() {
             >
               Iniciar sesión
             </motion.button>
+            <p className="text-xs text-muted-foreground mt-3 text-center">
+              Al continuar aceptas nuestros{' '}
+              <a
+                href={termsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1A56DB] font-semibold underline"
+              >
+                Términos y condiciones
+              </a>
+            </p>
           </motion.form>
         ) : (
           <motion.form
@@ -444,6 +459,17 @@ export default function AuthScreen() {
             >
               {iniciandoSesion ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </motion.button>
+            <p className="text-xs text-muted-foreground mt-3 text-center">
+              Al continuar aceptas nuestros{' '}
+              <a
+                href={termsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1A56DB] font-semibold underline"
+              >
+                Términos y condiciones
+              </a>
+            </p>
           </motion.form>
         )}
       </div>

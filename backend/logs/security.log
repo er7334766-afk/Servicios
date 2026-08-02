@@ -1,0 +1,10 @@
+{"ts":"2026-08-02T01:16:01.090Z","event":"login_failed","details":{"correo":"nelsonlening@gmail.com","attempts":1}}
+{"ts":"2026-08-02T01:16:03.919Z","event":"login_failed","details":{"correo":"nelsonlening@gmail.com","attempts":2}}
+{"ts":"2026-08-02T01:16:06.572Z","event":"login_locked","details":{"correo":"nelsonlening@gmail.com","attempts":3}}
+{"ts":"2026-08-02T01:16:06.574Z","event":"login_failed","details":{"correo":"nelsonlening@gmail.com","attempts":3}}
+{"ts":"2026-08-02T01:16:08.420Z","event":"login_blocked","details":{"correo":"nelsonlening@gmail.com","waitSec":299}}
+{"ts":"2026-08-02T01:16:12.205Z","event":"login_blocked","details":{"correo":"nelsonlening@gmail.com","waitSec":295}}
+{"ts":"2026-08-02T01:17:11.686Z","event":"login_success","details":{"correo":"gonzaleznelson@gmail.com","userId":39,"sid":"c1b6588a-e579-41a8-88da-69cf6d87cfeb"}}
+{"ts":"2026-08-02T01:26:13.713Z","event":"login_failed","details":{"correo":"gonzaleznelson@gmail.com","attempts":1}}
+{"ts":"2026-08-02T01:26:22.168Z","event":"login_success","details":{"correo":"gonzaleznelson@gmail.com","userId":39,"sid":"fcc931e1-5c75-4edf-b777-433151eb7f87"}}
+{"ts":"2026-08-02T01:39:15.528Z","event":"login_success","details":{"correo":"nelsonlening@gmail.com","userId":43,"sid":"6062516f-262e-4f5f-87f9-c5b3338a5b84"}}

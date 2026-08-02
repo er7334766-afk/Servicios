@@ -3,6 +3,8 @@ import cors from "cors";
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { BlobServiceClient } from "@azure/storage-blob";
+import cookieParser from 'cookie-parser';
+import { v4 as uuidv4 } from 'uuid';
 
 import { database } from "./config/database.js";
 import fs from 'fs';
@@ -37,6 +39,42 @@ const blobServiceClient: BlobServiceClient | null = AZURE_STORAGE_CONNECTION_STR
   ? BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING)
   : null;
 const SALT_ROUNDS = 10;
+
+// --- Security/session configuration ---
+const SESSION_INACTIVITY_MS = 10 * 60 * 1000; // 10 minutos
+const LOCKOUT_MS = 5 * 60 * 1000; // 5 minutos
+const MAX_LOGIN_ATTEMPTS = 3;
+const COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? 'sid';
+const COOKIE_SECURE = (process.env.NODE_ENV === 'production');
+const COOKIE_SAME_SITE: 'lax' | 'strict' | 'none' = 'lax';
+
+type SessionData = {
+  id: string;
+  user: any;
+  createdAt: number;
+  lastActivity: number;
+};
+
+const sessions = new Map<string, SessionData>();
+const loginAttempts = new Map<string, { count: number; lockedUntil?: number }>();
+
+function ensureLogsDir() {
+  const dir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function logSecurity(event: string, details: Record<string, any> = {}) {
+  try {
+    ensureLogsDir();
+    const ts = new Date().toISOString();
+    const entry = { ts, event, details };
+    const destino = path.join(process.cwd(), 'logs', 'security.log');
+    fs.appendFileSync(destino, JSON.stringify(entry) + "\n");
+  } catch (e) {
+    console.error('No se pudo escribir security log:', e);
+  }
+}
 
 async function subirArchivoAzure(base64: string, fileName: string, contentType: string, containerName: string) {
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
@@ -87,8 +125,42 @@ async function subirArchivoAzure(base64: string, fileName: string, contentType: 
 
 
 app.use(cors());
+app.use(cookieParser());
 // Aumentar límite para permitir subir imágenes/documentos en base64 grandes
 app.use(express.json({ limit: "50mb" }));
+
+// Middleware para refrescar sesión por actividad
+app.use((req, res, next) => {
+  try {
+    const sid = req.cookies?.[COOKIE_NAME];
+    if (sid && sessions.has(sid)) {
+      const sess = sessions.get(sid)!;
+      const now = Date.now();
+      // Si inactividad excede, caducar sesión
+      if (now - sess.lastActivity > SESSION_INACTIVITY_MS) {
+        sessions.delete(sid);
+        res.clearCookie(COOKIE_NAME);
+        logSecurity('session_expired', { sid, userId: sess.user?.id });
+      } else {
+        // refrescar
+        sess.lastActivity = now;
+        sessions.set(sid, sess);
+        // volver a enviar cookie para renovar su maxAge
+        res.cookie(COOKIE_NAME, sid, {
+          httpOnly: true,
+          secure: COOKIE_SECURE,
+          sameSite: COOKIE_SAME_SITE,
+          maxAge: SESSION_INACTIVITY_MS,
+        });
+      }
+    }
+  } catch (e) {
+    // no bloquear por errores de sesión
+    console.error('Session middleware error', e);
+  }
+
+  next();
+});
 
 // Servir archivos subidos localmente para desarrollo cuando se usa el fallback
 const uploadsPath = path.join(process.cwd(), 'uploads');
@@ -96,6 +168,13 @@ if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsPath));
+
+// Servir archivos públicos (términos, privacidad, manuales)
+const publicPath = path.join(process.cwd(), 'public');
+if (!fs.existsSync(publicPath)) {
+  fs.mkdirSync(publicPath, { recursive: true });
+}
+app.use('/public', express.static(publicPath));
 
 app.get("/", (_req, res) => {
   res.json({
@@ -1152,17 +1231,26 @@ app.post("/api/login", async (req, res) => {
     const { correo, password, rol } = req.body;
 
     if (!correo || !password || !rol) {
-      return res.status(400).json({
-        mensaje: "Correo, contraseña y rol son obligatorios",
-      });
+      return res.status(400).json({ mensaje: "Correo, contraseña y rol son obligatorios" });
     }
 
     const correoLimpio = String(correo).trim().toLowerCase();
-    let usuario = null;
 
-    if (rol === "client") {
-  const [respuesta]: any = await database.execute(
-    `
+    // Check lockout
+    const now = Date.now();
+    const attempt = loginAttempts.get(correoLimpio) ?? { count: 0 };
+    if (attempt.lockedUntil && attempt.lockedUntil > now) {
+      const waitSec = Math.ceil((attempt.lockedUntil - now) / 1000);
+      logSecurity('login_blocked', { correo: correoLimpio, waitSec });
+      return res.status(429).json({ mensaje: `Cuenta bloqueada temporalmente. Intente en ${waitSec} segundos.` });
+    }
+
+    let usuario: any = null;
+
+    // Reuse existing queries to fetch user record
+    if (rol === 'client') {
+      const [respuesta]: any = await database.execute(
+        `
       SELECT
         id_cliente AS id,
         nombre,
@@ -1174,55 +1262,26 @@ app.post("/api/login", async (req, res) => {
       FROM clientes
       WHERE correo = ?
     `,
-    [correoLimpio]
-  );
+        [correoLimpio]
+      );
 
-  const filas: any[] = Array.isArray(respuesta?.recordset)
-    ? respuesta.recordset
-    : Array.isArray(respuesta?.recordsets?.[0])
-      ? respuesta.recordsets[0]
-      : Array.isArray(respuesta)
-        ? respuesta
-        : [];
+      const filas: any[] = Array.isArray(respuesta?.recordset)
+        ? respuesta.recordset
+        : Array.isArray(respuesta?.recordsets?.[0])
+          ? respuesta.recordsets[0]
+          : Array.isArray(respuesta)
+            ? respuesta
+            : [];
 
-  
-  console.log('Correo buscado:', correoLimpio);
-console.log('Rol recibido:', rol);
-console.log('Empleados encontrados:', filas.length);
-
-if (filas.length > 0) {
-  const empleado = filas[0];
-
-  const hashGuardado = String(
-    empleado.password_hash ?? ''
-  ).trim();
-
-  console.log('ID encontrado:', empleado.id);
-  console.log('Longitud del hash:', hashGuardado.length);
-  console.log(
-    'Comienza como bcrypt:',
-    hashGuardado.startsWith('$2')
-  );
-
-  const valid = await bcrypt.compare(
-    String(password),
-    hashGuardado
-  );
-
-  console.log('Resultado bcrypt empleado:', valid);
-
-  if (valid) {
-    const {
-      password_hash,
-      ...usuarioSinPassword
-    } = empleado;
-
-    usuario = usuarioSinPassword;
-  }
-}
-} else if (rol === "worker") {
-  const [respuesta]: any = await database.execute(
-    `
+      if (filas.length > 0) {
+        const row = filas[0];
+        const hashGuardado = String(row.password_hash ?? '').trim();
+        const valid = await bcrypt.compare(String(password), hashGuardado);
+        if (valid) usuario = (({ password_hash, ...rest }) => rest)(row);
+      }
+    } else if (rol === 'worker') {
+      const [respuesta]: any = await database.execute(
+        `
       SELECT
         id_empleado AS id,
         id_empleado AS idEmpleado,
@@ -1236,68 +1295,64 @@ if (filas.length > 0) {
       FROM empleados
       WHERE correo = ?
     `,
-    [correoLimpio]
-  );
+        [correoLimpio]
+      );
 
-  const filas: any[] = Array.isArray(respuesta?.recordset)
-    ? respuesta.recordset
-    : Array.isArray(respuesta?.recordsets?.[0])
-      ? respuesta.recordsets[0]
-      : Array.isArray(respuesta)
-        ? respuesta
-        : [];
+      const filas: any[] = Array.isArray(respuesta?.recordset)
+        ? respuesta.recordset
+        : Array.isArray(respuesta?.recordsets?.[0])
+          ? respuesta.recordsets[0]
+          : Array.isArray(respuesta)
+            ? respuesta
+            : [];
 
-  //console.log("Respuesta empleado:", respuesta);
-  //console.log("Empleados encontrados:", filas.length);
-
-  if (filas.length > 0) {
-    const empleado = filas[0];
-
-    const hashGuardado = String(
-      empleado.password_hash ?? ""
-    ).trim();
-
-    //console.log("Longitud del hash:", hashGuardado.length);
-
-    const valid = await bcrypt.compare(
-      String(password),
-      hashGuardado
-    );
-
-    //console.log("Resultado bcrypt empleado:", valid);
-
-    if (valid) {
-      const {
-        password_hash,
-        ...usuarioSinPassword
-      } = empleado;
-
-      usuario = usuarioSinPassword;
-    }
-  }
-} else {
-      return res.status(400).json({
-        mensaje: "Rol no válido",
-      });
+      if (filas.length > 0) {
+        const row = filas[0];
+        const hashGuardado = String(row.password_hash ?? '').trim();
+        const valid = await bcrypt.compare(String(password), hashGuardado);
+        if (valid) usuario = (({ password_hash, ...rest }) => rest)(row);
+      }
+    } else {
+      return res.status(400).json({ mensaje: 'Rol no válido' });
     }
 
     if (!usuario) {
-      return res.status(401).json({
-        mensaje: "Correo o contraseña incorrectos",
-      });
+      // increment attempts
+      const prev = loginAttempts.get(correoLimpio) ?? { count: 0 };
+      const updated = { count: prev.count + 1 } as any;
+      if (updated.count >= MAX_LOGIN_ATTEMPTS) {
+        updated.lockedUntil = Date.now() + LOCKOUT_MS;
+        logSecurity('login_locked', { correo: correoLimpio, attempts: updated.count });
+      }
+      loginAttempts.set(correoLimpio, updated);
+      logSecurity('login_failed', { correo: correoLimpio, attempts: updated.count });
+      return res.status(401).json({ mensaje: 'Correo o contraseña incorrectos', attempts: updated.count });
     }
 
-    return res.status(200).json({
-      mensaje: "Inicio de sesión exitoso",
-      usuario,
-    });
-  } catch (error: any) {
-    console.error("Error al iniciar sesión:", error);
+    // Success: clear attempts, create session and set cookie
+    loginAttempts.delete(correoLimpio);
+    const sid = uuidv4();
+    const session: SessionData = {
+      id: sid,
+      user: usuario,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+    };
+    sessions.set(sid, session);
 
-    return res.status(500).json({
-      mensaje: "Error interno del servidor al iniciar sesión",
-      detalle: error?.message ?? String(error),
+    res.cookie(COOKIE_NAME, sid, {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: COOKIE_SAME_SITE,
+      maxAge: SESSION_INACTIVITY_MS,
     });
+
+    logSecurity('login_success', { correo: correoLimpio, userId: usuario?.id, sid });
+
+    return res.status(200).json({ mensaje: 'Inicio de sesión exitoso', usuario });
+  } catch (error: any) {
+    console.error('Error al iniciar sesión:', error);
+    return res.status(500).json({ mensaje: 'Error interno del servidor al iniciar sesión', detalle: error?.message ?? String(error) });
   }
 });
 
@@ -7852,4 +7907,55 @@ console.log(
 
 app.listen(port, () => {
   console.log(`Servidor ejecutándose en http://localhost:${port}`);
+});
+
+// ==========================================
+// ELIMINAR CUENTA (requiere sesión)
+// ==========================================
+app.delete('/api/account', async (req, res) => {
+  try {
+    const sid = req.cookies?.[COOKIE_NAME];
+    if (!sid || !sessions.has(sid)) {
+      return res.status(401).json({ mensaje: 'No autenticado' });
+    }
+
+    const sess = sessions.get(sid)!;
+    const user = sess.user;
+    if (!user) {
+      sessions.delete(sid);
+      res.clearCookie(COOKIE_NAME);
+      return res.status(401).json({ mensaje: 'Sesión inválida' });
+    }
+
+    // Determinar rol: se puede pasar en query/body, o inferir del objeto user
+    let role = (req.body && req.body.role) || req.query?.role;
+    if (!role) {
+      if (user.id_empleado || user.idEmpleado) role = 'worker';
+      else role = 'client';
+    }
+
+    const userId = Number(user.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ mensaje: 'ID de usuario inválido' });
+    }
+
+    if (role === 'client') {
+      await database.execute('DELETE FROM clientes WHERE id_cliente = ?', [userId]);
+    } else if (role === 'worker') {
+      await database.execute('DELETE FROM empleados WHERE id_empleado = ?', [userId]);
+    } else {
+      return res.status(400).json({ mensaje: 'Rol no válido' });
+    }
+
+    // limpiar sesión y cookie
+    sessions.delete(sid);
+    res.clearCookie(COOKIE_NAME);
+
+    logSecurity('account_deleted', { userId, role });
+
+    return res.status(200).json({ mensaje: 'Cuenta eliminada correctamente' });
+  } catch (error: any) {
+    console.error('Error al eliminar cuenta:', error);
+    return res.status(500).json({ mensaje: 'Error interno al eliminar cuenta', detalle: error?.message ?? String(error) });
+  }
 });
