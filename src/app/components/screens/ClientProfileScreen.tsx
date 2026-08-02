@@ -220,7 +220,7 @@ export default function ClientProfileScreen() {
 
     try {
       setDeletingAccount(true);
-      const resp = await fetch('http://localhost:3000/api/account', {
+      const resp = await fetch('/api/account', {
         method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

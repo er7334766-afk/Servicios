@@ -1384,7 +1384,7 @@ export default function WorkerOwnProfileScreen() {
             const ok = window.confirm('¿Eliminar tu cuenta? Esta acción es irreversible.');
             if (!ok) return;
             try {
-              const res = await fetch('http://localhost:3000/api/account', {
+              const res = await fetch('/api/account', {
                 method: 'DELETE',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },

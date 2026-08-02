@@ -7890,26 +7890,6 @@ app.put(
 );
 
 // ==========================================
-// RESPUESTA JSON PARA RUTAS NO ENCONTRADAS
-// ==========================================
-app.use((req, res) => {
-  return res.status(404).json({
-    mensaje: 'Ruta no encontrada',
-    metodo: req.method,
-    ruta: req.originalUrl,
-  });
-});
-
-
-console.log(
-  'NOTIFICACIONES CORREGIDAS: cliente y empleado separados'
-);
-
-app.listen(port, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${port}`);
-});
-
-// ==========================================
 // ELIMINAR CUENTA (requiere sesión)
 // ==========================================
 app.delete('/api/account', async (req, res) => {
@@ -7958,4 +7938,24 @@ app.delete('/api/account', async (req, res) => {
     console.error('Error al eliminar cuenta:', error);
     return res.status(500).json({ mensaje: 'Error interno al eliminar cuenta', detalle: error?.message ?? String(error) });
   }
+});
+
+// ==========================================
+// RESPUESTA JSON PARA RUTAS NO ENCONTRADAS
+// ==========================================
+app.use((req, res) => {
+  return res.status(404).json({
+    mensaje: 'Ruta no encontrada',
+    metodo: req.method,
+    ruta: req.originalUrl,
+  });
+});
+
+
+console.log(
+  'NOTIFICACIONES CORREGIDAS: cliente y empleado separados'
+);
+
+app.listen(port, () => {
+  console.log(`Servidor ejecutándose en http://localhost:${port}`);
 });
