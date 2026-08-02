@@ -19,6 +19,34 @@ import {
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useApp } from '../../context/AppContext';
 
+const API_ORIGIN = 'http://localhost:3000';
+const API_URL = `${API_ORIGIN}/api`;
+
+function resolverUrlArchivo(
+  valor?: string | null,
+): string {
+  const url = String(valor ?? '').trim();
+
+  if (!url) {
+    return '';
+  }
+
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+
+  if (url.startsWith('/')) {
+    return `${API_ORIGIN}${url}`;
+  }
+
+  return `${API_ORIGIN}/${url}`;
+}
+
 interface ContactoChat {
   id: number;
   nombre: string;
@@ -114,8 +142,14 @@ function obtenerUrlImagen(mensaje: string): string | null {
     return null;
   }
 
-  const url = mensaje.slice(MARCADOR_IMAGEN.length).trim();
-  return url || null;
+  const url = mensaje
+    .slice(MARCADOR_IMAGEN.length)
+    .trim();
+
+  const urlResuelta =
+    resolverUrlArchivo(url);
+
+  return urlResuelta || null;
 }
 
 export default function ChatScreen() {
@@ -239,8 +273,8 @@ const idSeleccionado = Number(
     }
 
     const url = esEmpleado
-      ? `http://localhost:3000/api/clientes/${idCliente}`
-      : `http://localhost:3000/api/empleados/${idEmpleado}`;
+      ? `${API_URL}/clientes/${idCliente}`
+      : `${API_URL}/empleados/${idEmpleado}`;
 
     
       const respuesta = await fetch(url, {
@@ -274,7 +308,7 @@ if (texto) {
         nombre: String(
           datos.nombre_C ?? 'Cliente'
         ),
-        foto: String(datos.foto ?? ''),
+        foto: resolverUrlArchivo(datos.foto ?? datos.foto_url),
         estado: 'Cliente',
       });
     } else {
@@ -283,7 +317,7 @@ if (texto) {
         nombre: String(
           datos.nombre_E ?? 'Empleado'
         ),
-        foto: String(datos.foto ?? ''),
+        foto: resolverUrlArchivo(datos.foto ?? datos.foto_url),
         estado: String(
           datos.estado ?? 'Desconectado'
         ),
@@ -295,7 +329,7 @@ if (texto) {
     async () => {
       try {
         const respuesta = await fetch(
-          'http://localhost:3000/api/chat/leidos',
+          `${API_URL}/chat/leidos`,
           {
             method: 'PUT',
             headers: {
@@ -348,7 +382,7 @@ if (texto) {
     }
 
     const respuesta = await fetch(
-      `http://localhost:3000/api/chat/cliente/${idCliente}/empleado/${idEmpleado}`
+      `${API_URL}/chat/cliente/${idCliente}/empleado/${idEmpleado}`
     );
 
     const texto = await respuesta.text();
@@ -540,7 +574,7 @@ if (texto) {
     }
 
     const respuesta = await fetch(
-      'http://localhost:3000/api/chat',
+      `${API_URL}/chat`,
       {
         method: 'POST',
         headers: {
@@ -629,12 +663,12 @@ if (texto) {
       const tiposPermitidos = [
         'image/jpeg',
         'image/png',
-        'image/webp',
+        'image/jpg',
       ];
 
       if (!tiposPermitidos.includes(archivo.type)) {
         throw new Error(
-          'Selecciona una imagen JPG, PNG o WEBP',
+          'Selecciona una imagen JPG o PNG',
         );
       }
 
@@ -649,7 +683,7 @@ if (texto) {
       const base64 = await archivoABase64(archivo);
 
       const respuestaSubida = await fetch(
-        'http://localhost:3000/api/upload-foto',
+        `${API_URL}/upload-chat`,
         {
           method: 'POST',
           headers: {
@@ -686,9 +720,15 @@ if (texto) {
         );
       }
 
-      const url = String(datosSubida.url ?? '').trim();
+      const urlGuardada = String(
+        datosSubida.url ?? '',
+      ).trim();
 
-      if (!url) {
+      const url = resolverUrlArchivo(
+        urlGuardada,
+      );
+
+      if (!urlGuardada) {
         throw new Error(
           'El servidor no devolvió la URL de la imagen',
         );
@@ -1024,7 +1064,7 @@ if (texto) {
         <input
           ref={inputImagenRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
           className="hidden"
           onChange={seleccionarImagen}
         />

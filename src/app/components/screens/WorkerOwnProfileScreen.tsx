@@ -26,6 +26,43 @@ import EditProfileScreen from './EditProfileScreen';
 import EditServiceScreen from './EditServiceScreen';
 
 const API_URL = 'http://localhost:3000/api';
+const API_ORIGIN = 'http://localhost:3000';
+
+function normalizarUrlArchivo(
+  valor?: string | null,
+): string {
+  const url = String(valor ?? '').trim();
+
+  if (!url) {
+    return '';
+  }
+
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+
+  if (url.startsWith('/')) {
+    return `${API_ORIGIN}${url}`;
+  }
+
+  return `${API_ORIGIN}/${url}`;
+}
+
+function obtenerEmpleadoRespuesta(
+  datos: any,
+): any {
+  return (
+    datos?.empleado ??
+    datos?.recordset?.[0] ??
+    datos?.recordsets?.[0]?.[0] ??
+    datos
+  );
+}
 
 interface Categoria {
   id_categoria: number | string;
@@ -178,11 +215,12 @@ export default function WorkerOwnProfileScreen() {
       (currentUser as any)?.nombre_E ??
       'Trabajador',
 
-    avatarUrl:
+    avatarUrl: normalizarUrlArchivo(
       currentUser?.avatarUrl ??
-      (currentUser as any)?.foto ??
-      (currentUser as any)?.foto_url ??
-      '',
+        (currentUser as any)?.foto_url ??
+        (currentUser as any)?.foto ??
+        (currentUser as any)?.photoUrl,
+    ),
 
     location:
       (
@@ -358,7 +396,13 @@ export default function WorkerOwnProfileScreen() {
         )
       : [];
 
-    setGalleryUrls(urls);
+    setGalleryUrls(
+      urls
+        .map((url) =>
+          normalizarUrlArchivo(url),
+        )
+        .filter(Boolean),
+    );
   }, [currentUser]);
 
   const handleLogout = () => {
@@ -465,11 +509,16 @@ export default function WorkerOwnProfileScreen() {
         );
       }
 
-      const nuevaFoto = String(
+      const nuevaFotoGuardada = String(
         datosSubida.url ?? '',
       ).trim();
 
-      if (!nuevaFoto) {
+      const nuevaFotoVisible =
+        normalizarUrlArchivo(
+          nuevaFotoGuardada,
+        );
+
+      if (!nuevaFotoGuardada) {
         throw new Error(
           'El servidor no devolvió la URL de la foto',
         );
@@ -500,6 +549,11 @@ export default function WorkerOwnProfileScreen() {
         );
       }
 
+      const perfilActual =
+        obtenerEmpleadoRespuesta(
+          datosPerfil,
+        );
+
       const respuestaGuardar = await fetch(
         `${API_URL}/empleados/${idEmpleado}`,
         {
@@ -510,31 +564,49 @@ export default function WorkerOwnProfileScreen() {
           },
           body: JSON.stringify({
             nombre_E:
-              datosPerfil.nombre_E ??
-              datosPerfil.nombre ??
+              perfilActual?.nombre_E ??
+              perfilActual?.nombre ??
               worker.name,
+
             correo:
-              datosPerfil.correo ??
+              perfilActual?.correo ??
               (currentUser as any)?.correo ??
+              (currentUser as any)?.email ??
               '',
+
             celular:
-              datosPerfil.celular ??
-              datosPerfil.telefono ??
+              perfilActual?.celular ??
+              perfilActual?.telefono ??
               (currentUser as any)?.celular ??
+              (currentUser as any)?.phone ??
               '',
+
             titulo:
-              datosPerfil.titulo ?? '',
-            dni:
-              datosPerfil.dni ?? '',
-            antecedente:
-              datosPerfil.antecedente ??
-              datosPerfil.antecedentes ??
+              perfilActual?.titulo ??
               '',
+
+            dni:
+              perfilActual?.dni ??
+              '',
+
+            antecedente:
+              perfilActual?.antecedente ??
+              perfilActual?.antecedentes ??
+              '',
+
             direccion:
-              datosPerfil.direccion ?? '',
+              perfilActual?.direccion ??
+              '',
+
             sobre_mi:
-              datosPerfil.sobre_mi ?? '',
-            foto: nuevaFoto,
+              perfilActual?.sobre_mi ??
+              '',
+
+            foto:
+              nuevaFotoGuardada,
+
+            foto_url:
+              nuevaFotoGuardada,
           }),
         },
       );
@@ -555,9 +627,18 @@ export default function WorkerOwnProfileScreen() {
       if (currentUser) {
         setCurrentUser({
           ...currentUser,
-          avatarUrl: nuevaFoto,
-          foto: nuevaFoto,
-          foto_url: nuevaFoto,
+
+          avatarUrl:
+            nuevaFotoVisible,
+
+          foto:
+            nuevaFotoGuardada,
+
+          foto_url:
+            nuevaFotoGuardada,
+
+          photoUrl:
+            nuevaFotoVisible,
         } as any);
       }
 
@@ -694,10 +775,15 @@ export default function WorkerOwnProfileScreen() {
         );
       }
 
-      const nuevaUrl =
+      const nuevaUrlGuardada =
         datos.url;
 
-      if (!nuevaUrl) {
+      const nuevaUrl =
+        normalizarUrlArchivo(
+          nuevaUrlGuardada,
+        );
+
+      if (!nuevaUrlGuardada) {
         throw new Error(
           'El servidor no devolvió la URL de la imagen',
         );

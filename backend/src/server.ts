@@ -12,12 +12,27 @@ const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+//console.log("Cadena existe:", !!AZURE_STORAGE_CONNECTION_STRING);
+
+/*console.log(
+    "Primeros 80 caracteres:",
+    AZURE_STORAGE_CONNECTION_STRING?.substring(0,80)
+);*/
+
+/*console.log(
+    "Using Placeholder:",
+    String(AZURE_STORAGE_CONNECTION_STRING ?? "")
+        .includes("your_account")
+);*/
 if (!AZURE_STORAGE_CONNECTION_STRING) {
   console.warn("AZURE_STORAGE_CONNECTION_STRING no definida. Subidas a Azure fallarán si no se configura.");
 }
 const AZURE_BLOB_CONTAINER = process.env.AZURE_BLOB_CONTAINER ?? "fotosclientesyempleados";
 const AZURE_ANTECEDENTES_CONTAINER = process.env.AZURE_ANTECEDENTES_CONTAINER ?? "antecedentes";
 const AZURE_EVIDENCIAS_CONTAINER = process.env.AZURE_EVIDENCIAS_CONTAINER ?? "evidencias";
+
+const AZURE_CHAT_CONTAINER = process.env.AZURE_BLOB_CONTAINER ?? 'fotosclientesyempleados';
+
 const blobServiceClient: BlobServiceClient | null = AZURE_STORAGE_CONNECTION_STRING
   ? BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING)
   : null;
@@ -166,6 +181,63 @@ app.post("/api/upload-evidencia", async (req, res) => {
   }
 });
 
+// ==========================================
+// SUBIR IMAGEN DEL CHAT
+// ==========================================
+app.post(
+  '/api/upload-chat',
+  async (req, res) => {
+    try {
+      const {
+        base64,
+        fileName,
+        contentType,
+      } = req.body as {
+        base64?: string;
+        fileName?: string;
+        contentType?: string;
+      };
+
+      if (
+        !base64 ||
+        !fileName ||
+        !contentType
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Faltan datos de la imagen',
+        });
+      }
+
+      const url =
+        await subirArchivoAzure(
+          base64,
+          fileName,
+          contentType,
+          AZURE_CHAT_CONTAINER,
+        );
+
+      return res.status(200).json({
+        url,
+        mensaje:
+          'Imagen subida correctamente',
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al subir imagen del chat:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo subir la imagen',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
 
 
 // ==========================================
