@@ -5129,7 +5129,28 @@ app.get(
             e.titulo,
             e.direccion,
             e.estado AS estado_empleado,
-            e.numero_trabajos AS N_trabajos,
+
+            (
+              SELECT COUNT(*)
+              FROM servicios AS trabajos
+              WHERE trabajos.fk_empleado =
+                    e.id_empleado
+                AND LOWER(
+                  LTRIM(
+                    RTRIM(
+                      COALESCE(
+                        trabajos.estado,
+                        ''
+                      )
+                    )
+                  )
+                ) IN (
+                  'completado',
+                  'completada',
+                  'completed'
+                )
+            ) AS N_trabajos,
+
             e.sobre_mi,
             e.foto_url AS foto
 

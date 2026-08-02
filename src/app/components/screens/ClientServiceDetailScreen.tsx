@@ -80,6 +80,66 @@ function normalizarEstado(
     .toLowerCase();
 }
 
+function obtenerTrabajosRealizados(
+  postulante: any
+): number {
+  const valor = Number(
+    postulante?.trabajos_completados ??
+      postulante?.numero_trabajos ??
+      postulante?.N_trabajos ??
+      postulante?.trabajos_realizados ??
+      postulante?.total_trabajos ??
+      0
+  );
+
+  return Number.isFinite(valor)
+    ? valor
+    : 0;
+}
+
+async function obtenerTrabajosEmpleado(
+  idEmpleado: number
+): Promise<number> {
+  if (
+    !Number.isInteger(idEmpleado) ||
+    idEmpleado <= 0
+  ) {
+    return 0;
+  }
+
+  try {
+    const respuesta = await fetch(
+      `/api/empleados/${idEmpleado}`,
+      {
+        cache: 'no-store',
+      }
+    );
+
+    if (!respuesta.ok) {
+      return 0;
+    }
+
+    const texto = await respuesta.text();
+
+    if (!texto) {
+      return 0;
+    }
+
+    const datos = JSON.parse(texto);
+
+    return obtenerTrabajosRealizados(
+      datos?.empleado ?? datos
+    );
+  } catch (error) {
+    console.error(
+      'No se pudo consultar la cantidad de trabajos del empleado:',
+      error
+    );
+
+    return 0;
+  }
+}
+
 export default function ClientServiceDetailScreen() {
   const navigate = useNavigate();
   const { idServicio } = useParams();
@@ -137,10 +197,44 @@ export default function ClientServiceDetailScreen() {
 
       setServicio(datos.servicio ?? null);
 
-      setPostulaciones(
+      const listaPostulaciones: PostulanteServicio[] =
         Array.isArray(datos.postulaciones)
           ? datos.postulaciones
-          : []
+          : [];
+
+      const postulacionesCompletas =
+        await Promise.all(
+          listaPostulaciones.map(
+            async (postulacion) => {
+              const cantidadActual =
+                obtenerTrabajosRealizados(
+                  postulacion
+                );
+
+              if (cantidadActual > 0) {
+                return postulacion;
+              }
+
+              const idEmpleado = Number(
+                postulacion.id_empleado
+              );
+
+              const trabajosConsultados =
+                await obtenerTrabajosEmpleado(
+                  idEmpleado
+                );
+
+              return {
+                ...postulacion,
+                N_trabajos:
+                  trabajosConsultados,
+              } as PostulanteServicio;
+            }
+          )
+        );
+
+      setPostulaciones(
+        postulacionesCompletas
       );
     } catch (error) {
       setError(
@@ -569,11 +663,14 @@ export default function ClientServiceDetailScreen() {
                             <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
 
                             <p className="text-xs text-gray-600">
-                              {Number(
-                                postulacion.N_trabajos ??
-                                  0
+                              {obtenerTrabajosRealizados(
+                                postulacion
                               )}{' '}
-                              trabajos realizados
+                              {obtenerTrabajosRealizados(
+                                postulacion
+                              ) === 1
+                                ? 'trabajo realizado'
+                                : 'trabajos realizados'}
                             </p>
                           </div>
                         </div>

@@ -825,7 +825,8 @@ export default function HomeWorkerScreen() {
       const resultado =
         await postularEmpleadoServicio(
           idServicio,
-          idEmpleado
+          idEmpleado,
+          'aceptar',
         );
 
       setServiciosPostulados(
