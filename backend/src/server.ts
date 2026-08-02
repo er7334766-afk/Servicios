@@ -12,12 +12,27 @@ const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+//console.log("Cadena existe:", !!AZURE_STORAGE_CONNECTION_STRING);
+
+/*console.log(
+    "Primeros 80 caracteres:",
+    AZURE_STORAGE_CONNECTION_STRING?.substring(0,80)
+);*/
+
+/*console.log(
+    "Using Placeholder:",
+    String(AZURE_STORAGE_CONNECTION_STRING ?? "")
+        .includes("your_account")
+);*/
 if (!AZURE_STORAGE_CONNECTION_STRING) {
   console.warn("AZURE_STORAGE_CONNECTION_STRING no definida. Subidas a Azure fallarán si no se configura.");
 }
 const AZURE_BLOB_CONTAINER = process.env.AZURE_BLOB_CONTAINER ?? "fotosclientesyempleados";
 const AZURE_ANTECEDENTES_CONTAINER = process.env.AZURE_ANTECEDENTES_CONTAINER ?? "antecedentes";
 const AZURE_EVIDENCIAS_CONTAINER = process.env.AZURE_EVIDENCIAS_CONTAINER ?? "evidencias";
+
+const AZURE_CHAT_CONTAINER = process.env.AZURE_BLOB_CONTAINER ?? 'fotosclientesyempleados';
+
 const blobServiceClient: BlobServiceClient | null = AZURE_STORAGE_CONNECTION_STRING
   ? BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING)
   : null;
@@ -166,6 +181,63 @@ app.post("/api/upload-evidencia", async (req, res) => {
   }
 });
 
+// ==========================================
+// SUBIR IMAGEN DEL CHAT
+// ==========================================
+app.post(
+  '/api/upload-chat',
+  async (req, res) => {
+    try {
+      const {
+        base64,
+        fileName,
+        contentType,
+      } = req.body as {
+        base64?: string;
+        fileName?: string;
+        contentType?: string;
+      };
+
+      if (
+        !base64 ||
+        !fileName ||
+        !contentType
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Faltan datos de la imagen',
+        });
+      }
+
+      const url =
+        await subirArchivoAzure(
+          base64,
+          fileName,
+          contentType,
+          AZURE_CHAT_CONTAINER,
+        );
+
+      return res.status(200).json({
+        url,
+        mensaje:
+          'Imagen subida correctamente',
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al subir imagen del chat:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo subir la imagen',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
 
 
 // ==========================================
@@ -5728,66 +5800,500 @@ app.put(
 );
 
 // ==========================================
-// AGENDA / SERVICIOS ESTADOS
+// CAMBIAR ESTADO DEL SERVICIO Y NOTIFICAR
+// A LA OTRA PERSONA
 // ==========================================
 app.put(
   '/api/servicios/:idServicio/estado',
   async (req, res) => {
     try {
-      const idServicio = Number(req.params.idServicio);
-      let estadoNuevo = String(req.body.estado ?? '').trim();
+      const idServicio = Number(
+        req.params.idServicio
+      );
 
-      if (!Number.isInteger(idServicio) || idServicio <= 0) {
+      const estadoRecibido = String(
+        req.body?.estado ?? ''
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/_/g, ' ');
+
+      const responsable = String(
+        req.body?.actualizado_por ??
+          req.body?.cancelado_por ??
+          ''
+      )
+        .trim()
+        .toLowerCase();
+
+      const motivoCancelacion = String(
+        req.body?.motivo_cancelacion ?? ''
+      ).trim();
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
         return res.status(400).json({
-          mensaje: 'ID de servicio inválido',
+          mensaje:
+            'ID de servicio inválido',
         });
       }
 
-      // Mapeo de posibles valores de entrada a valores del constraint
-      const estadoMap: Record<string, string> = {
-        'pendiente': 'Pendiente',
-        'asignado': 'Asignado',
+      const mapaEstados: Record<
+        string,
+        string
+      > = {
+        pendiente: 'Pendiente',
+        asignado: 'Asignado',
+        aceptado: 'Asignado',
+        aceptada: 'Asignado',
         'en proceso': 'En proceso',
-        'en_proceso': 'En proceso',
-        'completado': 'Completado',
-        'cancelado': 'Cancelado',
+        iniciado: 'En proceso',
+        completado: 'Completado',
+        completada: 'Completado',
+        finalizado: 'Completado',
+        finalizada: 'Completado',
+        cancelado: 'Cancelado',
+        cancelada: 'Cancelado',
       };
 
-      const estadoNormalizado = estadoMap[estadoNuevo.toLowerCase()] || estadoNuevo;
+      const estadoNormalizado =
+        mapaEstados[estadoRecibido];
 
-      const estadosPermitidos = ['Pendiente', 'Asignado', 'En proceso', 'Completado', 'Cancelado'];
-
-      if (!estadosPermitidos.includes(estadoNormalizado)) {
+      if (!estadoNormalizado) {
         return res.status(400).json({
-          mensaje: `El estado indicado no es válido: ${estadoNuevo}`,
+          mensaje:
+            'El estado indicado no es válido',
+          estado_recibido:
+            req.body?.estado ?? null,
         });
       }
 
-      const [resultado]: any = await database.execute(
+      if (
+        responsable !== 'cliente' &&
+        responsable !== 'empleado'
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Debes indicar quién actualizó el servicio',
+          detalle:
+            'Usa "cliente" o "empleado" en actualizado_por o cancelado_por',
+        });
+      }
+
+      // ======================================
+      // OBTENER SERVICIO ANTES DE ACTUALIZARLO
+      // ======================================
+      const [
+        resultadoServicio,
+      ]: any = await database.execute(
+        `
+        SELECT TOP 1
+          s.id_servicio,
+
+          COALESCE(
+            s.fk_cliente,
+            s.id_cliente
+          ) AS id_cliente,
+
+          s.fk_empleado AS id_empleado,
+
+          COALESCE(
+            NULLIF(
+              LTRIM(RTRIM(s.titulo)),
+              ''
+            ),
+            NULLIF(
+              LTRIM(RTRIM(s.descripcion)),
+              ''
+            ),
+            'Servicio'
+          ) AS titulo,
+
+          COALESCE(
+            NULLIF(
+              LTRIM(RTRIM(s.estado)),
+              ''
+            ),
+            'Pendiente'
+          ) AS estado_actual
+
+        FROM servicios AS s
+        WHERE s.id_servicio = ?;
+        `,
+        [idServicio]
+      );
+
+      const servicios =
+        obtenerFilas(
+          resultadoServicio
+        );
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'Servicio no encontrado',
+        });
+      }
+
+      const servicio = servicios[0];
+
+      const idCliente = Number(
+        servicio.id_cliente
+      );
+
+      const idEmpleado = Number(
+        servicio.id_empleado
+      );
+
+      const tituloServicio = String(
+        servicio.titulo ??
+          'Servicio'
+      ).trim();
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El servicio no tiene un cliente válido',
+        });
+      }
+
+      // Si la acción requiere un trabajador,
+      // comprobamos que esté asignado.
+      if (
+        estadoNormalizado !== 'Pendiente' &&
+        (
+          !Number.isInteger(idEmpleado) ||
+          idEmpleado <= 0
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El servicio no tiene un trabajador asignado',
+        });
+      }
+
+      // ======================================
+      // ACTUALIZAR ESTADO CON OUTPUT
+      // ======================================
+      const [
+        resultadoActualizacion,
+      ]: any = await database.execute(
         `
         UPDATE servicios
         SET estado = ?
-        WHERE id_servicio = ?
+        OUTPUT
+          INSERTED.id_servicio,
+          INSERTED.estado
+        WHERE id_servicio = ?;
         `,
-        [estadoNormalizado, idServicio]
+        [
+          estadoNormalizado,
+          idServicio,
+        ]
       );
 
-      if (resultado.affectedRows === 0) {
+      const actualizados =
+        obtenerFilas(
+          resultadoActualizacion
+        );
+
+      if (actualizados.length === 0) {
         return res.status(404).json({
-          mensaje: 'Servicio no encontrado',
+          mensaje:
+            'No se pudo actualizar el servicio',
         });
       }
 
+      // ======================================
+      // PREPARAR LA NOTIFICACIÓN
+      // ======================================
+      let tituloNotificacion = '';
+      let descripcionNotificacion = '';
+      let tipoNotificacion = '';
+
+      if (
+        estadoNormalizado ===
+        'En proceso'
+      ) {
+        tituloNotificacion =
+          'El trabajo ha comenzado';
+
+        descripcionNotificacion =
+          `El trabajador inició el servicio "${tituloServicio}".`;
+
+        tipoNotificacion =
+          'servicio_iniciado';
+      }
+
+      if (
+        estadoNormalizado ===
+        'Completado'
+      ) {
+        tituloNotificacion =
+          'Trabajo finalizado';
+
+        descripcionNotificacion =
+          `El trabajador completó el servicio "${tituloServicio}".`;
+
+        tipoNotificacion =
+          'servicio_completado';
+      }
+
+      if (
+        estadoNormalizado ===
+        'Cancelado'
+      ) {
+        if (
+          responsable === 'empleado'
+        ) {
+          tituloNotificacion =
+            'Trabajo cancelado por el trabajador';
+
+          descripcionNotificacion =
+            motivoCancelacion
+              ? `El trabajador canceló el servicio "${tituloServicio}". Motivo: ${motivoCancelacion}`
+              : `El trabajador canceló el servicio "${tituloServicio}".`;
+
+          tipoNotificacion =
+            'cancelado_empleado';
+        } else {
+          tituloNotificacion =
+            'Servicio cancelado por el cliente';
+
+          descripcionNotificacion =
+            motivoCancelacion
+              ? `El cliente canceló el servicio "${tituloServicio}". Motivo: ${motivoCancelacion}`
+              : `El cliente canceló el servicio "${tituloServicio}".`;
+
+          tipoNotificacion =
+            'cancelado_cliente';
+        }
+      }
+
+      let notificacionCreada:
+        | any
+        | null = null;
+
+      // ======================================
+      // ELEGIR A QUIÉN SE NOTIFICA
+      // ======================================
+      if (
+        tituloNotificacion &&
+        tipoNotificacion
+      ) {
+        /*
+         * Si actúa el empleado:
+         * la notificación pertenece al cliente.
+         *
+         * Si actúa el cliente:
+         * la notificación pertenece al empleado.
+         */
+        const idClienteDestino =
+          responsable === 'empleado'
+            ? idCliente
+            : null;
+
+        const idEmpleadoDestino =
+          responsable === 'cliente'
+            ? idEmpleado
+            : null;
+
+        // Evitar notificaciones duplicadas.
+        const [
+          resultadoExistente,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_notificacion
+            FROM notificaciones
+            WHERE fk_servicio = ?
+              AND tipo = ?
+              AND (
+                (
+                  ? IS NOT NULL
+                  AND id_cliente = ?
+                  AND id_empleado IS NULL
+                )
+                OR
+                (
+                  ? IS NOT NULL
+                  AND id_empleado = ?
+                  AND id_cliente IS NULL
+                )
+              )
+            ORDER BY
+              id_notificacion DESC;
+            `,
+            [
+              idServicio,
+              tipoNotificacion,
+
+              idClienteDestino,
+              idClienteDestino,
+
+              idEmpleadoDestino,
+              idEmpleadoDestino,
+            ]
+          );
+
+        const existentes =
+          obtenerFilas(
+            resultadoExistente
+          );
+
+        if (
+          existentes.length === 0
+        ) {
+          const [
+            resultadoNotificacion,
+          ]: any =
+            await database.execute(
+              `
+              INSERT INTO notificaciones (
+                id_cliente,
+                id_empleado,
+                titulo,
+                descripcion,
+                tipo,
+                leida,
+                fecha,
+                fk_servicio
+              )
+              OUTPUT
+                INSERTED.id_notificacion,
+                INSERTED.id_cliente,
+                INSERTED.id_empleado,
+                INSERTED.titulo,
+                INSERTED.descripcion,
+                INSERTED.tipo,
+                INSERTED.leida,
+                INSERTED.fecha,
+                INSERTED.fk_servicio
+              VALUES (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                0,
+                SYSDATETIME(),
+                ?
+              );
+              `,
+              [
+                idClienteDestino,
+                idEmpleadoDestino,
+                tituloNotificacion,
+                descripcionNotificacion,
+                tipoNotificacion,
+                idServicio,
+              ]
+            );
+
+          const notificaciones =
+            obtenerFilas(
+              resultadoNotificacion
+            );
+
+          notificacionCreada =
+            notificaciones[0] ??
+            null;
+        }
+      }
+
+      // Al terminar o cancelar, el empleado
+      // vuelve a estar disponible.
+      if (
+        Number.isInteger(idEmpleado) &&
+        idEmpleado > 0 &&
+        (
+          estadoNormalizado ===
+            'Completado' ||
+          estadoNormalizado ===
+            'Cancelado'
+        )
+      ) {
+        await database.execute(
+          `
+          UPDATE empleados
+          SET estado = 'Disponible'
+          WHERE id_empleado = ?;
+          `,
+          [idEmpleado]
+        );
+      }
+
+      console.log(
+        'Servicio actualizado y notificado:',
+        {
+          idServicio,
+          estadoNormalizado,
+          responsable,
+          idCliente,
+          idEmpleado,
+          destinatario:
+            responsable === 'empleado'
+              ? {
+                  tipo: 'cliente',
+                  id: idCliente,
+                }
+              : {
+                  tipo: 'empleado',
+                  id: idEmpleado,
+                },
+          notificacion:
+            notificacionCreada,
+        }
+      );
+
       return res.status(200).json({
-        mensaje: 'Estado actualizado correctamente',
-        estado: estadoNormalizado,
+        mensaje:
+          notificacionCreada
+            ? 'Estado actualizado y notificación enviada'
+            : 'Estado actualizado correctamente',
+
+        servicio: {
+          id_servicio: idServicio,
+          estado:
+            estadoNormalizado,
+        },
+
+        destinatario:
+          responsable === 'empleado'
+            ? {
+                rol: 'cliente',
+                id: idCliente,
+              }
+            : {
+                rol: 'empleado',
+                id: idEmpleado,
+              },
+
+        notificacion:
+          notificacionCreada,
       });
     } catch (error: any) {
-      console.error('Error al actualizar estado:', error);
+      console.error(
+        'Error al actualizar estado y notificar:',
+        error
+      );
 
       return res.status(500).json({
-        mensaje: 'Error al actualizar el estado del servicio',
-        detalle: error.message,
+        mensaje:
+          'No se pudo actualizar el estado del servicio',
+        detalle:
+          error?.message ||
+          String(error),
+        numero:
+          error?.number ?? null,
+        codigo:
+          error?.code ?? null,
       });
     }
   }
@@ -6853,6 +7359,107 @@ app.get(
     }
   }
 );
+
+// ==========================================
+// BORRAR NOTIFICACIONES DEL CLIENTE
+// ==========================================
+app.delete(
+  '/api/clientes/:idCliente/notificaciones',
+  async (req, res) => {
+    try {
+      const idCliente = Number(
+        req.params.idCliente,
+      );
+
+      if (
+        !Number.isInteger(idCliente) ||
+        idCliente <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de cliente inválido',
+        });
+      }
+
+      await database.execute(
+        `
+        DELETE FROM notificaciones
+        WHERE id_cliente = ?;
+        `,
+        [idCliente],
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Notificaciones eliminadas correctamente',
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al eliminar notificaciones del cliente:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudieron eliminar las notificaciones',
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  },
+);
+
+// ==========================================
+// BORRAR NOTIFICACIONES DEL EMPLEADO
+// ==========================================
+app.delete(
+  '/api/empleados/:idEmpleado/notificaciones',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de empleado inválido',
+        });
+      }
+
+      await database.execute(
+        `
+        DELETE FROM notificaciones
+        WHERE id_empleado = ?;
+        `,
+        [idEmpleado],
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Notificaciones eliminadas correctamente',
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al eliminar notificaciones del empleado:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudieron eliminar las notificaciones',
+        detalle:
+          error?.message ||
+          String(error),
+      });
+    }
+  },
+);
+
 
 // ==========================================
 // RESPUESTA JSON PARA RUTAS NO ENCONTRADAS

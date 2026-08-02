@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
 } from 'react';
@@ -25,6 +26,43 @@ import EditProfileScreen from './EditProfileScreen';
 import EditServiceScreen from './EditServiceScreen';
 
 const API_URL = 'http://localhost:3000/api';
+const API_ORIGIN = 'http://localhost:3000';
+
+function normalizarUrlArchivo(
+  valor?: string | null,
+): string {
+  const url = String(valor ?? '').trim();
+
+  if (!url) {
+    return '';
+  }
+
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+
+  if (url.startsWith('/')) {
+    return `${API_ORIGIN}${url}`;
+  }
+
+  return `${API_ORIGIN}/${url}`;
+}
+
+function obtenerEmpleadoRespuesta(
+  datos: any,
+): any {
+  return (
+    datos?.empleado ??
+    datos?.recordset?.[0] ??
+    datos?.recordsets?.[0]?.[0] ??
+    datos
+  );
+}
 
 interface Categoria {
   id_categoria: number | string;
@@ -122,6 +160,12 @@ export default function WorkerOwnProfileScreen() {
   const [subiendoEvidencia, setSubiendoEvidencia] =
     useState(false);
 
+  const [subiendoFotoPerfil, setSubiendoFotoPerfil] =
+    useState(false);
+
+  const inputFotoPerfilRef =
+    useRef<HTMLInputElement>(null);
+
   const [galleryUrls, setGalleryUrls] =
     useState<string[]>([]);
 
@@ -167,16 +211,30 @@ export default function WorkerOwnProfileScreen() {
 
     name:
       currentUser?.name ??
+      (currentUser as any)?.nombre ??
+      (currentUser as any)?.nombre_E ??
       'Trabajador',
 
-    avatarUrl:
+    avatarUrl: normalizarUrlArchivo(
       currentUser?.avatarUrl ??
-      '',
+        (currentUser as any)?.foto_url ??
+        (currentUser as any)?.foto ??
+        (currentUser as any)?.photoUrl,
+    ),
 
     location:
-      currentUser?.location &&
-      currentUser.location !== 'No especificada'
-        ? currentUser.location
+      (
+        currentUser?.location ??
+        (currentUser as any)?.direccion
+      ) &&
+      (
+        currentUser?.location ??
+        (currentUser as any)?.direccion
+      ) !== 'No especificada'
+        ? String(
+            currentUser?.location ??
+              (currentUser as any)?.direccion,
+          )
         : 'Ubicación no especificada',
 
     rating:
@@ -338,12 +396,270 @@ export default function WorkerOwnProfileScreen() {
         )
       : [];
 
-    setGalleryUrls(urls);
+    setGalleryUrls(
+      urls
+        .map((url) =>
+          normalizarUrlArchivo(url),
+        )
+        .filter(Boolean),
+    );
   }, [currentUser]);
 
   const handleLogout = () => {
     setCurrentUser(null);
     navigate('/');
+  };
+
+
+  const handleCambiarFotoPerfil = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const archivo = event.target.files?.[0];
+
+    if (!archivo) {
+      return;
+    }
+
+    try {
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        throw new Error(
+          'No se encontró el ID del trabajador',
+        );
+      }
+
+      const tiposPermitidos = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ];
+
+      if (!tiposPermitidos.includes(archivo.type)) {
+        throw new Error(
+          'Selecciona una imagen JPG, PNG o WEBP',
+        );
+      }
+
+      if (archivo.size > 5 * 1024 * 1024) {
+        throw new Error(
+          'La imagen no puede superar los 5 MB',
+        );
+      }
+
+      setSubiendoFotoPerfil(true);
+      setErrorMessage('');
+
+      const contenido =
+        await new Promise<string>(
+          (resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = () =>
+              resolve(
+                String(reader.result ?? ''),
+              );
+
+            reader.onerror = () =>
+              reject(
+                new Error(
+                  'No se pudo leer la imagen',
+                ),
+              );
+
+            reader.readAsDataURL(archivo);
+          },
+        );
+
+      const base64 = contenido.split(',')[1];
+
+      if (!base64) {
+        throw new Error(
+          'No se pudo convertir la imagen',
+        );
+      }
+
+      const respuestaSubida = await fetch(
+        `${API_URL}/upload-foto`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            base64,
+            fileName: archivo.name,
+            contentType: archivo.type,
+          }),
+        },
+      );
+
+      const datosSubida =
+        await leerRespuestaJson<RespuestaEvidencia>(
+          respuestaSubida,
+        );
+
+      if (!respuestaSubida.ok) {
+        throw new Error(
+          datosSubida.detalle ||
+            datosSubida.mensaje ||
+            'No se pudo subir la foto',
+        );
+      }
+
+      const nuevaFotoGuardada = String(
+        datosSubida.url ?? '',
+      ).trim();
+
+      const nuevaFotoVisible =
+        normalizarUrlArchivo(
+          nuevaFotoGuardada,
+        );
+
+      if (!nuevaFotoGuardada) {
+        throw new Error(
+          'El servidor no devolvió la URL de la foto',
+        );
+      }
+
+      /*
+       * Consultamos el perfil actual para no borrar
+       * nombre, correo ni los demás datos al guardar
+       * únicamente la nueva fotografía.
+       */
+      const respuestaPerfil = await fetch(
+        `${API_URL}/empleados/${idEmpleado}`,
+        {
+          cache: 'no-store',
+        },
+      );
+
+      const datosPerfil =
+        await leerRespuestaJson<any>(
+          respuestaPerfil,
+        );
+
+      if (!respuestaPerfil.ok) {
+        throw new Error(
+          datosPerfil.detalle ||
+            datosPerfil.mensaje ||
+            'No se pudo consultar el perfil actual',
+        );
+      }
+
+      const perfilActual =
+        obtenerEmpleadoRespuesta(
+          datosPerfil,
+        );
+
+      const respuestaGuardar = await fetch(
+        `${API_URL}/empleados/${idEmpleado}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            nombre_E:
+              perfilActual?.nombre_E ??
+              perfilActual?.nombre ??
+              worker.name,
+
+            correo:
+              perfilActual?.correo ??
+              (currentUser as any)?.correo ??
+              (currentUser as any)?.email ??
+              '',
+
+            celular:
+              perfilActual?.celular ??
+              perfilActual?.telefono ??
+              (currentUser as any)?.celular ??
+              (currentUser as any)?.phone ??
+              '',
+
+            titulo:
+              perfilActual?.titulo ??
+              '',
+
+            dni:
+              perfilActual?.dni ??
+              '',
+
+            antecedente:
+              perfilActual?.antecedente ??
+              perfilActual?.antecedentes ??
+              '',
+
+            direccion:
+              perfilActual?.direccion ??
+              '',
+
+            sobre_mi:
+              perfilActual?.sobre_mi ??
+              '',
+
+            foto:
+              nuevaFotoGuardada,
+
+            foto_url:
+              nuevaFotoGuardada,
+          }),
+        },
+      );
+
+      const datosGuardado =
+        await leerRespuestaJson<any>(
+          respuestaGuardar,
+        );
+
+      if (!respuestaGuardar.ok) {
+        throw new Error(
+          datosGuardado.detalle ||
+            datosGuardado.mensaje ||
+            'No se pudo guardar la foto de perfil',
+        );
+      }
+
+      if (currentUser) {
+        setCurrentUser({
+          ...currentUser,
+
+          avatarUrl:
+            nuevaFotoVisible,
+
+          foto:
+            nuevaFotoGuardada,
+
+          foto_url:
+            nuevaFotoGuardada,
+
+          photoUrl:
+            nuevaFotoVisible,
+        } as any);
+      }
+
+      window.alert(
+        'Foto de perfil actualizada correctamente',
+      );
+    } catch (error) {
+      console.error(
+        'Error al cambiar foto de perfil:',
+        error,
+      );
+
+      mostrarError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo actualizar la foto',
+      );
+    } finally {
+      setSubiendoFotoPerfil(false);
+      event.target.value = '';
+    }
   };
 
   const handleSubirEvidencia = async (
@@ -459,10 +775,15 @@ export default function WorkerOwnProfileScreen() {
         );
       }
 
-      const nuevaUrl =
+      const nuevaUrlGuardada =
         datos.url;
 
-      if (!nuevaUrl) {
+      const nuevaUrl =
+        normalizarUrlArchivo(
+          nuevaUrlGuardada,
+        );
+
+      if (!nuevaUrlGuardada) {
         throw new Error(
           'El servidor no devolvió la URL de la imagen',
         );
@@ -614,13 +935,26 @@ export default function WorkerOwnProfileScreen() {
               <button
                 type="button"
                 onClick={() =>
-                  setIsEditing(true)
+                  inputFotoPerfilRef.current?.click()
                 }
-                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#1A56DB]"
-                aria-label="Editar foto de perfil"
+                disabled={subiendoFotoPerfil}
+                className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A56DB] shadow disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Cambiar foto de perfil"
               >
-                <Edit2 className="h-3 w-3 text-white" />
+                {subiendoFotoPerfil ? (
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <Edit2 className="h-3.5 w-3.5 text-white" />
+                )}
               </button>
+
+              <input
+                ref={inputFotoPerfilRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleCambiarFotoPerfil}
+              />
             </div>
 
             <div className="min-w-0 flex-1">

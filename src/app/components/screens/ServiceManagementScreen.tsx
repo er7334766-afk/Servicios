@@ -89,7 +89,7 @@ function formatearFecha(fecha: string): string {
   });
 }
 
-function formatearHora(hora: string): string {
+/*function formatearHora(hora: string): string {
   if (!hora) return 'No especificada';
 
   const [horas, minutos] = hora.split(':').map(Number);
@@ -104,6 +104,50 @@ function formatearHora(hora: string): string {
     minute: '2-digit',
     hour12: true,
   }).format(fecha);
+}*/
+
+function formatearHora(hora?: string | null): string {
+  if (!hora) {
+    return 'No especificada';
+  }
+
+  const texto = String(hora).trim();
+
+  
+  const iso = texto.match(/T(\d{2}):(\d{2})/);
+
+  if (iso) {
+    const horas = Number(iso[1]);
+    const minutos = Number(iso[2]);
+
+    const fecha = new Date();
+    fecha.setHours(horas, minutos, 0, 0);
+
+    return fecha.toLocaleTimeString('es-HN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  }
+
+ 
+  const normal = texto.match(/^(\d{1,2}):(\d{2})/);
+
+  if (normal) {
+    const horas = Number(normal[1]);
+    const minutos = Number(normal[2]);
+
+    const fecha = new Date();
+    fecha.setHours(horas, minutos, 0, 0);
+
+    return fecha.toLocaleTimeString('es-HN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  }
+
+  return texto;
 }
 
 function normalizarEstado(estado?: string | null): EstadoServicio {

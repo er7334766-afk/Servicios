@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -21,6 +22,9 @@ import {
   CheckCircle2,
   PlayCircle,
   XCircle,
+  MoreVertical,
+  CheckCheck,
+  Trash2,
 } from 'lucide-react';
 
 import type {
@@ -224,6 +228,19 @@ export default function NotificationsScreen() {
     setError,
   ] = useState('');
 
+  const [
+    menuAbierto,
+    setMenuAbierto,
+  ] = useState(false);
+
+  const [
+    borrandoTodas,
+    setBorrandoTodas,
+  ] = useState(false);
+
+  const menuRef =
+    useRef<HTMLDivElement | null>(null);
+
   const esTrabajador = role === 'worker';
 
   const idUsuario = Number(
@@ -325,6 +342,34 @@ export default function NotificationsScreen() {
       true,
     );
   }, [idUsuario, esTrabajador]);
+
+
+  useEffect(() => {
+    const cerrarMenu = (
+      evento: MouseEvent,
+    ) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(
+          evento.target as Node,
+        )
+      ) {
+        setMenuAbierto(false);
+      }
+    };
+
+    document.addEventListener(
+      'mousedown',
+      cerrarMenu,
+    );
+
+    return () => {
+      document.removeEventListener(
+        'mousedown',
+        cerrarMenu,
+      );
+    };
+  }, []);
 
   const marcarComoLeida =
     async (
@@ -493,6 +538,73 @@ export default function NotificationsScreen() {
       }
     };
 
+  const borrarTodasLasNotificaciones =
+    async () => {
+      if (
+        !Number.isInteger(idUsuario) ||
+        idUsuario <= 0
+      ) {
+        return;
+      }
+
+      const confirmar =
+        window.confirm(
+          '¿Deseas eliminar todas las notificaciones? Esta acción no se puede deshacer.',
+        );
+
+      if (!confirmar) {
+        return;
+      }
+
+      try {
+        setBorrandoTodas(true);
+        setMenuAbierto(false);
+        setError('');
+
+        const respuesta =
+          await fetch(
+            esTrabajador
+              ? `${API_URL}/empleados/${idUsuario}/notificaciones`
+              : `${API_URL}/clientes/${idUsuario}/notificaciones`,
+            {
+              method: 'DELETE',
+            },
+          );
+
+        const datos =
+          await leerRespuestaJson<{
+            mensaje?: string;
+            detalle?: string;
+          }>(respuesta);
+
+        if (!respuesta.ok) {
+          throw new Error(
+            datos.detalle ||
+              datos.mensaje ||
+              'No se pudieron eliminar las notificaciones.',
+          );
+        }
+
+        setNotifications([]);
+      } catch (
+        errorDesconocido
+      ) {
+        console.error(
+          'Error al eliminar todas las notificaciones:',
+          errorDesconocido,
+        );
+
+        setError(
+          errorDesconocido instanceof
+            Error
+            ? errorDesconocido.message
+            : 'No se pudieron eliminar las notificaciones.',
+        );
+      } finally {
+        setBorrandoTodas(false);
+      }
+    };
+
   const today =
     notifications.filter(
       (notification) =>
@@ -649,10 +761,7 @@ export default function NotificationsScreen() {
 
             {unread > 0 && (
               <p className="text-xs text-muted-foreground">
-                {unread}{' '}
-                {unread === 1
-                  ? 'sin leer'
-                  : 'sin leer'}
+                {unread} sin leer
               </p>
             )}
           </div>
@@ -665,7 +774,7 @@ export default function NotificationsScreen() {
               )
             }
             disabled={actualizando}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[#1A56DB] disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[#1A56DB] hover:bg-muted disabled:opacity-50"
             aria-label="Actualizar notificaciones"
           >
             <RefreshCw
@@ -677,17 +786,66 @@ export default function NotificationsScreen() {
             />
           </button>
 
-          {unread > 0 && (
+          <div
+            ref={menuRef}
+            className="relative"
+          >
             <button
               type="button"
               onClick={() =>
-                void marcarTodasComoLeidas()
+                setMenuAbierto(
+                  (valor) => !valor,
+                )
               }
-              className="text-xs font-semibold text-[#1A56DB]"
+              className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
+              aria-label="Opciones de notificaciones"
+              aria-expanded={menuAbierto}
             >
-              Marcar todas
+              <MoreVertical className="h-5 w-5" />
             </button>
-          )}
+
+            {menuAbierto && (
+              <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuAbierto(false);
+                    void marcarTodasComoLeidas();
+                  }}
+                  disabled={unread === 0}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <CheckCheck className="h-4 w-4 text-[#1A56DB]" />
+
+                  <span>
+                    Marcar todas como leídas
+                  </span>
+                </button>
+
+                <div className="h-px bg-border" />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void borrarTodasLasNotificaciones()
+                  }
+                  disabled={
+                    notifications.length === 0 ||
+                    borrandoTodas
+                  }
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+
+                  <span>
+                    {borrandoTodas
+                      ? 'Borrando...'
+                      : 'Borrar todas'}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
