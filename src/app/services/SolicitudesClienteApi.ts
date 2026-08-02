@@ -26,6 +26,8 @@ export interface PostulanteServicio {
   fk_servicio: number;
   fk_empleado: number;
 
+  tipo_postulacion?: string | null;
+  estado_negociacion?: string | null;
   estado_postulacion: string;
   fecha_postulacion?: string | null;
 

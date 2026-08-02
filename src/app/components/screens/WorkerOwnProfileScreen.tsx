@@ -1071,7 +1071,7 @@ export default function WorkerOwnProfileScreen() {
                   )}
                   className="rounded-full border border-[#1A56DB]/20 bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
                 >
-                  {categoria.nombre}
+                  {categoria.nombre.charAt(0).toUpperCase() + categoria.nombre.slice(1)}
                 </span>
               ),
             )

@@ -448,11 +448,26 @@ export default function ClientServiceDetailScreen() {
         ) : (
           <div className="space-y-4">
             {postulaciones.map(
+              
               (postulacion) => {
                 const estadoPostulacion =
                   normalizarEstado(
                     postulacion.estado_postulacion
                   );
+
+                const tipoPostulacion =
+                  normalizarEstado(
+                    postulacion.tipo_postulacion
+                  );
+                const quiereNegociar =
+                  tipoPostulacion === 'negociar';
+
+                const estadoNegociacion = normalizarEstado(
+                  postulacion.estado_negociacion
+                );
+
+                const negociacionAceptada =
+                  estadoNegociacion === 'aceptado';
 
                 const aceptada =
                   estadoPostulacion ===
@@ -511,6 +526,20 @@ export default function ClientServiceDetailScreen() {
                               {postulacion.titulo ||
                                 'Trabajador de servicios'}
                             </p>
+                            
+                            <div className="mt-2">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                  quiereNegociar
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-green-100 text-green-700'
+                                }`}
+                              >
+                                {quiereNegociar
+                                  ? 'Quiere negociar el precio'
+                                  : 'Acepta el presupuesto'}
+                              </span>
+                            </div>
                           </div>
 
                           <span
@@ -578,108 +607,136 @@ export default function ClientServiceDetailScreen() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-5">
-                          {/* Ver perfil */}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigate(
-                                `/home/worker/${idEmpleado}`
-                              )
-                            }
-                            className="rounded-xl border border-[#1A56DB] text-[#1A56DB] px-3 py-2.5 text-xs font-semibold"
-                          >
-                            Ver perfil
-                          </button>
+                        
 
-                          {/* Aceptar y rechazar */}
-                          {pendiente &&
-                            !servicioAsignado && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={
-                                    botonesDeshabilitados
-                                  }
-                                  onClick={() =>
-                                    void manejarAceptar(
-                                      idEmpleado
-                                    )
-                                  }
-                                  className="rounded-xl bg-[#1A56DB] text-white px-3 py-2.5 text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                                >
-                                  {aceptandoEsta ? (
-                                    <>
-                                      <RefreshCw className="w-4 h-4 animate-spin" />
-                                      Aceptando
-                                    </>
-                                  ) : (
-                                    'Aceptar'
-                                  )}
-                                </button>
+                        <div className="grid grid-cols-1 gap-2 mt-5 sm:grid-cols-2">
+                            {/* Ver perfil */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/home/worker/${idEmpleado}`)
+                              }
+                              className="rounded-xl border border-[#1A56DB] px-3 py-2.5 text-xs font-semibold text-[#1A56DB]"
+                            >
+                              Ver perfil
+                            </button>
 
-                                <button
-                                  type="button"
-                                  disabled={
-                                    botonesDeshabilitados
-                                  }
-                                  onClick={() =>
-                                    void manejarRechazar(
-                                      idPostulacion
-                                    )
-                                  }
-                                  className="rounded-xl border border-red-200 bg-red-50 text-red-600 px-3 py-2.5 text-xs font-semibold disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                                >
-                                  {rechazandoEsta ? (
-                                    <>
-                                      <RefreshCw className="w-4 h-4 animate-spin" />
-                                      Rechazando
-                                    </>
-                                  ) : (
-                                    'Rechazar'
-                                  )}
-                                </button>
-                              </>
+                            {/* Ir al chat: solo para negociación */}
+                            {quiereNegociar && pendiente && !servicioAsignado ? (
+                              <button
+                                type="button"
+                                disabled={
+                                  !Number.isInteger(idEmpleado) ||
+                                  idEmpleado <= 0
+                                }
+                                onClick={() => {
+                                  navigate(`/home/chat/${idEmpleado}`, {
+                                    state: {
+                                      idServicio: servicioId,
+                                      volverA: `/home/mis-solicitudes/${servicioId}`,
+                                    },
+                                  });
+                                }}
+                                className="rounded-xl border border-[#1A56DB] bg-blue-50 px-3 py-2.5 text-xs font-semibold text-[#1A56DB] disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Ir al chat
+                              </button>
+                            ) : (
+                              <div className="hidden sm:block" />
                             )}
 
-                          {/* Trabajador aceptado */}
-                          {aceptada &&
-                            !servicioCompletado && (
-                              <div className="rounded-xl bg-green-50 border border-green-200 text-green-700 px-3 py-2.5 text-xs font-semibold flex items-center justify-center gap-1">
-                                <Check className="w-4 h-4" />
+                            {/* Contratar */}
+                            {pendiente && !servicioAsignado && (
+                              <button
+                                type="button"
+                                disabled={
+                                  botonesDeshabilitados ||
+                                  (quiereNegociar &&
+                                    !negociacionAceptada)
+                                }
+                                onClick={() =>
+                                  void manejarAceptar(idEmpleado)
+                                }
+                                className="flex w-full items-center justify-center gap-1 rounded-xl bg-[#1A56DB] px-3 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300 sm:col-span-2"
+                              >
+                                {aceptandoEsta ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Contratando
+                                  </>
+                                ) : (
+                                  'Contratar'
+                                )}
+                              </button>
+                            )}
+
+                            {/* Mensaje de espera */}
+                            {pendiente &&
+                              quiereNegociar &&
+                              !negociacionAceptada &&
+                              !servicioAsignado && (
+                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:col-span-2">
+                                  <p className="text-sm font-semibold text-[#1A56DB]">
+                                    ⏳ Esperando confirmación del trabajador
+                                  </p>
+
+                                  <p className="mt-1 text-xs leading-5 text-blue-700">
+                                    Podrás contratar cuando el trabajador acepte el nuevo presupuesto.
+                                  </p>
+                                </div>
+                              )}
+
+                            {/* Rechazar */}
+                            {pendiente && !servicioAsignado && (
+                              <button
+                                type="button"
+                                disabled={botonesDeshabilitados}
+                                onClick={() =>
+                                  void manejarRechazar(idPostulacion)
+                                }
+                                className="flex w-full items-center justify-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-600 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 sm:col-span-2"
+                              >
+                                {rechazandoEsta ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Rechazando
+                                  </>
+                                ) : (
+                                  'Rechazar'
+                                )}
+                              </button>
+                            )}
+
+                            {/* Trabajador aceptado */}
+                            {aceptada && !servicioCompletado && (
+                              <div className="flex items-center justify-center gap-1 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-xs font-semibold text-green-700 sm:col-span-2">
+                                <Check className="h-4 w-4" />
                                 Trabajador aceptado
                               </div>
                             )}
 
-                          {/* Reportar trabajador */}
-                          {aceptada &&
-                            servicioCompletado && (
+                            {/* Reportar trabajador */}
+                            {aceptada && servicioCompletado && (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  navigate(
-                                    '/home/report',
-                                    {
-                                      state: {
-                                        tipoReporte:
-                                          'usuario',
-                                        idServicio:
-                                          servicioId,
-                                        idReportado:
-                                          idEmpleado,
-                                        tipoReportado:
-                                          'worker',
-                                      },
-                                    }
-                                  )
+                                  navigate('/home/report', {
+                                    state: {
+                                      tipoReporte: 'usuario',
+                                      idServicio: servicioId,
+                                      idReportado: idEmpleado,
+                                      tipoReportado: 'worker',
+                                    },
+                                  })
                                 }
-                                className="rounded-xl border border-red-200 bg-red-50 text-red-600 px-3 py-2.5 text-xs font-semibold flex items-center justify-center gap-2"
+                                className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600 sm:col-span-2"
                               >
-                                <Flag className="w-4 h-4" />
+                                <Flag className="h-4 w-4" />
                                 Reportar trabajador
                               </button>
                             )}
-                        </div>
+                          </div>
+
                       </div>
                     </div>
                   </article>
