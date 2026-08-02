@@ -25,8 +25,10 @@ export interface PostulanteServicio {
   id_postulacion: number;
   fk_servicio: number;
   fk_empleado: number;
-
+  
   estado_postulacion: string;
+  estado_negociacion?: string | null;
+  
   fecha_postulacion?: string | null;
 
   id_empleado: number;
@@ -37,6 +39,8 @@ export interface PostulanteServicio {
   direccion?: string | null;
   estado_empleado?: string | null;
   N_trabajos?: number | null;
+
+  tipo_postulacion?: 'aceptar' | 'negociar' | string | null;
 }
 
 export interface DetallePostulaciones {

@@ -1582,6 +1582,13 @@ app.post(
         req.body?.fk_empleado,
       );
 
+      const tipoPostulacion =
+        String(
+          req.body?.tipo_postulacion ?? 'aceptar'
+        )
+          .trim()
+          .toLowerCase();
+
       if (
         !Number.isInteger(idServicio) ||
         idServicio <= 0
@@ -1721,16 +1728,19 @@ app.post(
           INSERT INTO postulaciones (
             fk_servicio,
             fk_empleado,
+            tipo_postulacion,
             estado,
             fecha
           )
           OUTPUT
             INSERTED.id_postulacion,
+            INSERTED.tipo_postulacion,
             INSERTED.fk_servicio,
             INSERTED.fk_empleado,
             INSERTED.estado,
             INSERTED.fecha
           VALUES (
+            ?,
             ?,
             ?,
             'Pendiente',
@@ -1740,6 +1750,7 @@ app.post(
           [
             idServicio,
             idEmpleado,
+            tipoPostulacion,
           ],
         );
 
@@ -1762,6 +1773,11 @@ app.post(
         servicio.titulo ||
           'Solicitud de servicio',
       ).trim();
+
+      const descripcionNotificacion =
+        tipoPostulacion === 'negociar'
+          ? `${nombreEmpleado} quiere negociar el presupuesto de tu solicitud "${tituloServicio}".`
+          : `${nombreEmpleado} aceptó el presupuesto de tu solicitud "${tituloServicio}".`;
 
       // Notificar al cliente.
       const [resultadoNotificacion]: any =
@@ -1802,7 +1818,8 @@ app.post(
             idCliente,
             null,
             'Nueva postulación',
-            `${nombreEmpleado} se postuló a tu solicitud "${tituloServicio}".`,
+            descripcionNotificacion,
+            // `${nombreEmpleado} se postuló a tu solicitud "${tituloServicio}".`,
             'postulacion',
             idServicio,
           ],
@@ -4709,6 +4726,8 @@ app.get(
             id_postulacion,
             fk_servicio,
             fk_empleado,
+            tipo_postulacion,
+            estado_negociacion,
             estado,
             fecha
           FROM postulaciones
@@ -5119,6 +5138,8 @@ app.get(
             p.id_postulacion,
             p.fk_servicio,
             p.fk_empleado,
+            p.tipo_postulacion,
+            p.estado_negociacion,
             p.estado AS estado_postulacion,
             p.fecha AS fecha_postulacion,
 
@@ -7481,6 +7502,337 @@ app.delete(
   },
 );
 
+//presupuesto
+app.put(
+  '/api/servicios/:idServicio/presupuesto',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio
+      );
+
+      const presupuestoNuevo = Number(
+        req.body?.presupuesto
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de servicio inválido',
+        });
+      }
+
+      if (
+        !Number.isFinite(presupuestoNuevo) ||
+        presupuestoNuevo <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'Presupuesto inválido',
+        });
+      }
+
+      // 1. Obtener datos actuales del servicio
+      const [resultadoServicio]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            s.id_servicio,
+            s.titulo,
+            s.presupuesto,
+            s.fk_empleado,
+            c.nombre AS nombre_cliente
+          FROM servicios AS s
+          LEFT JOIN clientes AS c
+            ON c.id_cliente = COALESCE(
+              s.fk_cliente,
+              s.id_cliente
+            )
+          WHERE s.id_servicio = ?
+          `,
+          [idServicio]
+        );
+
+      const servicios =
+        obtenerFilas(resultadoServicio);
+
+      if (servicios.length === 0) {
+        return res.status(404).json({
+          mensaje: 'Servicio no encontrado',
+        });
+      }
+
+      const servicio = servicios[0];
+
+      const nombreCliente = String(
+        servicio.nombre_cliente || 'El cliente'
+      ).trim();
+
+      const presupuestoAnterior = Number(
+        servicio.presupuesto
+      );
+
+      const idEmpleado = Number(
+        req.body?.fk_empleado ??
+          servicio.fk_empleado
+      );
+
+      const tituloServicio = String(
+        servicio.titulo ||
+          'Solicitud de servicio'
+      ).trim();
+
+      // 2. Actualizar presupuesto
+      await database.execute(
+        `
+        UPDATE servicios
+        SET presupuesto = ?
+        WHERE id_servicio = ?
+        `,
+        [
+          presupuestoNuevo,
+          idServicio,
+        ]
+      );
+
+      const [resultadoEstado]: any =
+        await database.execute(
+          `
+          UPDATE postulaciones
+          SET estado_negociacion  = 'EsperandoConfirmacion'
+          OUTPUT
+            INSERTED.id_postulacion,
+            INSERTED.estado_negociacion
+          WHERE fk_servicio = ?
+            AND fk_empleado = ?
+            AND tipo_postulacion = 'negociar'
+          `,
+          [
+            idServicio,
+            idEmpleado,
+          ]
+        );
+
+      // 3. Notificar al trabajador si ya está asignado - Crear notificación para el trabajador
+      if (
+        Number.isInteger(idEmpleado) &&
+        idEmpleado > 0
+      ) {
+        await database.execute(
+          `
+          INSERT INTO notificaciones (
+            id_cliente,
+            id_empleado,
+            titulo,
+            descripcion,
+            tipo,
+            leida,
+            fecha,
+            fk_servicio
+          )
+          VALUES (
+            NULL,
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            SYSDATETIME(),
+            ?
+          )
+          `,
+          [
+            idEmpleado,
+            'Presupuesto actualizado',
+            `El cliente ${nombreCliente} actualizó el presupuesto de la solicitud "${tituloServicio}" de L${presupuestoAnterior.toLocaleString()} a L${presupuestoNuevo.toLocaleString()}.`,
+            'presupuesto_actualizado',
+            idServicio,
+          ]
+        );
+      }
+
+      return res.status(200).json({
+        mensaje:
+          'Presupuesto actualizado correctamente',
+        presupuestoAnterior,
+        presupuestoNuevo,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al actualizar presupuesto:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo actualizar el presupuesto',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  }
+);
+
+app.put(
+  '/api/postulaciones/:idPostulacion/aceptar-negociacion',
+  async (req, res) => {
+    try {
+      const idPostulacion = Number(
+        req.params.idPostulacion
+      );
+
+      if (
+        !Number.isInteger(idPostulacion) ||
+        idPostulacion <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de postulación inválido',
+        });
+      }
+
+      const [resultadoPostulacion]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            p.id_postulacion,
+            p.fk_servicio,
+            p.fk_empleado,
+            p.tipo_postulacion,
+            p.estado_negociacion,
+            s.id_cliente,
+            s.titulo,
+            s.presupuesto,
+            e.nombre AS nombre_empleado
+          FROM postulaciones AS p
+          INNER JOIN servicios AS s
+            ON s.id_servicio = p.fk_servicio
+          INNER JOIN empleados AS e
+            ON e.id_empleado = p.fk_empleado
+          WHERE p.id_postulacion = ?
+          `,
+          [idPostulacion]
+        );
+
+      const postulaciones =
+        obtenerFilas(resultadoPostulacion);
+
+      if (postulaciones.length === 0) {
+        return res.status(404).json({
+          mensaje: 'Esta negociación no está pendiente de confirmación',
+        });
+      }
+
+      const postulacion = postulaciones[0];
+
+      const tipoPostulacion = String(
+        postulacion.tipo_postulacion ?? ''
+      )
+        .trim()
+        .toLowerCase();
+
+      const estadoNegociacion = String(
+        postulacion.estado_negociacion ?? ''
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        tipoPostulacion !== 'negociar' ||
+        estadoNegociacion !==
+          'esperandoconfirmacion'
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Esta negociaci├│n no est├í pendiente de confirmaci├│n',
+        });
+      }
+
+      await database.execute(
+        `
+        UPDATE postulaciones
+        SET estado_negociacion = 'Aceptado'
+        WHERE id_postulacion = ?
+        `,
+        [idPostulacion]
+      );
+
+      const idCliente = Number(
+        postulacion.id_cliente
+      );
+
+      if (
+        Number.isInteger(idCliente) &&
+        idCliente > 0
+      ) {
+        const nombreEmpleado = String(
+          postulacion.nombre_empleado ||
+            'El trabajador'
+        ).trim();
+
+        const tituloServicio = String(
+          postulacion.titulo ||
+            'Solicitud de servicio'
+        ).trim();
+
+        const presupuesto = Number(
+          postulacion.presupuesto
+        );
+
+        await database.execute(
+          `
+          INSERT INTO notificaciones (
+            id_cliente,
+            id_empleado,
+            titulo,
+            descripcion,
+            tipo,
+            leida,
+            fecha,
+            fk_servicio
+          )
+          VALUES (
+            ?,
+            NULL,
+            ?,
+            ?,
+            ?,
+            0,
+            SYSDATETIME(),
+            ?
+          )
+          `,
+          [
+            idCliente,
+            'Presupuesto aceptado',
+            `${nombreEmpleado} aceptó el nuevo presupuesto de L ${presupuesto.toLocaleString()} para "${tituloServicio}".`,
+            'presupuesto_aceptado',
+            Number(postulacion.fk_servicio),
+          ]
+        );
+      }
+
+      return res.status(200).json({
+        mensaje:
+          'Nuevo presupuesto aceptado correctamente',
+        estado_negociacion: 'Aceptado',
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al aceptar negociación:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo aceptar el nuevo presupuesto',
+        detalle:
+          error?.message ?? String(error),
+      });
+    }
+  }
+);
 
 // ==========================================
 // RESPUESTA JSON PARA RUTAS NO ENCONTRADAS

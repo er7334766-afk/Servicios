@@ -28,7 +28,7 @@ import {
   obtenerServiciosDisponibles,
   postularEmpleadoServicio,
   type ServicioDisponible,
-} from '../../services/serviciosApi';
+} from '../../services/ServiciosApi';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',

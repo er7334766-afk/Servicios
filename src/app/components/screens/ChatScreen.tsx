@@ -19,34 +19,6 @@ import {
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useApp } from '../../context/AppContext';
 
-const API_ORIGIN = 'http://localhost:3000';
-const API_URL = `${API_ORIGIN}/api`;
-
-function resolverUrlArchivo(
-  valor?: string | null,
-): string {
-  const url = String(valor ?? '').trim();
-
-  if (!url) {
-    return '';
-  }
-
-  if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('blob:')
-  ) {
-    return url;
-  }
-
-  if (url.startsWith('/')) {
-    return `${API_ORIGIN}${url}`;
-  }
-
-  return `${API_ORIGIN}/${url}`;
-}
-
 interface ContactoChat {
   id: number;
   nombre: string;
@@ -110,48 +82,6 @@ function leerUsuarioLocal(): UsuarioGuardado | null {
   return null;
 }
 
-
-const MARCADOR_IMAGEN = '[IMAGEN]';
-
-function archivoABase64(archivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const lector = new FileReader();
-
-    lector.onload = () => {
-      const contenido = String(lector.result ?? '');
-      const base64 = contenido.split(',')[1];
-
-      if (!base64) {
-        reject(new Error('No se pudo convertir la imagen'));
-        return;
-      }
-
-      resolve(base64);
-    };
-
-    lector.onerror = () => {
-      reject(new Error('No se pudo leer la imagen'));
-    };
-
-    lector.readAsDataURL(archivo);
-  });
-}
-
-function obtenerUrlImagen(mensaje: string): string | null {
-  if (!mensaje.startsWith(MARCADOR_IMAGEN)) {
-    return null;
-  }
-
-  const url = mensaje
-    .slice(MARCADOR_IMAGEN.length)
-    .trim();
-
-  const urlResuelta =
-    resolverUrlArchivo(url);
-
-  return urlResuelta || null;
-}
-
 export default function ChatScreen() {
   const parametros = useParams<{
     id?: string;
@@ -171,11 +101,10 @@ export default function ChatScreen() {
     useState<MensajeChat[]>([]);
 
   const [texto, setTexto] = useState('');
+
   const [cargando, setCargando] =
     useState(true);
   const [enviando, setEnviando] =
-    useState(false);
-  const [subiendoImagen, setSubiendoImagen] =
     useState(false);
   const [error, setError] = useState('');
 
@@ -185,9 +114,6 @@ export default function ChatScreen() {
   const mensajesContainerRef =
     useRef<HTMLDivElement>(null);
 
-  const inputImagenRef =
-    useRef<HTMLInputElement>(null);
-
   const primeraCargaRef = useRef(true);
   const usuarioEstaAbajoRef = useRef(true);
   const ultimoMensajeIdRef =
@@ -195,6 +121,18 @@ export default function ChatScreen() {
 
   const usuarioLocal = leerUsuarioLocal();
   const [mostrarMenu, setMostrarMenu] = useState(false);
+
+  const [mostrarModalPresupuesto, setMostrarModalPresupuesto] =
+    useState(false);
+
+  const [nuevoPresupuesto, setNuevoPresupuesto] =
+    useState('');
+
+  const [presupuestoActual, setPresupuestoActual] =
+    useState<number | null>(null);
+
+  const [cargandoPresupuesto, setCargandoPresupuesto] =
+    useState(false);
 
   /*
    * Cliente:
@@ -215,25 +153,35 @@ export default function ChatScreen() {
         idCliente?: number | string;
         idEmpleado?: number | string;
         participantId?: number | string;
+        idServicio?: number | string;
+        volverA?: string;
       }
     | null;
 
-const ultimoSegmentoUrl =
-  location.pathname
-    .split('/')
-    .filter(Boolean)
-    .at(-1);
+  const idServicio = Number(
+    estadoNavegacion?.idServicio
 
-const idSeleccionado = Number(
-  parametros.id ??
-    parametros.idCliente ??
-    parametros.idContacto ??
-    parametros.participantId ??
-    estadoNavegacion?.participantId ??
-    estadoNavegacion?.idCliente ??
-    estadoNavegacion?.idEmpleado ??
-    ultimoSegmentoUrl
-);
+  );
+
+  const rutaRegreso =
+    estadoNavegacion?.volverA || '/home/chat';
+
+  const ultimoSegmentoUrl =
+    location.pathname
+      .split('/')
+      .filter(Boolean)
+      .at(-1);
+
+  const idSeleccionado = Number(
+    parametros.id ??
+      parametros.idCliente ??
+      parametros.idContacto ??
+      parametros.participantId ??
+      estadoNavegacion?.participantId ??
+      estadoNavegacion?.idCliente ??
+      estadoNavegacion?.idEmpleado ??
+      ultimoSegmentoUrl
+  );
 
   const rolActual =
     role ??
@@ -273,8 +221,8 @@ const idSeleccionado = Number(
     }
 
     const url = esEmpleado
-      ? `${API_URL}/clientes/${idCliente}`
-      : `${API_URL}/empleados/${idEmpleado}`;
+      ? `http://localhost:3000/api/clientes/${idCliente}`
+      : `http://localhost:3000/api/empleados/${idEmpleado}`;
 
     
       const respuesta = await fetch(url, {
@@ -308,7 +256,7 @@ if (texto) {
         nombre: String(
           datos.nombre_C ?? 'Cliente'
         ),
-        foto: resolverUrlArchivo(datos.foto ?? datos.foto_url),
+        foto: String(datos.foto ?? ''),
         estado: 'Cliente',
       });
     } else {
@@ -317,7 +265,7 @@ if (texto) {
         nombre: String(
           datos.nombre_E ?? 'Empleado'
         ),
-        foto: resolverUrlArchivo(datos.foto ?? datos.foto_url),
+        foto: String(datos.foto ?? ''),
         estado: String(
           datos.estado ?? 'Desconectado'
         ),
@@ -329,7 +277,7 @@ if (texto) {
     async () => {
       try {
         const respuesta = await fetch(
-          `${API_URL}/chat/leidos`,
+          'http://localhost:3000/api/chat/leidos',
           {
             method: 'PUT',
             headers: {
@@ -382,7 +330,7 @@ if (texto) {
     }
 
     const respuesta = await fetch(
-      `${API_URL}/chat/cliente/${idCliente}/empleado/${idEmpleado}`
+      `http://localhost:3000/api/chat/cliente/${idCliente}/empleado/${idEmpleado}`
     );
 
     const texto = await respuesta.text();
@@ -401,6 +349,67 @@ if (texto) {
     setMensajes(listaMensajes);
 
     
+  };
+
+  const cargarPresupuestoServicio = async () => {
+    if (
+      !Number.isInteger(idServicio) ||
+      idServicio <= 0
+    ) {
+      setError(
+        'No se pudo identificar la solicitud.'
+      );
+      return;
+    }
+
+    try {
+      setCargandoPresupuesto(true);
+      setError('');
+
+      const respuesta = await fetch(
+        `http://localhost:3000/api/servicios/${idServicio}`,
+        {
+          cache: 'no-store',
+        }
+      );
+
+      const textoRespuesta =
+        await respuesta.text();
+
+      const datos = textoRespuesta
+        ? JSON.parse(textoRespuesta)
+        : null;
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.mensaje ||
+            'No se pudo obtener el presupuesto'
+        );
+      }
+
+      const presupuesto = Number(
+        datos?.presupuesto
+      );
+
+      if (
+        !Number.isFinite(presupuesto) ||
+        presupuesto <= 0
+      ) {
+        throw new Error(
+          'El presupuesto de la solicitud no es válido'
+        );
+      }
+
+      setPresupuestoActual(presupuesto);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo cargar el presupuesto'
+      );
+    } finally {
+      setCargandoPresupuesto(false);
+    }
   };
 
   /*
@@ -550,10 +559,8 @@ if (texto) {
       ultimoMensajeId;
   }, [mensajes]);
 
-  const enviarContenido = async (
-    contenido: string,
-  ) => {
-    const mensajeLimpio = contenido.trim();
+  const handleEnviar = async () => {
+    const mensajeLimpio = texto.trim();
 
     if (!mensajeLimpio || enviando) {
       return;
@@ -563,74 +570,58 @@ if (texto) {
       !Number.isInteger(idCliente) ||
       idCliente <= 0
     ) {
-      throw new Error('ID de cliente inválido');
+      setError('ID de cliente inválido');
+      return;
     }
 
     if (
       !Number.isInteger(idEmpleado) ||
       idEmpleado <= 0
     ) {
-      throw new Error('ID de empleado inválido');
-    }
-
-    const respuesta = await fetch(
-      `${API_URL}/chat`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fk_cliente: idCliente,
-          fk_empleado: idEmpleado,
-          remitente: esEmpleado
-            ? 'empleado'
-            : 'cliente',
-          mensaje: mensajeLimpio,
-        }),
-      },
-    );
-
-    const textoRespuesta =
-      await respuesta.text();
-
-    let datos: any = null;
-
-    if (textoRespuesta.trim()) {
-      try {
-        datos = JSON.parse(textoRespuesta);
-      } catch {
-        throw new Error(
-          'El servidor devolvió una respuesta inválida',
-        );
-      }
-    }
-
-    if (!respuesta.ok) {
-      throw new Error(
-        datos?.detalle ||
-          datos?.mensaje ||
-          'No se pudo enviar el mensaje',
-      );
-    }
-
-    usuarioEstaAbajoRef.current = true;
-    await cargarMensajes();
-  };
-
-  const handleEnviar = async () => {
-    const mensajeLimpio = texto.trim();
-
-    if (!mensajeLimpio || enviando) {
+      setError('ID de empleado inválido');
       return;
     }
 
     try {
       setEnviando(true);
-      setError('');
 
-      await enviarContenido(mensajeLimpio);
+      const respuesta = await fetch(
+        'http://localhost:3000/api/chat',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            fk_cliente: idCliente,
+            fk_empleado: idEmpleado,
+            remitente: esEmpleado
+              ? 'empleado'
+              : 'cliente',
+            mensaje: mensajeLimpio,
+          }),
+        }
+      );
+
+      const textoRespuesta = await respuesta.text();
+      const datos = textoRespuesta ? JSON.parse(textoRespuesta) : null;
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos?.detalle ||
+            datos?.mensaje ||
+            'No se pudo enviar el mensaje'
+        );
+      }
+
       setTexto('');
+
+      // Al enviar un mensaje propio, llevar al usuario
+      // al final del chat.
+      usuarioEstaAbajoRef.current = true;
+
+      await cargarMensajes();
     } catch (error) {
       const mensaje =
         error instanceof Error
@@ -639,120 +630,12 @@ if (texto) {
 
       console.error(
         'Error al enviar mensaje:',
-        error,
+        error
       );
 
       setError(mensaje);
     } finally {
       setEnviando(false);
-    }
-  };
-
-  const seleccionarImagen = async (
-    evento: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const archivo = evento.target.files?.[0];
-
-    if (!archivo) {
-      return;
-    }
-
-    try {
-      setError('');
-
-      const tiposPermitidos = [
-        'image/jpeg',
-        'image/png',
-        'image/jpg',
-      ];
-
-      if (!tiposPermitidos.includes(archivo.type)) {
-        throw new Error(
-          'Selecciona una imagen JPG o PNG',
-        );
-      }
-
-      if (archivo.size > 5 * 1024 * 1024) {
-        throw new Error(
-          'La imagen no puede superar los 5 MB',
-        );
-      }
-
-      setSubiendoImagen(true);
-
-      const base64 = await archivoABase64(archivo);
-
-      const respuestaSubida = await fetch(
-        `${API_URL}/upload-chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            base64,
-            fileName: archivo.name,
-            contentType: archivo.type,
-          }),
-        },
-      );
-
-      const textoRespuesta =
-        await respuestaSubida.text();
-
-      let datosSubida: any = {};
-
-      if (textoRespuesta.trim()) {
-        try {
-          datosSubida = JSON.parse(textoRespuesta);
-        } catch {
-          throw new Error(
-            'El servidor devolvió una respuesta inválida al subir la imagen',
-          );
-        }
-      }
-
-      if (!respuestaSubida.ok) {
-        throw new Error(
-          datosSubida.detalle ||
-            datosSubida.mensaje ||
-            'No se pudo subir la imagen',
-        );
-      }
-
-      const urlGuardada = String(
-        datosSubida.url ?? '',
-      ).trim();
-
-      const url = resolverUrlArchivo(
-        urlGuardada,
-      );
-
-      if (!urlGuardada) {
-        throw new Error(
-          'El servidor no devolvió la URL de la imagen',
-        );
-      }
-
-      await enviarContenido(
-        `${MARCADOR_IMAGEN}${url}`,
-      );
-    } catch (error) {
-      const mensaje =
-        error instanceof Error
-          ? error.message
-          : 'No se pudo enviar la imagen';
-
-      console.error(
-        'Error al enviar imagen:',
-        error,
-      );
-
-      setError(mensaje);
-      window.alert(mensaje);
-    } finally {
-      setSubiendoImagen(false);
-      evento.target.value = '';
     }
   };
 
@@ -819,9 +702,13 @@ if (texto) {
       <div className="bg-card border-b border-border px-4 pt-10 pb-3 flex items-center gap-3 flex-shrink-0">
         <button
           type="button"
-          onClick={() =>
-            navigate('/home/chat')
-          }
+          onClick={() => {
+            if (estadoNavegacion?.volverA) {
+              navigate(estadoNavegacion.volverA);
+            } else {
+              navigate(-1);
+            }
+          }}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
@@ -877,37 +764,23 @@ if (texto) {
                 👤 Ver perfil
               </button>
 
-              {/* <button
-                type="button"
-                onClick={() => {
-                  setMostrarMenu(false);
+              {!esEmpleado &&
+                Number.isInteger(idServicio) &&
+                idServicio > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrarMenu(false);
+                      setNuevoPresupuesto('');
+                      setMostrarModalPresupuesto(true);
 
-                  const confirmar = window.confirm(
-                    '¿Estás seguro de que deseas eliminar todos los mensajes de esta conversación?\n\nEsta acción eliminará el historial únicamente de tu cuenta y no podrá deshacerse.'
-                  );
-
-                  if (!confirmar) {
-                    return;
-                  }
-
-                  // Aquí irá la llamada al backend
-                }}
-                className="w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
-              >
-                🗑️ Vaciar chat
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMostrarMenu(false);
-
-                  // Bloquear usuario
-                }}
-                className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                🚫 Bloquear
-              </button> */}
+                      void cargarPresupuestoServicio();
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
+                  >
+                    💰 Cambiar presupuesto
+                  </button>
+                )}
             </div>
           )}
         </div>
@@ -984,35 +857,7 @@ if (texto) {
                       : 'bg-card border border-border text-foreground rounded-tr-2xl rounded-tl-sm rounded-br-2xl rounded-bl-2xl'
                   }`}
                 >
-                  {obtenerUrlImagen(
-                    mensaje.mensaje,
-                  ) ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          obtenerUrlImagen(
-                            mensaje.mensaje,
-                          ) ?? '',
-                          '_blank',
-                          'noopener,noreferrer',
-                        )
-                      }
-                      className="block overflow-hidden rounded-xl"
-                    >
-                      <img
-                        src={
-                          obtenerUrlImagen(
-                            mensaje.mensaje,
-                          ) ?? ''
-                        }
-                        alt="Imagen enviada"
-                        className="max-h-64 w-full max-w-[240px] object-cover"
-                      />
-                    </button>
-                  ) : (
-                    mensaje.mensaje
-                  )}
+                  {mensaje.mensaje}
                 </div>
 
                 <span className="text-[10px] text-muted-foreground px-1">
@@ -1045,29 +890,10 @@ if (texto) {
       <div className="bg-card border-t border-border px-4 py-3 flex items-center gap-2 flex-shrink-0">
         <button
           type="button"
-          onClick={() =>
-            inputImagenRef.current?.click()
-          }
-          disabled={
-            subiendoImagen || enviando
-          }
-          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Enviar imagen"
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
         >
-          {subiendoImagen ? (
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#1A56DB] border-t-transparent" />
-          ) : (
-            <Image className="w-5 h-5 text-muted-foreground" />
-          )}
+          <Image className="w-5 h-5 text-muted-foreground" />
         </button>
-
-        <input
-          ref={inputImagenRef}
-          type="file"
-          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
-          className="hidden"
-          onChange={seleccionarImagen}
-        />
 
         <div className="flex-1 flex items-center bg-input-background rounded-2xl px-4 py-2 gap-2">
           <input
@@ -1115,6 +941,145 @@ if (texto) {
           />
         </motion.button>
       </div>
+
+      {mostrarModalPresupuesto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5">
+
+          <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl">
+
+            <h2 className="text-xl font-bold text-center text-foreground">
+              💰 Cambiar presupuesto
+            </h2>
+
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              Ingresa el nuevo monto acordado con el trabajador.
+            </p>
+
+            {/* Presupuesto actual */}
+            <div className="mt-6 rounded-2xl bg-[#EFF6FF] p-4">
+
+              <p className="text-xs font-semibold uppercase text-[#1A56DB]">
+                Presupuesto actual
+              </p>
+
+              <p className="mt-2 text-3xl font-bold text-[#1A56DB]">
+
+                {cargandoPresupuesto
+                  ? 'Cargando...'
+                  : presupuestoActual !== null
+                    ? `L ${presupuestoActual.toLocaleString()}`
+                    : 'No disponible'}
+
+              </p>
+
+            </div>
+
+            {/* Nuevo presupuesto */}
+
+            <div className="mt-5">
+
+              <label className="text-sm font-semibold text-foreground">
+                Nuevo presupuesto
+              </label>
+
+              <input
+                type="number"
+                value={nuevoPresupuesto}
+                onChange={(e) =>
+                  setNuevoPresupuesto(e.target.value)
+                }
+                placeholder="Ej. 650"
+                className="mt-2 w-full rounded-xl border border-border px-4 py-3 focus:border-[#1A56DB] outline-none"
+              />
+
+            </div>
+
+            {/* Botones */}
+
+            <div className="mt-6 flex gap-3">
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarModalPresupuesto(false);
+                  setNuevoPresupuesto('');
+                }}
+                className="flex-1 rounded-xl border border-border py-3 font-semibold"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const monto = Number(
+                    nuevoPresupuesto
+                  );
+
+                  if (
+                    !Number.isFinite(monto) ||
+                    monto <= 0
+                  ) {
+                    alert(
+                      'Ingresa un presupuesto válido.'
+                    );
+                    return;
+                  }
+
+                  try {
+                    const respuesta = await fetch(
+                      `http://localhost:3000/api/servicios/${idServicio}/presupuesto`,
+                      {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type':
+                            'application/json',
+                        },
+                        body: JSON.stringify({
+                          presupuesto: monto,
+                          fk_empleado: idEmpleado,
+                        }),
+                      }
+                    );
+
+                    const datos =
+                      await respuesta.json();
+
+                    if (!respuesta.ok) {
+                      throw new Error(
+                        datos.mensaje
+                      );
+                    }
+
+                    setPresupuestoActual(monto);
+
+                    setMostrarModalPresupuesto(false);
+
+                    setNuevoPresupuesto('');
+
+                    alert(
+                      'Presupuesto actualizado correctamente.'
+                    );
+                  } catch (error) {
+                    console.error(error);
+                    alert(
+                      error instanceof Error
+                        ? error.message
+                        : 'No se pudo actualizar el presupuesto.'
+                    );
+                  }
+                }}
+                className="flex-1 rounded-xl bg-[#1A56DB] py-3 font-semibold text-white"
+              >
+                Guardar
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }

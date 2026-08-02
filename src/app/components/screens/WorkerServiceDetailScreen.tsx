@@ -3,11 +3,12 @@ import { useNavigate, useParams } from 'react-router';
 import { MessageCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
-  obtenerEstadoPostulacion,
+  aceptarNuevoPresupuesto,
+  obtenerPostulacionesCompletasEmpleado,
   obtenerServicioPorId,
   postularEmpleadoServicio,
   type ServicioDisponible,
-} from '../../services/serviciosApi';
+} from '../../services/ServiciosApi';
 
 type ServicioConHorario = ServicioDisponible & {
   hora_inicio?: string | null;
@@ -208,6 +209,15 @@ export default function WorkerServiceDetailScreen() {
 
   const [estadoPostulacion, setEstadoPostulacion] =
     useState<string | null>(null);
+  const [tipoPostulacionGuardada, setTipoPostulacionGuardada] =
+    useState<string | null>(null);
+
+  const [estadoNegociacion, setEstadoNegociacion] =
+    useState<string | null>(null);  
+  
+  const esperandoConfirmacion =
+    tipoPostulacionGuardada === 'negociar' &&
+    estadoNegociacion === 'esperandoconfirmacion';
 
   const [cargando, setCargando] = useState(true);
   const [postulando, setPostulando] = useState(false);
@@ -227,6 +237,12 @@ export default function WorkerServiceDetailScreen() {
   const [tipoPostulacion, setTipoPostulacion] = useState<
     'aceptar' | 'negociar'
   >('aceptar');
+
+  const [idPostulacionActual, setIdPostulacionActual] =
+    useState<number | null>(null);
+
+  const [aceptandoPresupuesto, setAceptandoPresupuesto] =
+    useState(false);
 
   useEffect(() => {
     async function cargarDetalle() {
@@ -254,13 +270,42 @@ export default function WorkerServiceDetailScreen() {
           Number.isInteger(empleadoId) &&
           empleadoId > 0
         ) {
-          const estado =
-            await obtenerEstadoPostulacion(
-              empleadoId,
-              servicioId
+          const postulaciones =
+            await obtenerPostulacionesCompletasEmpleado(
+              empleadoId
             );
 
-          setEstadoPostulacion(estado);
+          const postulacionActual =
+            postulaciones.find(
+              (postulacion) =>
+                Number(postulacion.fk_servicio) ===
+                servicioId
+            );
+
+          setEstadoPostulacion(
+            postulacionActual?.estado ?? null
+          );
+
+          setTipoPostulacionGuardada(
+            postulacionActual?.tipo_postulacion
+              ? String(postulacionActual.tipo_postulacion)
+                  .trim()
+                  .toLowerCase()
+              : null
+          );
+
+          setEstadoNegociacion(
+            postulacionActual?.estado_negociacion
+              ? String(postulacionActual.estado_negociacion)
+                  .trim()
+                  .toLowerCase()
+              : null
+          );
+
+          setIdPostulacionActual(
+            postulacionActual?.id_postulacion ?? null
+          );
+          
         }
       } catch (errorDesconocido) {
         setError(
@@ -303,7 +348,7 @@ export default function WorkerServiceDetailScreen() {
       setPostulando(true);
       setError('');
       setMensaje('');
-
+      
       const respuesta =
         await postularEmpleadoServicio(
           servicioId,
@@ -619,6 +664,65 @@ export default function WorkerServiceDetailScreen() {
                 servicio. El cliente podrá revisar tu
                 perfil y decidir si te contrata.
               </p>
+              
+              {esperandoConfirmacion && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-800">
+                    Nuevo presupuesto pendiente
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-amber-700">
+                    El cliente actualizó el presupuesto. Revísalo y confirma si estás de acuerdo.
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={
+                      aceptandoPresupuesto ||
+                      idPostulacionActual === null
+                    }
+                    onClick={async () => {
+                      if (idPostulacionActual === null) {
+                        setError(
+                          'No se encontró la postulación.'
+                        );
+                        return;
+                      }
+
+                      try {
+                        setAceptandoPresupuesto(true);
+                        setError('');
+                        setMensaje('');
+
+                        const respuesta =
+                          await aceptarNuevoPresupuesto(
+                            idPostulacionActual
+                          );
+
+                        setEstadoNegociacion('aceptado');
+
+                        setMensaje(
+                          respuesta.mensaje ||
+                            'Nuevo presupuesto aceptado correctamente.'
+                        );
+                      } catch (error) {
+                        setError(
+                          error instanceof Error
+                            ? error.message
+                            : 'No se pudo aceptar el nuevo presupuesto.'
+                        );
+                      } finally {
+                        setAceptandoPresupuesto(false);
+                      }
+                    }}
+                    className="mt-4 w-full rounded-xl bg-[#1A56DB] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    {aceptandoPresupuesto
+                      ? 'Aceptando...'
+                      : 'Aceptar nuevo presupuesto'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="mx-5 mb-4 rounded-2xl border border-border bg-card p-4">
@@ -685,7 +789,10 @@ export default function WorkerServiceDetailScreen() {
         )}
       </main>
 
-      <div className="absolute bottom-0 left-0 right-0 z-50 border-t border-border bg-card px-4 py-3 shadow-lg">
+
+      
+      <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white p-4">
+
         <div className="mx-auto max-w-md">
           <button
             type="button"
