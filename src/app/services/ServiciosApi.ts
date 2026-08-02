@@ -23,6 +23,8 @@ export interface PostulacionEmpleado {
   id_postulacion?: number;
   fk_servicio: number;
   fk_empleado?: number;
+  tipo_postulacion?: string | null;
+  estado_negociacion?: string | null;
   estado: string;
   fecha?: string;
 }
@@ -237,6 +239,22 @@ export async function obtenerPostulacionesCompletasEmpleado(
               )
             : undefined,
 
+        tipo_postulacion:
+          item.tipo_postulacion !== undefined &&
+          item.tipo_postulacion !== null
+            ? String(item.tipo_postulacion)
+                .trim()
+                .toLowerCase()
+            : null,
+
+        estado_negociacion:
+          item.estado_negociacion !== undefined &&
+          item.estado_negociacion !== null
+            ? String(item.estado_negociacion)
+                .trim()
+                .toLowerCase()
+            : null,
+
         estado: String(
           item.estado ?? 'Pendiente'
         )
@@ -356,6 +374,29 @@ export async function postularEmpleadoServicio(
       datos.detalle ||
         datos.mensaje ||
         'No se pudo registrar la postulación'
+    );
+  }
+
+  return datos;
+}
+
+export async function aceptarNuevoPresupuesto(
+  idPostulacion: number
+) {
+  const respuesta = await fetch(
+    `${API_URL}/postulaciones/${idPostulacion}/aceptar-negociacion`,
+    {
+      method: 'PUT',
+    }
+  );
+
+  const datos = await leerRespuesta(respuesta);
+
+  if (!respuesta.ok) {
+    throw new Error(
+      datos.detalle ||
+        datos.mensaje ||
+        'No se pudo aceptar el nuevo presupuesto'
     );
   }
 
