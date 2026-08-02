@@ -29,7 +29,7 @@ import {
 
 
 
-type SortBy = 'rating' | null;
+type SortBy = 'rating' | 'recent' | null;
 
 interface PostJobForm {
   title: string;
@@ -74,6 +74,7 @@ interface ServicioDB {
   direccion: string;
   presupuesto: number;
   fecha: string;
+  fecha_creacion?: string | null;
   hora_inicio: string;
   hora_fin: string;
   estado?: string;
@@ -614,6 +615,41 @@ export default function SearchScreen() {
     );
   });
 
+  /*
+   * "Más recientes" ordena por fecha de creación cuando
+   * el backend la devuelve. Si todavía no existe ese campo,
+   * usa id_servicio descendente, porque normalmente el ID
+   * más alto corresponde al trabajo publicado más recientemente.
+   */
+  const trabajosOrdenados = [...trabajosFiltrados].sort(
+    (a, b) => {
+      if (sortBy !== 'recent') {
+        return 0;
+      }
+
+      const fechaA = a.fecha_creacion
+        ? new Date(a.fecha_creacion).getTime()
+        : Number.NaN;
+
+      const fechaB = b.fecha_creacion
+        ? new Date(b.fecha_creacion).getTime()
+        : Number.NaN;
+
+      if (
+        Number.isFinite(fechaA) &&
+        Number.isFinite(fechaB) &&
+        fechaA !== fechaB
+      ) {
+        return fechaB - fechaA;
+      }
+
+      return (
+        Number(b.id_servicio) -
+        Number(a.id_servicio)
+      );
+    }
+  );
+
 
   // ==========================================
   // CONVERTIR EMPLEADOS AL FORMATO DE LA LISTA
@@ -907,6 +943,33 @@ export default function SearchScreen() {
               </div>
             )}
 
+
+            {mostrarFiltros && esTrabajador && (
+              <div className="mt-2 flex justify-end">
+                <div className="w-48 rounded-xl border border-border bg-card p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortBy(
+                        sortBy === 'recent'
+                          ? null
+                          : 'recent'
+                      );
+
+                      setMostrarFiltros(false);
+                    }}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                      sortBy === 'recent'
+                        ? 'bg-[#EFF4FF] text-[#1A56DB] font-semibold'
+                        : 'text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    🕒 Más recientes
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Categorías desde MySQL */}
@@ -1146,11 +1209,22 @@ export default function SearchScreen() {
           {/* Resultados para trabajadores */}
           {esTrabajador && (
             <div className="px-5 pb-6">
-              <p className="text-sm font-semibold text-foreground mb-3">
-                {cargandoServicios
-                  ? 'Buscando trabajos...'
-                  : `${trabajosFiltrados.length} trabajos encontrados`}
-              </p>
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-foreground">
+                  {cargandoServicios
+                    ? 'Buscando trabajos...'
+                    : sortBy === 'recent'
+                      ? 'Trabajos más recientes'
+                      : `${trabajosOrdenados.length} trabajos encontrados`}
+                </p>
+
+                {!cargandoServicios &&
+                  sortBy === 'recent' && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Ordenados del más nuevo al más antiguo.
+                    </p>
+                  )}
+              </div>
 
               <div className="flex flex-col gap-3">
                 {cargandoServicios ? (
@@ -1161,7 +1235,7 @@ export default function SearchScreen() {
                   </div>
                 ) : (
                   <>
-                    {trabajosFiltrados.map((servicio) => (
+                    {trabajosOrdenados.map((servicio) => (
                       <button
                         key={servicio.id_servicio}
                         type="button"
@@ -1203,7 +1277,7 @@ export default function SearchScreen() {
                       </button>
                     ))}
 
-                    {trabajosFiltrados.length === 0 && (
+                    {trabajosOrdenados.length === 0 && (
                       <div className="text-center py-10">
                         <p className="text-muted-foreground text-sm">
                           No hay trabajos disponibles en esta categoría
@@ -1213,6 +1287,7 @@ export default function SearchScreen() {
                           onClick={() => {
                             setSelectedCat(null);
                             setSearchText('');
+                            setSortBy(null);
                           }}
                           className="text-[#1A56DB] text-sm mt-2"
                         >
