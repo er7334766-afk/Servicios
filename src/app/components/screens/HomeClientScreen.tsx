@@ -508,137 +508,339 @@ export default function HomeClientScreen() {
     );
   };
 
-  //empleados disponibles
+  // Empleados disponibles ordenados por experiencia real.
+  // Se consultan todos los empleados porque el endpoint
+  // /api/empleados/disponibles puede excluir perfiles cuyo estado
+  // esté guardado como "Activo" en lugar de "Disponible".
   useEffect(() => {
-    const cargarEmpleadosDisponibles = async () => {
-      try {
-        setCargandoEmpleados(true);
+    const normalizarEstadoEmpleado = (
+      estado?: string | null
+    ): string =>
+      String(estado ?? '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
 
-        const respuesta = await fetch(
-          'http://localhost:3000/api/empleados/disponibles'
-        );
+    const esEstadoDisponible = (
+      estado?: string | null
+    ): boolean => {
+      const valor =
+        normalizarEstadoEmpleado(estado);
 
-        if (!respuesta.ok) {
-          throw new Error('No se pudieron cargar los empleados disponibles');
-        }
-
-        const datos = await respuesta.json();
-
-        const empleadosNormalizados: EmpleadoDisponible[] =
-          (Array.isArray(datos) ? datos : [])
-            .map(
-              (e: any): EmpleadoDisponible => ({
-                id_empleado: Number(
-                  e.id_empleado ??
-                    e.id ??
-                    0
-                ),
-
-                nombre: String(
-                  e.nombre ??
-                    e.nombre_E ??
-                    'Trabajador'
-                ),
-
-                correo: String(
-                  e.correo ?? ''
-                ),
-
-                telefono: String(
-                  e.telefono ??
-                    e.celular ??
-                    ''
-                ),
-
-                dni:
-                  e.dni != null
-                    ? String(e.dni)
-                    : null,
-
-                titulo:
-                  e.titulo != null
-                    ? String(e.titulo)
-                    : null,
-
-                antecedentes:
-                  e.antecedentes != null
-                    ? String(e.antecedentes)
-                    : null,
-
-                direccion:
-                  e.direccion != null
-                    ? String(e.direccion)
-                    : null,
-
-                estado: String(
-                  e.estado ??
-                    'Disponible'
-                ),
-
-                numero_trabajos: Number(
-                  e.numero_trabajos ??
-                    e.N_trabajos ??
-                    e.numeroTrabajos ??
-                    0
-                ),
-
-                rating: Number(
-                  e.rating ??
-                    e.calificacion ??
-                    e.promedio_calificacion ??
-                    0
-                ),
-
-                cantidad_resenas: Number(
-                  e.cantidad_resenas ??
-                    e.total_resenas ??
-                    0
-                ),
-
-                sobre_mi:
-                  e.sobre_mi != null
-                    ? String(e.sobre_mi)
-                    : e.descripcion != null
-                      ? String(e.descripcion)
-                      : null,
-
-                foto_url:
-                  e.foto_url != null
-                    ? String(e.foto_url)
-                    : e.foto != null
-                      ? String(e.foto)
-                      : null,
-
-                fecha_creacion:
-                  e.fecha_creacion ??
-                  e.fechaCreacion ??
-                  null,
-
-                ultima_actividad:
-                  e.ultima_actividad ??
-                  null,
-              })
-            )
-            .filter(
-              (empleado) =>
-                Number.isInteger(
-                  empleado.id_empleado
-                ) &&
-                empleado.id_empleado > 0
-            );
-
-        setEmpleadosDisponibles(
-          empleadosNormalizados
-        );
-      } catch (error) {
-        console.error('Error al cargar empleados disponibles:', error);
-        setEmpleadosDisponibles([]);
-      } finally {
-        setCargandoEmpleados(false);
-      }
+      return [
+        'disponible',
+        'activo',
+        'activa',
+        'active',
+        'available',
+        'en linea',
+        'online',
+      ].includes(valor);
     };
 
-    cargarEmpleadosDisponibles();
+    const cargarEmpleadosDisponibles =
+      async () => {
+        try {
+          setCargandoEmpleados(true);
+
+          const respuesta = await fetch(
+            'http://localhost:3000/api/empleados',
+            {
+              cache: 'no-store',
+            }
+          );
+
+          const texto =
+            await respuesta.text();
+
+          let datos: unknown = [];
+
+          if (texto.trim()) {
+            try {
+              datos = JSON.parse(texto);
+            } catch {
+              throw new Error(
+                `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`
+              );
+            }
+          }
+
+          if (!respuesta.ok) {
+            const errorApi = datos as {
+              mensaje?: string;
+              detalle?: string;
+            };
+
+            throw new Error(
+              errorApi.detalle ||
+                errorApi.mensaje ||
+                'No se pudieron cargar los empleados'
+            );
+          }
+
+          const empleadosBase: any[] =
+            Array.isArray(datos)
+              ? datos
+              : [];
+
+          const empleadosActivos =
+            empleadosBase.filter(
+              (empleado: any) =>
+                esEstadoDisponible(
+                  empleado.estado
+                )
+            );
+
+          const empleadosConResumen =
+            await Promise.all(
+              empleadosActivos.map(
+                async (empleado: any) => {
+                  const idEmpleado = Number(
+                    empleado.id_empleado ??
+                      empleado.id ??
+                      0
+                  );
+
+                  if (
+                    !Number.isInteger(
+                      idEmpleado
+                    ) ||
+                    idEmpleado <= 0
+                  ) {
+                    return empleado;
+                  }
+
+                  try {
+                    const respuestaResumen =
+                      await fetch(
+                        `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+                        {
+                          cache: 'no-store',
+                        }
+                      );
+
+                    const textoResumen =
+                      await respuestaResumen.text();
+
+                    if (
+                      !respuestaResumen.ok ||
+                      !textoResumen.trim()
+                    ) {
+                      return empleado;
+                    }
+
+                    const resumen =
+                      JSON.parse(
+                        textoResumen
+                      ) as ResumenEmpleado;
+
+                    return {
+                      ...empleado,
+                      N_trabajos:
+                        Number(
+                          resumen.total_trabajos
+                        ) || 0,
+                      numero_trabajos:
+                        Number(
+                          resumen.total_trabajos
+                        ) || 0,
+                      calificacion:
+                        Number(
+                          resumen.promedio_calificacion
+                        ) || 0,
+                      rating:
+                        Number(
+                          resumen.promedio_calificacion
+                        ) || 0,
+                      cantidad_resenas:
+                        Number(
+                          resumen.total_resenas
+                        ) || 0,
+                    };
+                  } catch (error) {
+                    console.error(
+                      `No se pudo cargar el resumen del empleado ${idEmpleado}:`,
+                      error
+                    );
+
+                    return empleado;
+                  }
+                }
+              )
+            );
+
+          const empleadosNormalizados:
+            EmpleadoDisponible[] =
+            empleadosConResumen
+              .map(
+                (
+                  empleado: any
+                ): EmpleadoDisponible => ({
+                  id_empleado: Number(
+                    empleado.id_empleado ??
+                      empleado.id ??
+                      0
+                  ),
+                  nombre: String(
+                    empleado.nombre ??
+                      empleado.nombre_E ??
+                      'Trabajador'
+                  ),
+                  correo: String(
+                    empleado.correo ?? ''
+                  ),
+                  telefono: String(
+                    empleado.telefono ??
+                      empleado.celular ??
+                      ''
+                  ),
+                  dni:
+                    empleado.dni != null
+                      ? String(empleado.dni)
+                      : null,
+                  titulo:
+                    empleado.titulo != null
+                      ? String(
+                          empleado.titulo
+                        )
+                      : null,
+                  antecedentes:
+                    empleado.antecedentes != null
+                      ? String(
+                          empleado.antecedentes
+                        )
+                      : null,
+                  direccion:
+                    empleado.direccion != null
+                      ? String(
+                          empleado.direccion
+                        )
+                      : null,
+                  estado: 'Disponible',
+                  numero_trabajos: Number(
+                    empleado.numero_trabajos ??
+                      empleado.N_trabajos ??
+                      empleado.numeroTrabajos ??
+                      0
+                  ),
+                  rating: Number(
+                    empleado.rating ??
+                      empleado.calificacion ??
+                      empleado.promedio_calificacion ??
+                      0
+                  ),
+                  cantidad_resenas: Number(
+                    empleado.cantidad_resenas ??
+                      empleado.total_resenas ??
+                      0
+                  ),
+                  sobre_mi:
+                    empleado.sobre_mi != null
+                      ? String(
+                          empleado.sobre_mi
+                        )
+                      : empleado.descripcion !=
+                          null
+                        ? String(
+                            empleado.descripcion
+                          )
+                        : null,
+                  foto_url:
+                    empleado.foto_url != null
+                      ? String(
+                          empleado.foto_url
+                        )
+                      : empleado.foto != null
+                        ? String(
+                            empleado.foto
+                          )
+                        : null,
+                  fecha_creacion:
+                    empleado.fecha_creacion ??
+                    empleado.fechaCreacion ??
+                    null,
+                  ultima_actividad:
+                    empleado.ultima_actividad ??
+                    null,
+                })
+              )
+              .filter(
+                (empleado) =>
+                  Number.isInteger(
+                    empleado.id_empleado
+                  ) &&
+                  empleado.id_empleado > 0
+              )
+              .sort((a, b) => {
+                const trabajosA = Number(
+                  a.numero_trabajos ?? 0
+                );
+                const trabajosB = Number(
+                  b.numero_trabajos ?? 0
+                );
+
+                if (trabajosB !== trabajosA) {
+                  return trabajosB - trabajosA;
+                }
+
+                const ratingA = Number(
+                  a.rating ?? 0
+                );
+                const ratingB = Number(
+                  b.rating ?? 0
+                );
+
+                if (ratingB !== ratingA) {
+                  return ratingB - ratingA;
+                }
+
+                const resenasA = Number(
+                  a.cantidad_resenas ?? 0
+                );
+                const resenasB = Number(
+                  b.cantidad_resenas ?? 0
+                );
+
+                if (resenasB !== resenasA) {
+                  return resenasB - resenasA;
+                }
+
+                return a.nombre.localeCompare(
+                  b.nombre,
+                  'es'
+                );
+              });
+
+          console.log(
+            'Disponibles ordenados:',
+            empleadosNormalizados.map(
+              (empleado) => ({
+                id: empleado.id_empleado,
+                nombre: empleado.nombre,
+                trabajos:
+                  empleado.numero_trabajos,
+                rating: empleado.rating,
+              })
+            )
+          );
+
+          setEmpleadosDisponibles(
+            empleadosNormalizados
+          );
+        } catch (error) {
+          console.error(
+            'Error al cargar empleados disponibles:',
+            error
+          );
+
+          setEmpleadosDisponibles([]);
+        } finally {
+          setCargandoEmpleados(false);
+        }
+      };
+
+    void cargarEmpleadosDisponibles();
   }, []);
 
   const cargarCantidadNotificaciones = async () => {
@@ -1187,7 +1389,10 @@ export default function HomeClientScreen() {
                     </h3>
 
                     <p className="text-xs text-muted-foreground mt-1">
-                      {worker.numero_trabajos ?? 0} trabajos realizados
+                      {worker.numero_trabajos ?? 0}{' '}
+                      {worker.numero_trabajos === 1
+                        ? 'trabajo realizado'
+                        : 'trabajos realizados'}
                     </p>
 
                     <div className="flex items-center gap-1 mt-1">

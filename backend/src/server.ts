@@ -5898,8 +5898,9 @@ app.put(
 
 // ==========================================
 // CAMBIAR ESTADO DEL SERVICIO Y NOTIFICAR
-// A LA OTRA PERSONA
+// A LA OTRA PERSONA NO OG
 // ==========================================
+
 app.put(
   '/api/servicios/:idServicio/estado',
   async (req, res) => {
@@ -6304,27 +6305,57 @@ app.put(
         }
       }
 
-      // Al terminar o cancelar, el empleado
-      // vuelve a estar disponible.
+      // ======================================
+      // ACTUALIZAR TRABAJOS COMPLETADOS
+      // ======================================
+      /*
+       * La disponibilidad ya no se cambia automáticamente aquí.
+       *
+       * El switch del trabajador es quien controla:
+       * - Disponible  -> aparece para los clientes.
+       * - Ocupado     -> está descansando y no aparece.
+       *
+       * Al completar un trabajo solo se recalcula
+       * la cantidad real de trabajos realizados.
+       */
       if (
         Number.isInteger(idEmpleado) &&
         idEmpleado > 0 &&
-        (
-          estadoNormalizado ===
-            'Completado' ||
-          estadoNormalizado ===
-            'Cancelado'
-        )
+        estadoNormalizado === 'Completado'
       ) {
         await database.execute(
           `
           UPDATE empleados
-          SET estado = 'Disponible'
+          SET numero_trabajos = (
+            SELECT COUNT(*)
+            FROM servicios AS trabajos
+            WHERE trabajos.fk_empleado = ?
+              AND LOWER(
+                LTRIM(
+                  RTRIM(
+                    COALESCE(
+                      trabajos.estado,
+                      ''
+                    )
+                  )
+                )
+              ) IN (
+                'completado',
+                'completada',
+                'completed',
+                'finalizado',
+                'finalizada'
+              )
+          )
           WHERE id_empleado = ?;
           `,
-          [idEmpleado]
+          [
+            idEmpleado,
+            idEmpleado,
+          ]
         );
       }
+
 
       console.log(
         'Servicio actualizado y notificado:',
