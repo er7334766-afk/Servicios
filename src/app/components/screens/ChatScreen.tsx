@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
 } from 'react';
 import {
   useLocation,
@@ -113,6 +114,9 @@ export default function ChatScreen() {
 
   const mensajesContainerRef =
     useRef<HTMLDivElement>(null);
+
+  const inputImagenRef =
+    useRef<HTMLInputElement>(null);
 
   const primeraCargaRef = useRef(true);
   const usuarioEstaAbajoRef = useRef(true);
@@ -639,6 +643,208 @@ if (texto) {
     }
   };
 
+  const convertirArchivoABase64 = (
+    archivo: File
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const lector = new FileReader();
+
+      lector.onload = () => {
+        if (typeof lector.result !== 'string') {
+          reject(
+            new Error(
+              'No se pudo leer la imagen seleccionada'
+            )
+          );
+          return;
+        }
+
+        const base64 =
+          lector.result.split(',')[1];
+
+        if (!base64) {
+          reject(
+            new Error(
+              'La imagen no tiene un formato válido'
+            )
+          );
+          return;
+        }
+
+        resolve(base64);
+      };
+
+      lector.onerror = () => {
+        reject(
+          new Error(
+            'No se pudo leer la imagen'
+          )
+        );
+      };
+
+      lector.readAsDataURL(archivo);
+    });
+  };
+
+  const enviarMensajeChat = async (
+    contenido: string
+  ) => {
+    const respuesta = await fetch(
+      'http://localhost:3000/api/chat',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+        body: JSON.stringify({
+          fk_cliente: idCliente,
+          fk_empleado: idEmpleado,
+          remitente: esEmpleado
+            ? 'empleado'
+            : 'cliente',
+          mensaje: contenido,
+        }),
+      }
+    );
+
+    const textoRespuesta =
+      await respuesta.text();
+
+    const datos = textoRespuesta
+      ? JSON.parse(textoRespuesta)
+      : null;
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos?.detalle ||
+          datos?.mensaje ||
+          'No se pudo enviar el mensaje'
+      );
+    }
+  };
+
+  const manejarSeleccionImagen = async (
+    evento: ChangeEvent<HTMLInputElement>
+  ) => {
+    const archivo =
+      evento.target.files?.[0];
+
+    evento.target.value = '';
+
+    if (!archivo || enviando) {
+      return;
+    }
+
+    if (!archivo.type.startsWith('image/')) {
+      setError(
+        'Solo puedes enviar archivos de imagen.'
+      );
+      return;
+    }
+
+    const limiteBytes =
+      5 * 1024 * 1024;
+
+    if (archivo.size > limiteBytes) {
+      setError(
+        'La imagen no puede superar los 5 MB.'
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0 ||
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setError(
+        'No se pudo identificar la conversación.'
+      );
+      return;
+    }
+
+    try {
+      setEnviando(true);
+      setError('');
+
+      const base64 =
+        await convertirArchivoABase64(
+          archivo
+        );
+
+      const respuestaSubida =
+        await fetch(
+          'http://localhost:3000/api/upload-chat',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              base64,
+              fileName: archivo.name,
+              contentType: archivo.type,
+            }),
+          }
+        );
+
+      const textoSubida =
+        await respuestaSubida.text();
+
+      const datosSubida = textoSubida
+        ? JSON.parse(textoSubida)
+        : null;
+
+      if (!respuestaSubida.ok) {
+        throw new Error(
+          datosSubida?.detalle ||
+            datosSubida?.mensaje ||
+            'No se pudo subir la imagen'
+        );
+      }
+
+      const urlImagen = String(
+        datosSubida?.url ?? ''
+      ).trim();
+
+      if (!urlImagen) {
+        throw new Error(
+          'El servidor no devolvió la URL de la imagen'
+        );
+      }
+
+      await enviarMensajeChat(
+        `[IMAGEN]${urlImagen}`
+      );
+
+      usuarioEstaAbajoRef.current = true;
+
+      await cargarMensajes();
+
+      window.setTimeout(() => {
+        bottomRef.current?.scrollIntoView({
+          behavior: 'smooth',
+        });
+      }, 100);
+    } catch (errorDesconocido) {
+      console.error(
+        'Error al enviar imagen:',
+        errorDesconocido
+      );
+
+      setError(
+        errorDesconocido instanceof Error
+          ? errorDesconocido.message
+          : 'No se pudo enviar la imagen'
+      );
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const formatTime = (fecha: string) => {
     const fechaMensaje = new Date(fecha);
 
@@ -826,6 +1032,17 @@ if (texto) {
           const propio =
             esMensajePropio(mensaje);
 
+          const esImagen =
+            mensaje.mensaje.startsWith(
+              '[IMAGEN]'
+            );
+
+          const urlImagen = esImagen
+            ? mensaje.mensaje
+                .replace('[IMAGEN]', '')
+                .trim()
+            : '';
+
           return (
             <motion.div
               key={mensaje.id_chat}
@@ -850,15 +1067,31 @@ if (texto) {
                     : 'items-start'
                 }`}
               >
-                <div
-                  className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
-                    propio
-                      ? 'bg-[#1A56DB] text-white rounded-tl-2xl rounded-tr-sm rounded-bl-2xl rounded-br-2xl'
-                      : 'bg-card border border-border text-foreground rounded-tr-2xl rounded-tl-sm rounded-br-2xl rounded-bl-2xl'
-                  }`}
-                >
-                  {mensaje.mensaje}
-                </div>
+                {esImagen ? (
+                  <a
+                    href={urlImagen}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-2xl border border-border bg-card p-1"
+                  >
+                    <img
+                      src={urlImagen}
+                      alt="Imagen enviada"
+                      loading="lazy"
+                      className="block max-h-72 w-full max-w-[260px] rounded-xl object-contain"
+                    />
+                  </a>
+                ) : (
+                  <div
+                    className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
+                      propio
+                        ? 'bg-[#1A56DB] text-white rounded-tl-2xl rounded-tr-sm rounded-bl-2xl rounded-br-2xl'
+                        : 'bg-card border border-border text-foreground rounded-tr-2xl rounded-tl-sm rounded-br-2xl rounded-bl-2xl'
+                    }`}
+                  >
+                    {mensaje.mensaje}
+                  </div>
+                )}
 
                 <span className="text-[10px] text-muted-foreground px-1">
                 {formatTime(mensaje.fecha)}
@@ -888,9 +1121,22 @@ if (texto) {
 
       {/* Barra para escribir */}
       <div className="bg-card border-t border-border px-4 py-3 flex items-center gap-2 flex-shrink-0">
+        <input
+          ref={inputImagenRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={manejarSeleccionImagen}
+        />
+
         <button
           type="button"
-          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted"
+          onClick={() =>
+            inputImagenRef.current?.click()
+          }
+          disabled={enviando}
+          aria-label="Enviar imagen"
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Image className="w-5 h-5 text-muted-foreground" />
         </button>
