@@ -29,3 +29,4 @@
 {"ts":"2026-08-02T02:28:50.844Z","event":"login_failed","details":{"correo":"cuentaejemplo@gmail.com","attempts":2}}
 {"ts":"2026-08-02T02:29:12.794Z","event":"login_locked","details":{"correo":"cuentaejemplo@gmail.com","attempts":3}}
 {"ts":"2026-08-02T02:29:12.795Z","event":"login_failed","details":{"correo":"cuentaejemplo@gmail.com","attempts":3}}
+{"ts":"2026-08-03T01:27:49.486Z","event":"login_failed","details":{"correo":"gonzaleznelson@gmail.com","attempts":1}}
