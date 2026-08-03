@@ -1,4 +1,3 @@
-//AuthScreen
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -149,38 +148,74 @@ export default function AuthScreen() {
     try {
       setRegistrando(true);
 
-      let respuesta;
+      const respuesta =
+        role === 'worker'
+          ? await registrarEmpleado({
+              nombre_E: data.name.trim(),
+              correo: data.email.trim().toLowerCase(),
+              celular: data.phone.trim(),
+              password_E: data.password,
+            })
+          : await registrarCliente({
+              nombre_C: data.name.trim(),
+              correo: data.email.trim().toLowerCase(),
+              celular: data.phone.trim(),
+              password_C: data.password,
+            });
 
-      if (role === 'worker') {
-        respuesta = await registrarEmpleado({
-          nombre_E: data.name.trim(),
-          correo: data.email.trim().toLowerCase(),
-          celular: data.phone.trim(),
-          password_E: data.password,
-        });
-      } else {
-        respuesta = await registrarCliente({
-          nombre_C: data.name.trim(),
-          correo: data.email.trim().toLowerCase(),
-          celular: data.phone.trim(),
-          password_C: data.password,
-        });
+      const idUsuario = Number(
+        respuesta.usuario?.id
+      );
+
+      if (
+        !Number.isInteger(idUsuario) ||
+        idUsuario <= 0
+      ) {
+        throw new Error(
+          'El servidor no devolvió un ID de usuario válido'
+        );
       }
 
       setCurrentUser({
-        id: String(respuesta.resultado.insertId),
+        id: String(idUsuario),
+
         idEmpleado:
           role === 'worker'
-            ? respuesta.resultado.insertId
+            ? idUsuario
             : undefined,
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        phone: data.phone.trim(),
+
+        name:
+          respuesta.usuario?.nombre ??
+          data.name.trim(),
+
+        email:
+          respuesta.usuario?.correo ??
+          data.email.trim().toLowerCase(),
+
+        phone:
+          respuesta.usuario?.telefono ??
+          data.phone.trim(),
+
         avatarUrl: '',
+
         role,
+
         location: 'Pendiente',
-        estado: role === 'worker' ? 'Descansando' : undefined,
-        joinedDate: new Date().toISOString().split('T')[0],
+
+        estado:
+          role === 'worker'
+            ? respuesta.usuario?.estado ??
+              'Pendiente'
+            : undefined,
+
+        joinedDate:
+          respuesta.fecha_creacion
+            ? String(
+                respuesta.fecha_creacion
+              ).split('T')[0]
+            : new Date()
+                .toISOString()
+                .split('T')[0],
       });
 
       registerForm.reset();
@@ -192,6 +227,11 @@ export default function AuthScreen() {
         error instanceof Error
           ? error.message
           : 'Error al registrar la cuenta';
+
+      console.error(
+        'Error al registrar la cuenta:',
+        error
+      );
 
       alert(mensaje);
     } finally {
@@ -477,12 +517,12 @@ export default function AuthScreen() {
             </div>
 
             <motion.button
-              whileTap={{ scale: iniciandoSesion ? 1 : 0.97 }}
+              whileTap={{ scale: registrando ? 1 : 0.97 }}
               type="submit"
-              disabled={iniciandoSesion}
+              disabled={registrando}
               className="w-full bg-[#1A56DB] text-white rounded-xl py-3.5 font-semibold mt-2 shadow-lg shadow-[#1A56DB]/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {iniciandoSesion ? 'Iniciando sesión...' : 'Iniciar sesión'}
+              {registrando ? 'Registrando...' : 'Registrarse'}
             </motion.button>
             <p className="text-xs text-muted-foreground mt-3 text-center">
               Al continuar aceptas nuestros{' '}

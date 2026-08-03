@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { BlobServiceClient } from "@azure/storage-blob";
 import cookieParser from 'cookie-parser';
 import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 
 import { database } from "./config/database.js";
 import fs from 'fs';
@@ -124,7 +125,13 @@ async function subirArchivoAzure(base64: string, fileName: string, contentType: 
 
 
 
-app.use(cors());
+//app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 // Aumentar límite para permitir subir imágenes/documentos en base64 grandes
 app.use(express.json({ limit: "50mb" }));
@@ -322,7 +329,7 @@ app.post(
 // ==========================================
 // RUTAS DE EMPLEADOS
 // ==========================================
-app.post('/api/empleados', async (req, res) => {
+/*app.post('/api/empleados', async (req, res) => {
   try {
     const { nombre_E, password_E, correo, celular } = req.body;
 
@@ -376,11 +383,279 @@ app.post('/api/empleados', async (req, res) => {
       mensaje: 'Error al registrar el empleado',
     });
   }
+});*/
+
+app.post('/api/empleados', async (req, res) => {
+  try {
+    const {
+      nombre_E,
+      password_E,
+      correo,
+      celular,
+    } = req.body;
+
+    const nombre = String(
+      nombre_E ?? ''
+    ).trim();
+
+    const correoNormalizado = String(
+      correo ?? ''
+    )
+      .trim()
+      .toLowerCase();
+
+    const telefono = String(
+      celular ?? ''
+    ).trim();
+
+    const password = String(
+      password_E ?? ''
+    );
+
+    if (
+      !nombre ||
+      !password ||
+      !correoNormalizado ||
+      !telefono
+    ) {
+      return res.status(400).json({
+        mensaje:
+          'Nombre, correo, teléfono y contraseña son obligatorios',
+      });
+    }
+
+    // Comprobar que el correo no esté registrado.
+    const [
+      resultadoCorreo,
+    ]: any =
+      await database.execute(
+        `
+        SELECT TOP 1
+          id_empleado
+        FROM empleados
+        WHERE LOWER(
+          LTRIM(RTRIM(correo))
+        ) = LOWER(
+          LTRIM(RTRIM(?))
+        );
+        `,
+        [correoNormalizado]
+      );
+
+    const empleadosExistentes =
+      obtenerFilas(
+        resultadoCorreo
+      );
+
+    if (
+      empleadosExistentes.length > 0
+    ) {
+      return res.status(409).json({
+        mensaje:
+          'Ya existe un empleado registrado con ese correo',
+      });
+    }
+
+    const passwordHash =
+      await bcrypt.hash(
+        password,
+        SALT_ROUNDS
+      );
+
+    /*
+     * OUTPUT INSERTED obtiene directamente
+     * el empleado registrado.
+     *
+     * fecha_creacion debe generarse mediante
+     * el valor DEFAULT definido en SQL Server.
+     */
+    const [
+      resultadoRegistro,
+    ]: any =
+      await database.execute(
+        `
+        INSERT INTO empleados
+        (
+          nombre,
+          password_hash,
+          correo,
+          telefono,
+          titulo,
+          dni,
+          antecedentes,
+          direccion,
+          estado,
+          numero_trabajos,
+          sobre_mi,
+          foto_url
+        )
+
+        OUTPUT
+          INSERTED.id_empleado,
+          INSERTED.nombre,
+          INSERTED.correo,
+          INSERTED.telefono,
+          INSERTED.estado,
+          INSERTED.fecha_creacion
+
+        VALUES
+        (
+          ?,
+          ?,
+          ?,
+          ?,
+          NULL,
+          NULL,
+          NULL,
+          NULL,
+          ?,
+          ?,
+          NULL,
+          NULL
+        );
+        `,
+        [
+          nombre,
+          passwordHash,
+          correoNormalizado,
+          telefono,
+          'Pendiente',
+          0,
+        ]
+      );
+
+    const empleadosInsertados =
+      obtenerFilas(
+        resultadoRegistro
+      );
+
+    const empleado =
+      empleadosInsertados[0];
+
+    const idEmpleado = Number(
+      empleado?.id_empleado ?? 0
+    );
+
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      console.error(
+        'No se pudo obtener el ID del empleado registrado:',
+        resultadoRegistro
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'El empleado fue registrado, pero no se pudo iniciar la sesión',
+      });
+    }
+
+    // Crear sesión inmediatamente después del registro.
+    const sid = randomUUID();
+
+    const usuarioSesion = {
+      id: idEmpleado,
+      id_empleado: idEmpleado,
+      idEmpleado,
+      role: 'worker',
+      rol: 'worker',
+      nombre:
+        empleado?.nombre ??
+        nombre,
+      correo:
+        empleado?.correo ??
+        correoNormalizado,
+      telefono:
+        empleado?.telefono ??
+        telefono,
+      estado:
+        empleado?.estado ??
+        'Pendiente',
+    };
+
+    const ahora = Date.now();
+
+    sessions.set(sid, {
+      id: sid,
+      user: usuarioSesion,
+      createdAt: ahora,
+      lastActivity: ahora,
+    });
+
+    /*
+     * En localhost:
+     * secure será false porque NODE_ENV
+     * normalmente no será production.
+     */
+    res.cookie(
+      COOKIE_NAME,
+      sid,
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV ===
+          'production',
+        sameSite: 'lax',
+        maxAge:
+          1000 *
+          60 *
+          60 *
+          24 *
+          7,
+        path: '/',
+      }
+    );
+
+    logSecurity(
+      'worker_registered',
+      {
+        userId: idEmpleado,
+        role: 'worker',
+      }
+    );
+
+    return res.status(201).json({
+      mensaje:
+        'Empleado registrado correctamente',
+      autenticado: true,
+      role: 'worker',
+      usuario: usuarioSesion,
+      fecha_creacion:
+        empleado?.fecha_creacion ??
+        null,
+    });
+  } catch (error: any) {
+    console.error(
+      'Error al registrar empleado:',
+      error
+    );
+
+    if (
+      error?.number === 2627 ||
+      error?.number === 2601
+    ) {
+      return res.status(409).json({
+        mensaje:
+          'El correo ya está registrado',
+      });
+    }
+
+    return res.status(500).json({
+      mensaje:
+        'Error al registrar el empleado',
+      detalle:
+        error?.message ??
+        String(error),
+    });
+  }
 });
 
 app.get('/api/empleados', async (_req, res) => {
   try {
-    const [empleados] = await database.query(
+    const [
+      empleados,
+    ] = await database.query(
       `
       SELECT
         id_empleado,
@@ -395,63 +670,86 @@ app.get('/api/empleados', async (_req, res) => {
         foto_url,
         fecha_creacion AS fechaCreacion
       FROM empleados
-      `,
+      `
     );
 
-    res.json(empleados);
-  } catch (error) {
-    console.error('Error al consultar empleados:', error);
-
-    res.status(500).json({
-      mensaje: 'Error al consultar los empleados',
-    });
-  }
-});
-
-//disponibilidad de empleados
-app.get('/api/empleados/disponibles', async (_req, res) => {
-  try {
-    const [respuesta]: any = await database.execute(`
-      SELECT
-        id_empleado,
-        nombre,
-        correo,
-        telefono,
-        dni,
-        titulo,
-        antecedentes,
-        direccion,
-        estado,
-        numero_trabajos,
-        sobre_mi,
-        foto_url,
-        fecha_creacion,
-        ultima_actividad
-      FROM empleados
-      WHERE LOWER(LTRIM(RTRIM(estado))) = 'disponible'
-    `);
-
-    const empleados: any[] = Array.isArray(respuesta?.recordset)
-      ? respuesta.recordset
-      : Array.isArray(respuesta?.recordsets?.[0])
-        ? respuesta.recordsets[0]
-        : Array.isArray(respuesta)
-          ? respuesta
-          : [];
-
-    return res.status(200).json(empleados);
+    return res.status(200).json(
+      empleados
+    );
   } catch (error: any) {
     console.error(
-      'Error al consultar empleados disponibles:',
+      'Error al consultar empleados:',
       error
     );
 
     return res.status(500).json({
-      mensaje: 'Error al consultar los empleados disponibles',
-      detalle: error?.message ?? String(error),
+      mensaje:
+        'Error al consultar los empleados',
+      detalle:
+        error?.message ??
+        String(error),
     });
   }
 });
+
+// ======================================
+// DISPONIBILIDAD DE EMPLEADOS
+// ======================================
+app.get(
+  '/api/empleados/disponibles',
+  async (_req, res) => {
+    try {
+      const [
+        respuesta,
+      ]: any =
+        await database.execute(
+          `
+          SELECT
+            id_empleado,
+            nombre,
+            correo,
+            telefono,
+            dni,
+            titulo,
+            antecedentes,
+            direccion,
+            estado,
+            numero_trabajos,
+            sobre_mi,
+            foto_url,
+            fecha_creacion,
+            ultima_actividad
+          FROM empleados
+          WHERE LOWER(
+            LTRIM(RTRIM(estado))
+          ) = 'disponible';
+          `
+        );
+
+      const empleados =
+        obtenerFilas(
+          respuesta
+        );
+
+      return res.status(200).json(
+        empleados
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al consultar empleados disponibles:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar los empleados disponibles',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  }
+);
 
 //empleados destacados
 app.get('/api/empleados/destacados', async (_req, res) => {
@@ -648,7 +946,7 @@ app.put("/api/empleados/:id", async (req, res) => {
 // ==========================================
 // RUTAS DE CLIENTES
 // ==========================================
-app.post("/api/clientes", async (req, res) => {
+/*app.post("/api/clientes", async (req, res) => {
   try {
     const {
       nombre_C,
@@ -689,6 +987,254 @@ app.post("/api/clientes", async (req, res) => {
 
     res.status(500).json({
       mensaje: "Error al registrar el cliente"
+    });
+  }
+});*/
+
+app.post('/api/clientes', async (req, res) => {
+  try {
+    const {
+      nombre_C,
+      password_C,
+      correo,
+      celular,
+    } = req.body;
+
+    const nombre = String(
+      nombre_C ?? ''
+    ).trim();
+
+    const correoNormalizado = String(
+      correo ?? ''
+    )
+      .trim()
+      .toLowerCase();
+
+    const telefono = String(
+      celular ?? ''
+    ).trim();
+
+    const password = String(
+      password_C ?? ''
+    );
+
+    if (
+      !nombre ||
+      !password ||
+      !correoNormalizado ||
+      !telefono
+    ) {
+      return res.status(400).json({
+        mensaje:
+          'Nombre, correo, teléfono y contraseña son obligatorios',
+      });
+    }
+
+    // Comprobar que el correo no esté registrado.
+    const [
+      resultadoCorreo,
+    ]: any =
+      await database.execute(
+        `
+        SELECT TOP 1
+          id_cliente
+        FROM clientes
+        WHERE LOWER(
+          LTRIM(RTRIM(correo))
+        ) = LOWER(
+          LTRIM(RTRIM(?))
+        );
+        `,
+        [correoNormalizado]
+      );
+
+    const clientesExistentes =
+      obtenerFilas(
+        resultadoCorreo
+      );
+
+    if (
+      clientesExistentes.length > 0
+    ) {
+      return res.status(409).json({
+        mensaje:
+          'Ya existe un cliente registrado con ese correo',
+      });
+    }
+
+    const passwordHash =
+      await bcrypt.hash(
+        password,
+        SALT_ROUNDS
+      );
+
+    /*
+     * OUTPUT INSERTED obtiene directamente
+     * los datos del cliente registrado.
+     *
+     * fecha_creacion debe generarse mediante
+     * el valor DEFAULT definido en SQL Server.
+     */
+    const [
+      resultadoRegistro,
+    ]: any =
+      await database.execute(
+        `
+        INSERT INTO clientes
+        (
+          nombre,
+          password_hash,
+          correo,
+          telefono,
+          dni,
+          foto_url
+        )
+
+        OUTPUT
+          INSERTED.id_cliente,
+          INSERTED.nombre,
+          INSERTED.correo,
+          INSERTED.telefono,
+          INSERTED.fecha_creacion
+
+        VALUES
+        (
+          ?,
+          ?,
+          ?,
+          ?,
+          NULL,
+          NULL
+        );
+        `,
+        [
+          nombre,
+          passwordHash,
+          correoNormalizado,
+          telefono,
+        ]
+      );
+
+    const clientesInsertados =
+      obtenerFilas(
+        resultadoRegistro
+      );
+
+    const cliente =
+      clientesInsertados[0];
+
+    const idCliente = Number(
+      cliente?.id_cliente ?? 0
+    );
+
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0
+    ) {
+      console.error(
+        'No se pudo obtener el ID del cliente registrado:',
+        resultadoRegistro
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'El cliente fue registrado, pero no se pudo iniciar la sesión',
+      });
+    }
+
+    // Crear sesión inmediatamente después del registro.
+    const sid = randomUUID();
+
+    const usuarioSesion = {
+      id: idCliente,
+      id_cliente: idCliente,
+      idCliente,
+      role: 'client',
+      rol: 'client',
+      nombre:
+        cliente?.nombre ??
+        nombre,
+      correo:
+        cliente?.correo ??
+        correoNormalizado,
+      telefono:
+        cliente?.telefono ??
+        telefono,
+    };
+
+    const ahora = Date.now();
+
+    sessions.set(sid, {
+      id: sid,
+      user: usuarioSesion,
+      createdAt: ahora,
+      lastActivity: ahora,
+    });
+
+    /*
+     * En localhost:
+     * secure será false porque NODE_ENV
+     * normalmente no será production.
+     */
+    res.cookie(
+      COOKIE_NAME,
+      sid,
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV ===
+          'production',
+        sameSite: 'lax',
+        maxAge:
+          1000 *
+          60 *
+          60 *
+          24 *
+          7,
+        path: '/',
+      }
+    );
+
+    logSecurity(
+      'client_registered',
+      {
+        userId: idCliente,
+        role: 'client',
+      }
+    );
+
+    return res.status(201).json({
+      mensaje:
+        'Cliente registrado correctamente',
+      autenticado: true,
+      role: 'client',
+      usuario: usuarioSesion,
+      fecha_creacion:
+        cliente?.fecha_creacion ??
+        null,
+    });
+  } catch (error: any) {
+    console.error(
+      'Error al registrar cliente:',
+      error
+    );
+
+    if (
+      error?.number === 2627 ||
+      error?.number === 2601
+    ) {
+      return res.status(409).json({
+        mensaje:
+          'El correo ya está registrado',
+      });
+    }
+
+    return res.status(500).json({
+      mensaje:
+        'Error al registrar el cliente',
+      detalle:
+        error?.message ??
+        String(error),
     });
   }
 });
@@ -7923,7 +8469,7 @@ app.put(
 // ==========================================
 // ELIMINAR CUENTA (requiere sesión)
 // ==========================================
-app.delete('/api/account', async (req, res) => {
+/*app.delete('/api/account', async (req, res) => {
   try {
     const sid = req.cookies?.[COOKIE_NAME];
     if (!sid || !sessions.has(sid)) {
@@ -7985,7 +8531,748 @@ app.delete('/api/account', async (req, res) => {
     console.error('Error al eliminar cuenta:', error);
     return res.status(500).json({ mensaje: 'Error interno al eliminar cuenta', detalle: error?.message ?? String(error) });
   }
-});
+});*/
+
+// ==========================================
+// ELIMINAR CUENTA DE FORMA LÓGICA
+// ==========================================
+app.delete(
+  '/api/account',
+  async (req, res) => {
+    try {
+      const sid =
+        req.cookies?.[COOKIE_NAME];
+
+      if (
+        !sid ||
+        !sessions.has(sid)
+      ) {
+        return res.status(401).json({
+          mensaje: 'No autenticado',
+        });
+      }
+
+      const sesionActual =
+        sessions.get(sid);
+
+      const user =
+        sesionActual?.user;
+
+      if (!user) {
+        sessions.delete(sid);
+
+        res.clearCookie(
+          COOKIE_NAME
+        );
+
+        return res.status(401).json({
+          mensaje: 'Sesión inválida',
+        });
+      }
+
+      // ======================================
+      // NORMALIZAR EL ROL
+      // ======================================
+      const normalizarRol = (
+        valor: unknown
+      ): 'client' | 'worker' | '' => {
+        const rol = String(
+          valor ?? ''
+        )
+          .trim()
+          .toLowerCase();
+
+        const rolesEmpleado = [
+          'worker',
+          'empleado',
+          'trabajador',
+          'employee',
+          'prestador',
+        ];
+
+        const rolesCliente = [
+          'client',
+          'cliente',
+          'customer',
+          'usuario',
+          'user',
+        ];
+
+        if (
+          rolesEmpleado.includes(rol)
+        ) {
+          return 'worker';
+        }
+
+        if (
+          rolesCliente.includes(rol)
+        ) {
+          return 'client';
+        }
+
+        return '';
+      };
+
+      // Primero revisar el rol enviado por
+      // el frontend.
+      let role = normalizarRol(
+        req.body?.role ??
+          req.body?.rol ??
+          req.body?.tipo ??
+          req.body?.tipo_usuario ??
+          req.query?.role ??
+          req.query?.rol ??
+          req.query?.tipo
+      );
+
+      // Después revisar el rol almacenado
+      // dentro de la sesión.
+      if (!role) {
+        role = normalizarRol(
+          user.role ??
+            user.rol ??
+            user.tipo ??
+            user.tipo_usuario ??
+            user.tipoUsuario
+        );
+      }
+
+      const idEmpleadoSesion = Number(
+        user.id_empleado ??
+          user.idEmpleado ??
+          0
+      );
+
+      const idClienteSesion = Number(
+        user.id_cliente ??
+          user.idCliente ??
+          0
+      );
+
+      // Si la sesión tiene un ID específico,
+      // ese ID tiene prioridad.
+      if (
+        !role &&
+        Number.isInteger(
+          idEmpleadoSesion
+        ) &&
+        idEmpleadoSesion > 0
+      ) {
+        role = 'worker';
+      }
+
+      if (
+        !role &&
+        Number.isInteger(
+          idClienteSesion
+        ) &&
+        idClienteSesion > 0
+      ) {
+        role = 'client';
+      }
+
+      /*
+       * Si solo existe un ID genérico y
+       * todavía no conocemos el rol,
+       * verificamos en qué tabla existe.
+       */
+      const idGenerico = Number(
+        user.id ?? 0
+      );
+
+      if (
+        !role &&
+        Number.isInteger(idGenerico) &&
+        idGenerico > 0
+      ) {
+        const [
+          resultadoEmpleadoExiste,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_empleado
+            FROM empleados
+            WHERE id_empleado = ?;
+            `,
+            [idGenerico]
+          );
+
+        const empleadosEncontrados =
+          obtenerFilas(
+            resultadoEmpleadoExiste
+          );
+
+        const [
+          resultadoClienteExiste,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_cliente
+            FROM clientes
+            WHERE id_cliente = ?;
+            `,
+            [idGenerico]
+          );
+
+        const clientesEncontrados =
+          obtenerFilas(
+            resultadoClienteExiste
+          );
+
+        if (
+          empleadosEncontrados.length > 0 &&
+          clientesEncontrados.length === 0
+        ) {
+          role = 'worker';
+        } else if (
+          clientesEncontrados.length > 0 &&
+          empleadosEncontrados.length === 0
+        ) {
+          role = 'client';
+        }
+      }
+
+      /*
+       * Último intento: buscar por correo.
+       * Esto ayuda cuando la sesión solo
+       * conserva id y correo sin indicar rol.
+       */
+      const correoSesion = String(
+        user.correo ??
+          user.email ??
+          ''
+      ).trim();
+
+      if (
+        !role &&
+        correoSesion
+      ) {
+        const [
+          resultadoEmpleadoCorreo,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_empleado
+            FROM empleados
+            WHERE LOWER(
+              LTRIM(RTRIM(correo))
+            ) = LOWER(
+              LTRIM(RTRIM(?))
+            );
+            `,
+            [correoSesion]
+          );
+
+        const empleadosCorreo =
+          obtenerFilas(
+            resultadoEmpleadoCorreo
+          );
+
+        const [
+          resultadoClienteCorreo,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_cliente
+            FROM clientes
+            WHERE LOWER(
+              LTRIM(RTRIM(correo))
+            ) = LOWER(
+              LTRIM(RTRIM(?))
+            );
+            `,
+            [correoSesion]
+          );
+
+        const clientesCorreo =
+          obtenerFilas(
+            resultadoClienteCorreo
+          );
+
+        if (
+          empleadosCorreo.length > 0 &&
+          clientesCorreo.length === 0
+        ) {
+          role = 'worker';
+        } else if (
+          clientesCorreo.length > 0 &&
+          empleadosCorreo.length === 0
+        ) {
+          role = 'client';
+        }
+      }
+
+      // ======================================
+      // DETERMINAR ID DEL USUARIO
+      // ======================================
+      let userId = 0;
+
+      if (role === 'worker') {
+        userId = Number(
+          user.id_empleado ??
+            user.idEmpleado ??
+            user.id ??
+            0
+        );
+      }
+
+      if (role === 'client') {
+        userId = Number(
+          user.id_cliente ??
+            user.idCliente ??
+            user.id ??
+            0
+        );
+      }
+
+      /*
+       * Si el rol se detectó por correo pero
+       * el ID genérico no corresponde, obtener
+       * nuevamente el ID desde la base.
+       */
+      if (
+        role === 'worker' &&
+        (
+          !Number.isInteger(userId) ||
+          userId <= 0
+        ) &&
+        correoSesion
+      ) {
+        const [
+          resultadoIdEmpleado,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_empleado
+            FROM empleados
+            WHERE LOWER(
+              LTRIM(RTRIM(correo))
+            ) = LOWER(
+              LTRIM(RTRIM(?))
+            );
+            `,
+            [correoSesion]
+          );
+
+        const empleados =
+          obtenerFilas(
+            resultadoIdEmpleado
+          );
+
+        userId = Number(
+          empleados[0]?.id_empleado ??
+            0
+        );
+      }
+
+      if (
+        role === 'client' &&
+        (
+          !Number.isInteger(userId) ||
+          userId <= 0
+        ) &&
+        correoSesion
+      ) {
+        const [
+          resultadoIdCliente,
+        ]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              id_cliente
+            FROM clientes
+            WHERE LOWER(
+              LTRIM(RTRIM(correo))
+            ) = LOWER(
+              LTRIM(RTRIM(?))
+            );
+            `,
+            [correoSesion]
+          );
+
+        const clientes =
+          obtenerFilas(
+            resultadoIdCliente
+          );
+
+        userId = Number(
+          clientes[0]?.id_cliente ??
+            0
+        );
+      }
+
+      if (
+        role !== 'client' &&
+        role !== 'worker'
+      ) {
+        console.error(
+          'No se pudo determinar el rol:',
+          {
+            body: req.body,
+            query: req.query,
+            usuarioSesion: user,
+          }
+        );
+
+        return res.status(400).json({
+          mensaje: 'Rol no válido',
+          detalle:
+            'No se pudo identificar si la cuenta es de cliente o trabajador',
+        });
+      }
+
+      if (
+        !Number.isInteger(userId) ||
+        userId <= 0
+      ) {
+        console.error(
+          'No se pudo determinar el ID:',
+          {
+            role,
+            usuarioSesion: user,
+          }
+        );
+
+        return res.status(400).json({
+          mensaje:
+            'ID de usuario inválido',
+        });
+      }
+
+      // ======================================
+      // BLOQUEAR ELIMINACIÓN DURANTE 5 MINUTOS
+      // ======================================
+      const TIEMPO_ESPERA_MS =
+        5 * 60 * 1000;
+
+      const tabla =
+        role === 'worker'
+          ? 'empleados'
+          : 'clientes';
+
+      const columnaId =
+        role === 'worker'
+          ? 'id_empleado'
+          : 'id_cliente';
+
+      const [
+        resultadoFecha,
+      ]: any =
+        await database.execute(
+          `
+          SELECT
+            fecha_creacion
+          FROM ${tabla}
+          WHERE ${columnaId} = ?;
+          `,
+          [userId]
+        );
+
+      const filasFecha =
+        obtenerFilas(
+          resultadoFecha
+        );
+
+      if (
+        filasFecha.length === 0
+      ) {
+        return res.status(404).json({
+          mensaje:
+            role === 'worker'
+              ? 'La cuenta del trabajador no existe'
+              : 'La cuenta del cliente no existe',
+        });
+      }
+
+      const fechaCreacionRaw =
+        filasFecha[0]
+          ?.fecha_creacion;
+
+      const fechaCreacion =
+        fechaCreacionRaw instanceof Date
+          ? fechaCreacionRaw
+          : new Date(
+              fechaCreacionRaw
+            );
+
+      const fechaCreacionMs =
+        fechaCreacion.getTime();
+
+      if (
+        !Number.isFinite(
+          fechaCreacionMs
+        )
+      ) {
+        console.error(
+          'Fecha de creación inválida:',
+          {
+            role,
+            userId,
+            fechaCreacionRaw,
+          }
+        );
+
+        return res.status(500).json({
+          mensaje:
+            'No se pudo validar la antigüedad de la cuenta',
+          detalle:
+            'La fecha de creación almacenada no es válida',
+        });
+      }
+
+      const tiempoTranscurrido =
+        Date.now() -
+        fechaCreacionMs;
+
+      if (
+        tiempoTranscurrido <
+        TIEMPO_ESPERA_MS
+      ) {
+        const segundosRestantes =
+          Math.max(
+            1,
+            Math.ceil(
+              (
+                TIEMPO_ESPERA_MS -
+                tiempoTranscurrido
+              ) /
+                1000
+            )
+          );
+
+        const minutosRestantes =
+          Math.ceil(
+            segundosRestantes /
+              60
+          );
+
+        return res.status(429).json({
+          mensaje:
+            'Debes esperar antes de eliminar la cuenta.',
+          detalle:
+            `Podrás eliminarla en aproximadamente ${minutosRestantes} minuto(s).`,
+          segundos_restantes:
+            segundosRestantes,
+        });
+      }
+
+      const marcaTiempo =
+        Date.now();
+
+      // ======================================
+      // ANONIMIZAR CLIENTE
+      // ======================================
+      if (role === 'client') {
+        const correoAnonimo =
+          `eliminado_cliente_${userId}_${marcaTiempo}@cuenta.local`;
+
+        const [
+          resultadoCliente,
+        ]: any =
+          await database.execute(
+            `
+            UPDATE clientes
+            SET
+              nombre =
+                'Cuenta eliminada',
+
+              correo = ?,
+
+              telefono = NULL,
+
+              dni = NULL,
+
+              direccion = NULL,
+
+              foto_url = NULL
+
+            OUTPUT
+              INSERTED.id_cliente
+
+            WHERE id_cliente = ?;
+            `,
+            [
+              correoAnonimo,
+              userId,
+            ]
+          );
+
+        const clientesActualizados =
+          obtenerFilas(
+            resultadoCliente
+          );
+
+        if (
+          clientesActualizados.length ===
+          0
+        ) {
+          return res.status(404).json({
+            mensaje:
+              'La cuenta del cliente no existe',
+          });
+        }
+      }
+
+      // ======================================
+      // ANONIMIZAR EMPLEADO
+      // ======================================
+      if (role === 'worker') {
+        const correoAnonimo =
+          `eliminado_empleado_${userId}_${marcaTiempo}@cuenta.local`;
+
+        const [
+          resultadoEmpleado,
+        ]: any =
+          await database.execute(
+            `
+            UPDATE empleados
+            SET
+              nombre =
+                'Cuenta eliminada',
+
+              correo = ?,
+
+              telefono = NULL,
+
+              dni = NULL,
+
+              direccion = NULL,
+
+              titulo = NULL,
+
+              antecedentes = NULL,
+
+              sobre_mi = NULL,
+
+              foto_url = NULL,
+
+              estado = 'Ocupado'
+
+            OUTPUT
+              INSERTED.id_empleado
+
+            WHERE id_empleado = ?;
+            `,
+            [
+              correoAnonimo,
+              userId,
+            ]
+          );
+
+        const empleadosActualizados =
+          obtenerFilas(
+            resultadoEmpleado
+          );
+
+        if (
+          empleadosActualizados.length ===
+          0
+        ) {
+          return res.status(404).json({
+            mensaje:
+              'La cuenta del trabajador no existe',
+          });
+        }
+      }
+
+      // ======================================
+      // CERRAR TODAS LAS SESIONES
+      // ======================================
+      for (
+        const [
+          sessionId,
+          sessionData,
+        ] of sessions.entries()
+      ) {
+        const usuarioSesion =
+          sessionData?.user;
+
+        if (!usuarioSesion) {
+          continue;
+        }
+
+        const idSesion =
+          role === 'worker'
+            ? Number(
+                usuarioSesion.id_empleado ??
+                  usuarioSesion.idEmpleado ??
+                  usuarioSesion.id ??
+                  0
+              )
+            : Number(
+                usuarioSesion.id_cliente ??
+                  usuarioSesion.idCliente ??
+                  usuarioSesion.id ??
+                  0
+              );
+
+        const correoOtraSesion =
+          String(
+            usuarioSesion.correo ??
+              usuarioSesion.email ??
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+        const mismaCuentaPorId =
+          idSesion === userId;
+
+        const mismaCuentaPorCorreo =
+          Boolean(correoSesion) &&
+          correoOtraSesion ===
+            correoSesion.toLowerCase();
+
+        if (
+          mismaCuentaPorId ||
+          mismaCuentaPorCorreo
+        ) {
+          sessions.delete(
+            sessionId
+          );
+        }
+      }
+
+      res.clearCookie(
+        COOKIE_NAME
+      );
+
+      logSecurity(
+        'account_deleted',
+        {
+          userId,
+          role,
+          tipo:
+            'eliminacion_logica',
+        }
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Cuenta eliminada correctamente',
+        role,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al eliminar cuenta:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error interno al eliminar cuenta',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  }
+);
 
 // ==========================================
 // RESPUESTA JSON PARA RUTAS NO ENCONTRADAS

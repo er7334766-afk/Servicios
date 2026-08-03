@@ -19,6 +19,7 @@ export async function registrarEmpleado(
     'http://localhost:3000/api/empleados',
     {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -37,13 +38,21 @@ export async function registrarEmpleado(
   return datos;
 }
 
-// Obtener lista de empleados (destacados / exploración)
+// Obtener lista de empleados
 export async function obtenerEmpleados(): Promise<any[]> {
-  const resp = await fetch('http://localhost:3000/api/empleados');
+  const resp = await fetch(
+    'http://localhost:3000/api/empleados',
+    {
+      credentials: 'include',
+    },
+  );
+
   const datos = await resp.json();
 
   if (!resp.ok) {
-    throw new Error(datos.mensaje ?? 'No se pudieron obtener los empleados');
+    throw new Error(
+      datos.mensaje ?? 'No se pudieron obtener los empleados',
+    );
   }
 
   return datos;

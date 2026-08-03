@@ -5,11 +5,14 @@ export interface NuevoCliente {
   celular: string;
 }
 
-export async function registrarCliente(cliente: NuevoCliente) {
+export async function registrarCliente(
+  cliente: NuevoCliente,
+) {
   const respuesta = await fetch(
     'http://localhost:3000/api/clientes',
     {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -21,7 +24,8 @@ export async function registrarCliente(cliente: NuevoCliente) {
 
   if (!respuesta.ok) {
     throw new Error(
-      datos.mensaje ?? 'No se pudo registrar el cliente',
+      datos.mensaje ??
+        'No se pudo registrar el cliente',
     );
   }
 
@@ -30,11 +34,20 @@ export async function registrarCliente(cliente: NuevoCliente) {
 
 // Obtener lista de clientes
 export async function obtenerClientes(): Promise<any[]> {
-  const resp = await fetch('http://localhost:3000/api/clientes');
+  const resp = await fetch(
+    'http://localhost:3000/api/clientes',
+    {
+      credentials: 'include',
+    },
+  );
+
   const datos = await resp.json();
 
   if (!resp.ok) {
-    throw new Error(datos.mensaje ?? 'No se pudieron obtener los clientes');
+    throw new Error(
+      datos.mensaje ??
+        'No se pudieron obtener los clientes',
+    );
   }
 
   return datos;
