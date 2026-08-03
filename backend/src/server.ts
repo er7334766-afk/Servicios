@@ -7938,14 +7938,30 @@ app.delete('/api/account', async (req, res) => {
       return res.status(401).json({ mensaje: 'Sesión inválida' });
     }
 
-    // Determinar rol: se puede pasar en query/body, o inferir del objeto user
+    // Determinar rol y obtener ID del usuario
     let role = (req.body && req.body.role) || req.query?.role;
+    let userId: number;
+
     if (!role) {
-      if (user.id_empleado || user.idEmpleado) role = 'worker';
-      else role = 'client';
+      if (user.id_empleado || user.idEmpleado) {
+        role = 'worker';
+        userId = Number(user.id_empleado || user.idEmpleado);
+      } else if (user.id_cliente || user.idCliente) {
+        role = 'client';
+        userId = Number(user.id_cliente || user.idCliente);
+      } else {
+        // Fallback: intentar usar id general
+        userId = Number(user.id);
+      }
+    } else {
+      // Si se proporciona el rol, obtener el ID correspondiente
+      if (role === 'worker') {
+        userId = Number(user.id_empleado || user.idEmpleado || user.id);
+      } else {
+        userId = Number(user.id_cliente || user.idCliente || user.id);
+      }
     }
 
-    const userId = Number(user.id);
     if (!Number.isInteger(userId) || userId <= 0) {
       return res.status(400).json({ mensaje: 'ID de usuario inválido' });
     }

@@ -46,6 +46,7 @@ interface RegisterForm {
 export default function AuthScreen() {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [registrando, setRegistrando] = useState(false);
 
   const [iniciandoSesion, setIniciandoSesion] = useState(false);//login
@@ -410,10 +411,22 @@ export default function AuthScreen() {
                         'La contraseña debe tener al menos 6 caracteres',
                     },
                   })}
-                  type="password"
+                  type={showPass ? 'text' : 'password'}
                   placeholder="Mín. 6 caracteres"
-                  className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  className="w-full bg-input-background rounded-xl pl-10 pr-10 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPass((valor) => !valor)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  {showPass ? (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
               </div>
 
               {registerForm.formState.errors.password && (
@@ -438,10 +451,22 @@ export default function AuthScreen() {
                       valor === registerForm.getValues('password') ||
                       'Las contraseñas no coinciden',
                   })}
-                  type="password"
+                  type={showConfirmPass ? 'text' : 'password'}
                   placeholder="Repite tu contraseña"
-                  className="w-full bg-input-background rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
+                  className="w-full bg-input-background rounded-xl pl-10 pr-10 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPass((valor) => !valor)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  {showConfirmPass ? (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
               </div>
 
               {registerForm.formState.errors.confirm && (
