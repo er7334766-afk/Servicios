@@ -194,7 +194,7 @@ export default function CreditCardScreen({ onBack, onPaymentSuccess, montoTotal 
         <div className="mt-6">
           <div className="flex justify-between items-center mb-4 px-1">
             <span className="text-sm font-medium text-slate-500">Monto total a transferir:</span>
-            <span className="text-lg font-black text-[#1A56DB]">${montoTotal}</span>
+            <span className="text-lg font-black text-[#1A56DB]">L {montoTotal}</span>
           </div>
           <motion.button
             whileTap={{ scale: 0.98 }}

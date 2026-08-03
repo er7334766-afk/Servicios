@@ -55,12 +55,12 @@ export default function PaymentMethodScreen() {
     //   description: 'Paga cuando finalice el servicio',
     //   icon: Banknote,
     // },
-    {
-        id: 'paypal',
-        title: 'PayPal',
-        description: 'Pago rápido y seguro',
-        icon: Wallet,
-    },
+    // {
+    //     id: 'paypal',
+    //     title: 'PayPal',
+    //     description: 'Pago rápido y seguro',
+    //     icon: Wallet,
+    // },
     
   ];
 
