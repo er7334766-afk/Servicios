@@ -62,6 +62,8 @@ interface ResenaEmpleado {
   fecha?: string | null;
   nombre_cliente?: string | null;
   foto_cliente?: string | null;
+  respuesta_evaluado?: string | null;
+  fecha_respuesta?: string | null;
 }
 
 interface ResumenEmpleadoRespuesta {
@@ -113,17 +115,27 @@ function formatearFecha(
   fecha?: string | null,
 ): string {
   if (!fecha) {
-    return '';
+    return 'Fecha no disponible';
   }
 
-  const fechaConvertida = new Date(fecha);
+  const valor = String(fecha).trim();
+  const coincidencia =
+    /^(\d{4})-(\d{2})-(\d{2})/.exec(valor);
+
+  const fechaConvertida = coincidencia
+    ? new Date(
+        Number(coincidencia[1]),
+        Number(coincidencia[2]) - 1,
+        Number(coincidencia[3]),
+      )
+    : new Date(valor);
 
   if (
     Number.isNaN(
       fechaConvertida.getTime(),
     )
   ) {
-    return fecha;
+    return 'Fecha no disponible';
   }
 
   return fechaConvertida.toLocaleDateString(
@@ -714,63 +726,88 @@ export default function WorkerProfileScreen() {
             <div className="flex flex-col gap-3">
               {resenas.map(
                 (resena) => (
-                  <ReviewCard
-                    key={
-                      resena.id_resena
-                    }
-                    review={{
-                      id: String(
-                        resena.id_resena,
-                      ),
-
-                      bookingId: String(
-                        resena.id_servicio,
-                      ),
-
-                      reviewerId: '',
-
-                      reviewerName:
-                        resena.nombre_cliente ||
-                        'Cliente',
-
-                      reviewerAvatarUrl:
-                        resena.foto_cliente ||
-                        '',
-
-                      targetId: String(
-                        worker.id_empleado,
-                      ),
-
-                      rating:
-                        Number(
-                          resena.calificacion_general,
-                        ) || 0,
-
-                      punctualityRating:
-                        Number(
-                          resena.puntualidad,
-                        ) || 0,
-
-                      qualityRating:
-                        Number(
-                          resena.calidad,
-                        ) || 0,
-
-                      communicationRating:
-                        Number(
-                          resena.comunicacion,
-                        ) || 0,
-
-                      comment:
-                        resena.comentario ||
-                        '',
-
-                      date:
-                        formatearFecha(
-                          resena.fecha,
+                  <div
+                    key={resena.id_resena}
+                    className="overflow-hidden rounded-2xl border border-border bg-card"
+                  >
+                    <ReviewCard
+                      review={{
+                        id: String(
+                          resena.id_resena,
                         ),
-                    }}
-                  />
+
+                        bookingId: String(
+                          resena.id_servicio,
+                        ),
+
+                        reviewerId: '',
+
+                        reviewerName:
+                          resena.nombre_cliente ||
+                          'Cliente',
+
+                        reviewerAvatarUrl:
+                          resena.foto_cliente ||
+                          '',
+
+                        targetId: String(
+                          worker.id_empleado,
+                        ),
+
+                        rating:
+                          Number(
+                            resena.calificacion_general,
+                          ) || 0,
+
+                        punctualityRating:
+                          Number(
+                            resena.puntualidad,
+                          ) || 0,
+
+                        qualityRating:
+                          Number(
+                            resena.calidad,
+                          ) || 0,
+
+                        communicationRating:
+                          Number(
+                            resena.comunicacion,
+                          ) || 0,
+
+                        comment:
+                          resena.comentario ||
+                          '',
+
+                        date:
+                          formatearFecha(
+                            resena.fecha,
+                          ),
+                      }}
+                    />
+
+                    {String(
+                      resena.respuesta_evaluado ??
+                        '',
+                    ).trim() && (
+                      <div className="mx-4 mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        <p className="text-xs font-bold text-[#1A56DB]">
+                          Respuesta del trabajador
+                        </p>
+
+                        <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-foreground">
+                          {
+                            resena.respuesta_evaluado
+                          }
+                        </p>
+
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {formatearFecha(
+                            resena.fecha_respuesta,
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 ),
               )}
             </div>

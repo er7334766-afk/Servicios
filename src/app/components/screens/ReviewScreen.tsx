@@ -1,4 +1,3 @@
-// ReviewScreen.tsx
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -12,6 +11,111 @@ import {
   obtenerReservaPorServicio,
   type ReservaDetalle,
 } from '../../services/reservasApi';
+
+
+function formatearFecha(
+  fecha?: string | null,
+): string {
+  if (!fecha) {
+    return 'Fecha no disponible';
+  }
+
+  const valor = String(fecha).trim();
+  const coincidencia =
+    /^(\d{4})-(\d{2})-(\d{2})/.exec(valor);
+
+  if (!coincidencia) {
+    return valor;
+  }
+
+  const anio = Number(coincidencia[1]);
+  const mes = Number(coincidencia[2]);
+  const dia = Number(coincidencia[3]);
+
+  const fechaLocal = new Date(
+    anio,
+    mes - 1,
+    dia,
+  );
+
+  if (
+    Number.isNaN(
+      fechaLocal.getTime(),
+    )
+  ) {
+    return valor;
+  }
+
+  return new Intl.DateTimeFormat(
+    'es-HN',
+    {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    },
+  ).format(fechaLocal);
+}
+
+function formatearHora(
+  hora?: string | null,
+): string {
+  if (!hora) {
+    return '';
+  }
+
+  const valor = String(hora).trim();
+
+  /*
+   * Admite valores como:
+   * 08:00:00
+   * 08:00:00.0000000
+   * 2026-08-04T08:00:00.000Z
+   */
+  const coincidencia =
+    /(?:T|\s)?(\d{1,2}):(\d{2})/.exec(
+      valor,
+    );
+
+  if (!coincidencia) {
+    return valor;
+  }
+
+  const horas = Number(
+    coincidencia[1],
+  );
+
+  const minutos = Number(
+    coincidencia[2],
+  );
+
+  if (
+    !Number.isInteger(horas) ||
+    !Number.isInteger(minutos) ||
+    horas < 0 ||
+    horas > 23 ||
+    minutos < 0 ||
+    minutos > 59
+  ) {
+    return valor;
+  }
+
+  const fechaTemporal = new Date(
+    2000,
+    0,
+    1,
+    horas,
+    minutos,
+  );
+
+  return new Intl.DateTimeFormat(
+    'es-HN',
+    {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    },
+  ).format(fechaTemporal);
+}
 
 export default function ReviewScreen() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -220,8 +324,14 @@ export default function ReviewScreen() {
             </p>
 
             <p className="text-xs text-muted-foreground">
-              {reserva.fecha || 'Fecha no disponible'}
-              {reserva.hora ? ` · ${reserva.hora}` : ''}
+              {formatearFecha(
+                reserva.fecha,
+              )}
+              {reserva.hora
+                ? ` · ${formatearHora(
+                    reserva.hora,
+                  )}`
+                : ''}
             </p>
           </div>
         </div>

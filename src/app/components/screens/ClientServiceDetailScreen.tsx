@@ -10,6 +10,7 @@ import {
   MapPin,
   Phone,
   RefreshCw,
+  Star,
   User,
 } from 'lucide-react';
 
@@ -20,6 +21,95 @@ import {
   type PostulanteServicio,
   type SolicitudCliente,
 } from '../../services/SolicitudesClienteApi';
+
+
+const API_URL = 'http://localhost:3000/api';
+
+interface ResenaServicio {
+  id_resena: number;
+  id_reserva: number;
+  id_empleado: number;
+  calificacion_general: number;
+  puntualidad?: number | null;
+  calidad?: number | null;
+  comunicacion?: number | null;
+  comentario?: string | null;
+  fecha?: string | null;
+  respuesta_evaluado?: string | null;
+  fecha_respuesta?: string | null;
+  nombre_empleado?: string | null;
+  foto_empleado?: string | null;
+}
+
+async function leerRespuestaJson<T>(
+  respuesta: Response,
+): Promise<T> {
+  const texto = await respuesta.text();
+
+  if (!texto.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error(
+      `El servidor devolvió una respuesta inválida. Código ${respuesta.status}`,
+    );
+  }
+}
+
+function normalizarFecha(
+  fecha?: string | null,
+): Date | null {
+  if (!fecha) {
+    return null;
+  }
+
+  const valor = String(fecha).trim();
+
+  const coincidencia =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(
+      valor,
+    );
+
+  if (coincidencia) {
+    const fechaLocal = new Date(
+      Number(coincidencia[1]),
+      Number(coincidencia[2]) - 1,
+      Number(coincidencia[3]),
+      Number(coincidencia[4] ?? 0),
+      Number(coincidencia[5] ?? 0),
+      Number(coincidencia[6] ?? 0),
+    );
+
+    if (!Number.isNaN(fechaLocal.getTime())) {
+      return fechaLocal;
+    }
+  }
+
+  const fechaInterpretada = new Date(valor);
+
+  return Number.isNaN(fechaInterpretada.getTime())
+    ? null
+    : fechaInterpretada;
+}
+
+function formatearFecha(
+  fecha?: string | null,
+): string {
+  const fechaConvertida = normalizarFecha(fecha);
+
+  if (!fechaConvertida) {
+    return 'Fecha no disponible';
+  }
+
+  return new Intl.DateTimeFormat('es-HN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(fechaConvertida);
+}
 
 function formatearPresupuesto(
   presupuesto: number | string
@@ -166,6 +256,66 @@ export default function ClientServiceDetailScreen() {
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
 
+  const [resenaServicio, setResenaServicio] =
+    useState<ResenaServicio | null>(null);
+
+  const [cargandoResena, setCargandoResena] =
+    useState(false);
+
+  const cargarResenaServicio = async () => {
+    if (
+      !Number.isInteger(servicioId) ||
+      servicioId <= 0
+    ) {
+      setResenaServicio(null);
+      return;
+    }
+
+    try {
+      setCargandoResena(true);
+
+      const respuesta = await fetch(
+        `${API_URL}/resenas/servicio/${servicioId}`,
+        {
+          cache: 'no-store',
+          credentials: 'include',
+        },
+      );
+
+      if (respuesta.status === 404) {
+        setResenaServicio(null);
+        return;
+      }
+
+      const datos = await leerRespuestaJson<{
+        resena?: ResenaServicio | null;
+        mensaje?: string;
+        detalle?: string;
+      }>(respuesta);
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo cargar la reseña',
+        );
+      }
+
+      setResenaServicio(
+        datos.resena ?? null,
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar la reseña del servicio:',
+        error,
+      );
+
+      setResenaServicio(null);
+    } finally {
+      setCargandoResena(false);
+    }
+  };
+
   const cargarDetalle = async (
     cargaInicial = false
   ) => {
@@ -250,6 +400,7 @@ export default function ClientServiceDetailScreen() {
 
   useEffect(() => {
     void cargarDetalle(true);
+    void cargarResenaServicio();
   }, [servicioId]);
 
   const manejarAceptar = async (
@@ -524,6 +675,144 @@ export default function ClientServiceDetailScreen() {
               {mensaje}
             </p>
           </div>
+        )}
+
+        {/* Reseña escrita por el cliente */}
+        {servicioCompletado && (
+          <section className="rounded-3xl bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-bold text-gray-900">
+                Mi reseña
+              </h2>
+
+              {resenaServicio && (
+                <span className="text-xs text-gray-500">
+                  {formatearFecha(
+                    resenaServicio.fecha,
+                  )}
+                </span>
+              )}
+            </div>
+
+            {cargandoResena ? (
+              <div className="flex items-center justify-center py-6">
+                <RefreshCw className="h-5 w-5 animate-spin text-[#1A56DB]" />
+              </div>
+            ) : resenaServicio ? (
+              <div className="mt-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5">
+                    {Array.from(
+                      { length: 5 },
+                      (_, index) => {
+                        const activa =
+                          index <
+                          Number(
+                            resenaServicio.calificacion_general,
+                          );
+
+                        return (
+                          <Star
+                            key={index}
+                            className={`h-5 w-5 ${
+                              activa
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        );
+                      },
+                    )}
+                  </div>
+
+                  <span className="text-sm font-bold text-gray-900">
+                    {Number(
+                      resenaServicio.calificacion_general,
+                    ).toFixed(1)}
+                  </span>
+                </div>
+
+                {resenaServicio.comentario && (
+                  <p className="mt-4 whitespace-pre-line break-words text-sm leading-6 text-gray-700">
+                    {resenaServicio.comentario}
+                  </p>
+                )}
+
+                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-[11px] text-gray-500">
+                      Puntualidad
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-800">
+                      {Number(
+                        resenaServicio.puntualidad ?? 0,
+                      ) || 0}
+                      /5
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] text-gray-500">
+                      Calidad
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-800">
+                      {Number(
+                        resenaServicio.calidad ?? 0,
+                      ) || 0}
+                      /5
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] text-gray-500">
+                      Comunicación
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-gray-800">
+                      {Number(
+                        resenaServicio.comunicacion ?? 0,
+                      ) || 0}
+                      /5
+                    </p>
+                  </div>
+                </div>
+
+                {String(
+                  resenaServicio.respuesta_evaluado ??
+                    '',
+                ).trim() && (
+                  <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                    <p className="text-xs font-bold text-[#1A56DB]">
+                      Respuesta del trabajador
+                    </p>
+
+                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-gray-700">
+                      {
+                        resenaServicio.respuesta_evaluado
+                      }
+                    </p>
+
+                    <p className="mt-2 text-xs text-gray-500">
+                      {formatearFecha(
+                        resenaServicio.fecha_respuesta,
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
+                <Star className="mx-auto h-7 w-7 text-gray-300" />
+
+                <p className="mt-3 text-sm font-semibold text-gray-800">
+                  Todavía no has dejado una reseña
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-gray-500">
+                  Cuando califiques este servicio, tu reseña y la respuesta del trabajador aparecerán aquí.
+                </p>
+              </div>
+            )}
+          </section>
         )}
 
         {/* Postulaciones */}

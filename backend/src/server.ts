@@ -7172,7 +7172,7 @@ app.get('/api/reservas/servicio/:idServicio', async (req, res) => {
   }
 });
 
-app.post('/api/resenas', async (req, res) => {
+/*app.post('/api/resenas', async (req, res) => {
   try {
     const {
       id_reserva,
@@ -7242,7 +7242,887 @@ app.post('/api/resenas', async (req, res) => {
     console.error('Error al registrar reseña:', error);
     return res.status(500).json({ mensaje: 'Error al registrar la reseña', detalle: error.message });
   }
-});
+});*/
+
+app.post(
+  '/api/resenas',
+  async (req, res) => {
+    try {
+      const {
+        id_reserva,
+        id_empleado,
+        calificacion_general,
+        puntualidad,
+        calidad,
+        comunicacion,
+        comentario,
+      } = req.body;
+
+      const idReserva = Number(
+        id_reserva,
+      );
+
+      const idEmpleado = Number(
+        id_empleado,
+      );
+
+      const calificacionGeneral = Number(
+        calificacion_general,
+      );
+
+      if (
+        !Number.isInteger(idReserva) ||
+        idReserva <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Falta un id_reserva válido',
+        });
+      }
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Falta un id_empleado válido',
+        });
+      }
+
+      if (
+        !Number.isInteger(
+          calificacionGeneral,
+        ) ||
+        calificacionGeneral < 1 ||
+        calificacionGeneral > 5
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'La calificación general debe estar entre 1 y 5',
+        });
+      }
+
+      const parseCalificacionOpcional = (
+        valor: unknown,
+      ): number | null => {
+        if (
+          valor === undefined ||
+          valor === null ||
+          valor === ''
+        ) {
+          return null;
+        }
+
+        const numero = Number(valor);
+
+        if (
+          !Number.isInteger(numero) ||
+          numero < 1 ||
+          numero > 5
+        ) {
+          return null;
+        }
+
+        return numero;
+      };
+
+      const puntualidadValue =
+        parseCalificacionOpcional(
+          puntualidad,
+        );
+
+      const calidadValue =
+        parseCalificacionOpcional(
+          calidad,
+        );
+
+      const comunicacionValue =
+        parseCalificacionOpcional(
+          comunicacion,
+        );
+
+      const comentarioValue =
+        typeof comentario === 'string'
+          ? comentario.trim() || null
+          : null;
+
+      if (
+        comentarioValue &&
+        comentarioValue.length > 1000
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El comentario no puede superar los 1000 caracteres',
+        });
+      }
+
+      /*
+       * Verificar que la reserva exista y que
+       * corresponda al empleado recibido.
+       */
+      const [
+        resultadoReserva,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            r.id_reserva,
+            r.id_empleado,
+            r.id_servicio
+          FROM reservas AS r
+          WHERE r.id_reserva = ?;
+          `,
+          [idReserva],
+        );
+
+      const reservas =
+        obtenerFilas(
+          resultadoReserva,
+        );
+
+      if (reservas.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'La reserva no existe',
+        });
+      }
+
+      const reserva = reservas[0];
+
+      if (
+        Number(reserva.id_empleado) !==
+        idEmpleado
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El empleado no corresponde a esta reserva',
+        });
+      }
+
+      /*
+       * Evitar más de una reseña para
+       * la misma reserva.
+       */
+      const [
+        resultadoExistente,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_resena
+          FROM resenas
+          WHERE id_reserva = ?;
+          `,
+          [idReserva],
+        );
+
+      const resenasExistentes =
+        obtenerFilas(
+          resultadoExistente,
+        );
+
+      if (
+        resenasExistentes.length > 0
+      ) {
+        return res.status(409).json({
+          mensaje:
+            'Esta reserva ya tiene una reseña',
+        });
+      }
+
+      const [
+        resultadoInsercion,
+      ]: any =
+        await database.execute(
+          `
+          INSERT INTO resenas
+          (
+            id_reserva,
+            id_empleado,
+            calificacion_general,
+            puntualidad,
+            calidad,
+            comunicacion,
+            comentario,
+            fecha,
+            respuesta_evaluado,
+            fecha_respuesta
+          )
+
+          OUTPUT
+            INSERTED.id_resena,
+            INSERTED.id_reserva,
+            INSERTED.id_empleado,
+            INSERTED.calificacion_general,
+            INSERTED.puntualidad,
+            INSERTED.calidad,
+            INSERTED.comunicacion,
+            INSERTED.comentario,
+            INSERTED.fecha,
+            INSERTED.respuesta_evaluado,
+            INSERTED.fecha_respuesta
+
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            SYSDATETIME(),
+            NULL,
+            NULL
+          );
+          `,
+          [
+            idReserva,
+            idEmpleado,
+            calificacionGeneral,
+            puntualidadValue,
+            calidadValue,
+            comunicacionValue,
+            comentarioValue,
+          ],
+        );
+
+      const resenasInsertadas =
+        obtenerFilas(
+          resultadoInsercion,
+        );
+
+      const resenaCreada =
+        resenasInsertadas[0] ??
+        null;
+
+      if (!resenaCreada) {
+        return res.status(500).json({
+          mensaje:
+            'La reseña fue procesada, pero no se pudo confirmar el registro',
+        });
+      }
+
+      return res.status(201).json({
+        mensaje:
+          'Reseña registrada correctamente',
+        resena:
+          resenaCreada,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al registrar reseña:',
+        error,
+      );
+
+      if (
+        error?.number === 2627 ||
+        error?.number === 2601
+      ) {
+        return res.status(409).json({
+          mensaje:
+            'Esta reserva ya tiene una reseña',
+        });
+      }
+
+      return res.status(500).json({
+        mensaje:
+          'Error al registrar la reseña',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
+
+// ==========================================
+// RESPONDER UNA RESEÑA
+// Solo puede responder el trabajador evaluado
+// ==========================================
+/*app.put(
+  '/api/resenas/:idResena/respuesta',
+  async (req, res) => {
+    try {
+      const idResena = Number(
+        req.params.idResena,
+      );
+
+      const respuestaTexto = String(
+        req.body?.respuesta ?? '',
+      ).trim();
+
+      if (
+        !Number.isInteger(idResena) ||
+        idResena <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de reseña inválido',
+        });
+      }
+
+      if (
+        respuestaTexto.length < 3
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'La respuesta debe tener al menos 3 caracteres',
+        });
+      }
+
+      if (
+        respuestaTexto.length > 500
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'La respuesta no puede superar los 500 caracteres',
+        });
+      }
+
+      const sid =
+        req.cookies?.[COOKIE_NAME];
+
+      if (
+        !sid ||
+        !sessions.has(sid)
+      ) {
+        return res.status(401).json({
+          mensaje:
+            'Debes iniciar sesión para responder',
+        });
+      }
+
+      const sesion =
+        sessions.get(sid);
+
+      const usuario =
+        sesion?.user;
+
+      if (!usuario) {
+        return res.status(401).json({
+          mensaje:
+            'La sesión no es válida',
+        });
+      }
+
+      const rol = String(
+        usuario.role ??
+          usuario.rol ??
+          '',
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        rol !== 'worker' &&
+        rol !== 'empleado' &&
+        rol !== 'trabajador'
+      ) {
+        return res.status(403).json({
+          mensaje:
+            'Solo el trabajador evaluado puede responder',
+        });
+      }
+
+      const idEmpleadoSesion = Number(
+        usuario.id_empleado ??
+          usuario.idEmpleado ??
+          usuario.id,
+      );
+
+      if (
+        !Number.isInteger(
+          idEmpleadoSesion,
+        ) ||
+        idEmpleadoSesion <= 0
+      ) {
+        return res.status(401).json({
+          mensaje:
+            'No se pudo identificar al trabajador autenticado',
+        });
+      }
+
+      const [
+        resultadoResena,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_resena,
+            id_empleado,
+            respuesta_evaluado
+          FROM resenas
+          WHERE id_resena = ?;
+          `,
+          [idResena],
+        );
+
+      const resenas =
+        obtenerFilas(
+          resultadoResena,
+        );
+
+      if (
+        resenas.length === 0
+      ) {
+        return res.status(404).json({
+          mensaje:
+            'La reseña no existe',
+        });
+      }
+
+      const resena =
+        resenas[0];
+
+      if (
+        Number(
+          resena.id_empleado,
+        ) !==
+        idEmpleadoSesion
+      ) {
+        return res.status(403).json({
+          mensaje:
+            'No puedes responder una reseña dirigida a otro trabajador',
+        });
+      }
+
+      if (
+        String(
+          resena.respuesta_evaluado ??
+            '',
+        ).trim()
+      ) {
+        return res.status(409).json({
+          mensaje:
+            'Esta reseña ya tiene una respuesta',
+        });
+      }
+
+      const [
+        resultadoActualizacion,
+      ]: any =
+        await database.execute(
+          `
+          UPDATE resenas
+          SET
+            respuesta_evaluado = ?,
+            fecha_respuesta = SYSDATETIME()
+
+          OUTPUT
+            INSERTED.id_resena,
+            INSERTED.respuesta_evaluado,
+            INSERTED.fecha_respuesta
+
+          WHERE id_resena = ?;
+          `,
+          [
+            respuestaTexto,
+            idResena,
+          ],
+        );
+
+      const actualizadas =
+        obtenerFilas(
+          resultadoActualizacion,
+        );
+
+      if (
+        actualizadas.length === 0
+      ) {
+        return res.status(404).json({
+          mensaje:
+            'No se pudo actualizar la reseña',
+        });
+      }
+
+      return res.status(200).json({
+        mensaje:
+          'Respuesta publicada correctamente',
+        respuesta:
+          actualizadas[0],
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al responder reseña:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al publicar la respuesta',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);*/
+
+// ==========================================
+// RESPONDER UNA RESEÑA
+// Solo puede responder el trabajador evaluado
+// No depende del campo role del login
+// ==========================================
+app.put(
+  '/api/resenas/:idResena/respuesta',
+  async (req, res) => {
+    try {
+      const idResena = Number(
+        req.params.idResena,
+      );
+
+      const respuestaTexto = String(
+        req.body?.respuesta ?? '',
+      ).trim();
+
+      // ======================================
+      // VALIDAR DATOS
+      // ======================================
+      if (
+        !Number.isInteger(idResena) ||
+        idResena <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de reseña inválido',
+        });
+      }
+
+      if (respuestaTexto.length < 3) {
+        return res.status(400).json({
+          mensaje:
+            'La respuesta debe tener al menos 3 caracteres',
+        });
+      }
+
+      if (respuestaTexto.length > 500) {
+        return res.status(400).json({
+          mensaje:
+            'La respuesta no puede superar los 500 caracteres',
+        });
+      }
+
+      // ======================================
+      // OBTENER SESIÓN
+      // ======================================
+      const sid = String(
+        req.cookies?.[COOKIE_NAME] ?? '',
+      ).trim();
+
+      if (!sid) {
+        return res.status(401).json({
+          mensaje:
+            'Debes iniciar sesión para responder',
+        });
+      }
+
+      const sesion =
+        sessions.get(sid);
+
+      if (!sesion?.user) {
+        return res.status(401).json({
+          mensaje:
+            'La sesión no existe o ha expirado',
+        });
+      }
+
+      const usuarioSesion =
+        sesion.user;
+
+      /*
+       * No revisamos role ni rol.
+       *
+       * Tomamos cualquiera de los identificadores
+       * que ya guarda la sesión del empleado.
+       */
+      const idEmpleadoSesion = Number(
+        usuarioSesion.id_empleado ??
+          usuarioSesion.idEmpleado ??
+          usuarioSesion.id,
+      );
+
+      if (
+        !Number.isInteger(
+          idEmpleadoSesion,
+        ) ||
+        idEmpleadoSesion <= 0
+      ) {
+        return res.status(401).json({
+          mensaje:
+            'No se pudo identificar al trabajador autenticado',
+        });
+      }
+
+      // ======================================
+      // CONSULTAR RESEÑA
+      // ======================================
+      const [
+        resultadoResena,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_resena,
+            id_empleado,
+            respuesta_evaluado,
+            fecha_respuesta
+          FROM resenas
+          WHERE id_resena = ?;
+          `,
+          [idResena],
+        );
+
+      const resenas =
+        obtenerFilas(
+          resultadoResena,
+        );
+
+      if (resenas.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'La reseña no existe',
+        });
+      }
+
+      const resena =
+        resenas[0];
+
+      const idEmpleadoResena = Number(
+        resena.id_empleado,
+      );
+
+      /*
+       * Esta es la validación importante:
+       * el ID de la sesión debe ser igual al
+       * empleado evaluado en la reseña.
+       */
+      if (
+        !Number.isInteger(
+          idEmpleadoResena,
+        ) ||
+        idEmpleadoResena !==
+          idEmpleadoSesion
+      ) {
+        return res.status(403).json({
+          mensaje:
+            'No puedes responder una reseña dirigida a otro trabajador',
+        });
+      }
+
+      // Solo permitir una respuesta.
+      const respuestaExistente = String(
+        resena.respuesta_evaluado ?? '',
+      ).trim();
+
+      if (respuestaExistente) {
+        return res.status(409).json({
+          mensaje:
+            'Esta reseña ya tiene una respuesta',
+        });
+      }
+
+      // ======================================
+      // GUARDAR RESPUESTA
+      // ======================================
+      const [
+        resultadoActualizacion,
+      ]: any =
+        await database.execute(
+          `
+          UPDATE resenas
+          SET
+            respuesta_evaluado = ?,
+            fecha_respuesta = SYSDATETIME()
+
+          OUTPUT
+            INSERTED.id_resena,
+            INSERTED.id_reserva,
+            INSERTED.id_empleado,
+            INSERTED.respuesta_evaluado,
+            INSERTED.fecha_respuesta
+
+          WHERE
+            id_resena = ?
+            AND id_empleado = ?
+            AND (
+              respuesta_evaluado IS NULL
+              OR LTRIM(
+                RTRIM(
+                  respuesta_evaluado
+                )
+              ) = ''
+            );
+          `,
+          [
+            respuestaTexto,
+            idResena,
+            idEmpleadoSesion,
+          ],
+        );
+
+      const actualizadas =
+        obtenerFilas(
+          resultadoActualizacion,
+        );
+
+      if (actualizadas.length === 0) {
+        /*
+         * Puede ocurrir si otra petición respondió
+         * la reseña unos instantes antes.
+         */
+        return res.status(409).json({
+          mensaje:
+            'La reseña ya fue respondida o no pudo actualizarse',
+        });
+      }
+
+      const respuestaGuardada =
+        actualizadas[0];
+
+      logSecurity(
+        'review_response_created',
+        {
+          idResena,
+          idEmpleado:
+            idEmpleadoSesion,
+        },
+      );
+
+      return res.status(200).json({
+        mensaje:
+          'Respuesta publicada correctamente',
+
+        respuesta: {
+          id_resena:
+            Number(
+              respuestaGuardada.id_resena,
+            ),
+
+          respuesta_evaluado:
+            respuestaGuardada
+              .respuesta_evaluado,
+
+          fecha_respuesta:
+            respuestaGuardada
+              .fecha_respuesta,
+        },
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al responder reseña:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al publicar la respuesta',
+
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
+
+
+// ==========================================
+// OBTENER RESEÑA POR SERVICIO
+// ==========================================
+app.get(
+  '/api/resenas/servicio/:idServicio',
+  async (req, res) => {
+    try {
+      const idServicio = Number(
+        req.params.idServicio,
+      );
+
+      if (
+        !Number.isInteger(idServicio) ||
+        idServicio <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de servicio inválido',
+        });
+      }
+
+      const [
+        resultado,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            r.id_resena,
+            r.id_reserva,
+            r.id_empleado,
+            r.calificacion_general,
+            r.puntualidad,
+            r.calidad,
+            r.comunicacion,
+            r.comentario,
+            r.fecha,
+            r.respuesta_evaluado,
+            r.fecha_respuesta,
+
+            e.nombre
+              AS nombre_empleado,
+
+            e.foto_url
+              AS foto_empleado
+
+          FROM resenas AS r
+
+          INNER JOIN reservas AS re
+            ON re.id_reserva =
+              r.id_reserva
+
+          LEFT JOIN empleados AS e
+            ON e.id_empleado =
+              r.id_empleado
+
+          WHERE re.id_servicio = ?
+
+          ORDER BY
+            r.fecha DESC,
+            r.id_resena DESC;
+          `,
+          [idServicio],
+        );
+
+      const resenas =
+        obtenerFilas(resultado);
+
+      if (resenas.length === 0) {
+        return res.status(404).json({
+          mensaje:
+            'Este servicio todavía no tiene una reseña',
+          resena: null,
+        });
+      }
+
+      return res.status(200).json({
+        resena: resenas[0],
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al consultar reseña del servicio:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar la reseña del servicio',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
+
 
 app.put(
   "/api/usuarios/actividad",
@@ -7380,7 +8260,7 @@ app.get(
 // ==========================================
 // MÉTODOS DE PAGO (simple storage)
 // ==========================================
-app.post('/api/payment-methods', async (req, res) => {
+/*app.post('/api/payment-methods', async (req, res) => {
   try {
     const { fk_usuario, tipo, titular, numero_enmascarado, expiracion } = req.body;
 
@@ -7407,9 +8287,9 @@ app.post('/api/payment-methods', async (req, res) => {
     console.error('Error al agregar método de pago:', error);
     return res.status(500).json({ mensaje: 'Error al guardar el método de pago', detalle: error.message });
   }
-});
+});*/
 
-app.get('/api/payment-methods/:fk_usuario', async (req, res) => {
+/*app.get('/api/payment-methods/:fk_usuario', async (req, res) => {
   try {
     const fk_usuario = Number(req.params.fk_usuario);
 
@@ -7427,7 +8307,236 @@ app.get('/api/payment-methods/:fk_usuario', async (req, res) => {
     console.error('Error al consultar métodos de pago:', error);
     return res.status(500).json({ mensaje: 'Error al consultar métodos de pago', detalle: error.message });
   }
-});
+});*/
+
+
+// ==========================================
+// MÉTODOS DE PAGO
+// ==========================================
+
+app.post(
+  '/api/payment-methods',
+  async (req, res) => {
+    try {
+      const fkUsuario = Number(
+        req.body?.fk_usuario,
+      );
+
+      const tipo = String(
+        req.body?.tipo ?? '',
+      ).trim();
+
+      const titular = String(
+        req.body?.titular ?? '',
+      ).trim();
+
+      const numeroEnmascarado = String(
+        req.body?.numero_enmascarado ?? '',
+      ).trim();
+
+      const expiracion = String(
+        req.body?.expiracion ?? '',
+      ).trim();
+
+      if (
+        !Number.isInteger(fkUsuario) ||
+        fkUsuario <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de usuario inválido',
+        });
+      }
+
+      if (
+        !tipo ||
+        !titular ||
+        !numeroEnmascarado
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Faltan datos del método de pago',
+        });
+      }
+
+      /*
+       * Solo se debe recibir un número
+       * enmascarado que termine en 4 dígitos.
+       *
+       * Nunca se guarda el número completo
+       * ni el CVV.
+       */
+      if (
+        !/\d{4}$/.test(
+          numeroEnmascarado,
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'El número enmascarado no es válido',
+        });
+      }
+
+      if (
+        expiracion &&
+        !/^\d{2}\/\d{2}$/.test(
+          expiracion,
+        )
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'La expiración debe tener el formato MM/AA',
+        });
+      }
+
+      const [
+        resultado,
+      ]: any =
+        await database.execute(
+          `
+          INSERT INTO payment_methods
+          (
+            fk_usuario,
+            tipo,
+            titular,
+            numero_enmascarado,
+            expiracion,
+            fecha_creacion
+          )
+
+          OUTPUT
+            INSERTED.id_payment_method,
+            INSERTED.fk_usuario,
+            INSERTED.tipo,
+            INSERTED.titular,
+            INSERTED.numero_enmascarado,
+            INSERTED.expiracion,
+            INSERTED.fecha_creacion
+
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            GETDATE()
+          );
+          `,
+          [
+            fkUsuario,
+            tipo,
+            titular,
+            numeroEnmascarado,
+            expiracion || null,
+          ],
+        );
+
+      const metodosInsertados =
+        obtenerFilas(
+          resultado,
+        );
+
+      const metodoGuardado =
+        metodosInsertados[0] ??
+        null;
+
+      if (!metodoGuardado) {
+        return res.status(500).json({
+          mensaje:
+            'El método fue procesado, pero no se pudo confirmar el registro',
+        });
+      }
+
+      return res.status(201).json({
+        mensaje:
+          'Método de pago agregado correctamente',
+        metodo:
+          metodoGuardado,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error al agregar método de pago:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al guardar el método de pago',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
+
+app.get(
+  '/api/payment-methods/:fk_usuario',
+  async (req, res) => {
+    try {
+      const fkUsuario = Number(
+        req.params.fk_usuario,
+      );
+
+      if (
+        !Number.isInteger(fkUsuario) ||
+        fkUsuario <= 0
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'ID de usuario inválido',
+        });
+      }
+
+      const [
+        resultado,
+      ]: any =
+        await database.execute(
+          `
+          SELECT
+            id_payment_method,
+            fk_usuario,
+            tipo,
+            titular,
+            numero_enmascarado,
+            expiracion,
+            fecha_creacion
+          FROM payment_methods
+          WHERE fk_usuario = ?
+          ORDER BY
+            fecha_creacion DESC,
+            id_payment_method DESC;
+          `,
+          [
+            fkUsuario,
+          ],
+        );
+
+      const metodos =
+        obtenerFilas(
+          resultado,
+        );
+
+      return res.status(200).json(
+        metodos,
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al consultar métodos de pago:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar métodos de pago',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
 
 // ==========================================
 // RESERVAS: crear reserva (opcional)
@@ -7689,12 +8798,19 @@ app.get(
         idEmpleado <= 0
       ) {
         return res.status(400).json({
-          mensaje: 'ID de empleado inválido',
+          mensaje:
+            'ID de empleado inválido',
         });
       }
 
-      const respuestaResumen: any =
-        await database.query(`
+      // ======================================
+      // RESUMEN GENERAL DEL EMPLEADO
+      // ======================================
+      const [
+        resultadoResumen,
+      ]: any =
+        await database.execute(
+          `
           SELECT
             e.id_empleado,
 
@@ -7703,7 +8819,10 @@ app.get(
                 WHEN LOWER(
                   LTRIM(
                     RTRIM(
-                      COALESCE(s.estado, '')
+                      COALESCE(
+                        s.estado,
+                        ''
+                      )
                     )
                   )
                 ) IN (
@@ -7745,28 +8864,38 @@ app.get(
             AND r.id_empleado =
               e.id_empleado
 
-          WHERE e.id_empleado =
-            ${idEmpleado}
+          WHERE e.id_empleado = ?
 
           GROUP BY
             e.id_empleado;
-        `);
+          `,
+          [idEmpleado],
+        );
+
+      const filasResumen =
+        obtenerFilas(
+          resultadoResumen,
+        );
 
       const resumen =
-        respuestaResumen?.recordset?.[0] ??
-        respuestaResumen?.recordsets?.[0]?.[0] ??
-        respuestaResumen?.[0]?.[0] ??
-        respuestaResumen?.rows?.[0] ??
+        filasResumen[0] ??
         null;
 
       if (!resumen) {
         return res.status(404).json({
-          mensaje: 'Empleado no encontrado',
+          mensaje:
+            'Empleado no encontrado',
         });
       }
 
-      const respuestaResenas: any =
-        await database.query(`
+      // ======================================
+      // RESEÑAS DEL EMPLEADO
+      // ======================================
+      const [
+        resultadoResenas,
+      ]: any =
+        await database.execute(
+          `
           SELECT
             r.id_resena,
             r.id_reserva,
@@ -7776,19 +8905,25 @@ app.get(
             r.comunicacion,
             r.comentario,
             r.fecha,
+            r.respuesta_evaluado,
+            r.fecha_respuesta,
 
             re.id_servicio,
 
             COALESCE(
-              NULLIF(c.nombre, ''),
-              NULLIF(c.nombre_C, ''),
+              NULLIF(
+                LTRIM(
+                  RTRIM(
+                    c.nombre
+                  )
+                ),
+                ''
+              ),
               'Cliente'
             ) AS nombre_cliente,
 
-            COALESCE(
-              c.foto_url,
-              c.foto
-            ) AS foto_cliente
+            c.foto_url
+              AS foto_cliente
 
           FROM resenas AS r
 
@@ -7807,37 +8942,19 @@ app.get(
                 s.id_cliente
               )
 
-          WHERE r.id_empleado =
-            ${idEmpleado}
+          WHERE r.id_empleado = ?
 
           ORDER BY
             r.fecha DESC,
             r.id_resena DESC;
-        `);
+          `,
+          [idEmpleado],
+        );
 
-      const resenas: any[] =
-        Array.isArray(
-          respuestaResenas?.recordset,
-        )
-          ? respuestaResenas.recordset
-          : Array.isArray(
-                respuestaResenas
-                  ?.recordsets?.[0],
-              )
-            ? respuestaResenas.recordsets[0]
-            : Array.isArray(
-                  respuestaResenas?.[0],
-                )
-              ? respuestaResenas[0]
-              : Array.isArray(
-                    respuestaResenas?.rows,
-                  )
-                ? respuestaResenas.rows
-                : Array.isArray(
-                      respuestaResenas,
-                    )
-                  ? respuestaResenas
-                  : [];
+      const resenas =
+        obtenerFilas(
+          resultadoResenas,
+        );
 
       return res.status(200).json({
         total_trabajos:
@@ -7868,13 +8985,12 @@ app.get(
           'Error al consultar el perfil del empleado',
 
         detalle:
-          error?.message ||
+          error?.message ??
           String(error),
       });
     }
   },
 );
-
 
 // ==========================================
 // PERFIL PÚBLICO DEL CLIENTE

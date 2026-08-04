@@ -12,6 +12,7 @@ import {
   X,
   AlertTriangle,
   Briefcase,
+  Flag,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -496,6 +497,20 @@ export default function ServiceManagementScreen() {
   );
 }
 
+
+function abrirReporteCliente() {
+  if (!servicio) return;
+
+  navigate('/home/report', {
+    state: {
+      tipoReporte: 'usuario',
+      idServicio: servicio.id_servicio,
+      idReportado: servicio.fk_cliente,
+      tipoReportado: 'client',
+    },
+  });
+}
+
   if (cargando) {
     return (
       <div className="flex min-h-full items-center justify-center bg-background">
@@ -763,6 +778,18 @@ export default function ServiceManagementScreen() {
               <MessageCircle className="h-5 w-5" />
             </button>
           </div>
+
+          {esTrabajador &&
+            ['Asignado', 'En proceso', 'Completado'].includes(servicio.estado) && (
+              <button
+                type="button"
+                onClick={abrirReporteCliente}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-100"
+              >
+                <Flag className="h-4 w-4" />
+                Reportar cliente
+              </button>
+            )}
         </section>
 
         {/* Presupuesto */}

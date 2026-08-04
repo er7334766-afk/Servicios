@@ -82,6 +82,8 @@ interface ResenaEmpleado {
   fecha?: string | null;
   nombre_cliente?: string | null;
   foto_cliente?: string | null;
+  respuesta_evaluado?: string | null;
+  fecha_respuesta?: string | null;
 }
 
 interface ResumenEmpleadoRespuesta {
@@ -123,22 +125,98 @@ async function leerRespuestaJson<T>(
   }
 }
 
-function formatearFecha(fecha?: string | null) {
+function normalizarFecha(
+  fecha?: string | null,
+): Date | null {
   if (!fecha) {
-    return '';
+    return null;
   }
 
-  const fechaConvertida = new Date(fecha);
+  const valor = String(fecha).trim();
 
-  if (Number.isNaN(fechaConvertida.getTime())) {
-    return fecha;
+  if (!valor) {
+    return null;
   }
 
-  return fechaConvertida.toLocaleDateString('es-HN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  /*
+   * SQL Server puede devolver:
+   * 2026-08-04
+   * 2026-08-04T00:00:00.000Z
+   * 2026-08-04 00:00:00.0000000
+   */
+  const coincidencia =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(
+      valor,
+    );
+
+  if (coincidencia) {
+    const anio = Number(coincidencia[1]);
+    const mes = Number(coincidencia[2]);
+    const dia = Number(coincidencia[3]);
+    const hora = Number(coincidencia[4] ?? 0);
+    const minuto = Number(coincidencia[5] ?? 0);
+    const segundo = Number(coincidencia[6] ?? 0);
+
+    const fechaLocal = new Date(
+      anio,
+      mes - 1,
+      dia,
+      hora,
+      minuto,
+      segundo,
+      0,
+    );
+
+    if (!Number.isNaN(fechaLocal.getTime())) {
+      return fechaLocal;
+    }
+  }
+
+  const fechaInterpretada = new Date(valor);
+
+  if (Number.isNaN(fechaInterpretada.getTime())) {
+    return null;
+  }
+
+  return fechaInterpretada;
+}
+
+function formatearFecha(
+  fecha?: string | null,
+): string {
+  const fechaConvertida =
+    normalizarFecha(fecha);
+
+  if (!fechaConvertida) {
+    return 'Fecha no disponible';
+  }
+
+  return new Intl.DateTimeFormat(
+    'es-HN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    },
+  ).format(fechaConvertida);
+}
+
+function fechaParaReviewCard(
+  fecha?: string | null,
+): string {
+  const fechaConvertida =
+    normalizarFecha(fecha);
+
+  if (!fechaConvertida) {
+    return new Date(0).toISOString();
+  }
+
+  /*
+   * ReviewCard vuelve a ejecutar new Date(review.date).
+   * Por eso debe recibir una fecha ISO, no una fecha ya
+   * formateada como "4 ago 2026".
+   */
+  return fechaConvertida.toISOString();
 }
 
 export default function WorkerOwnProfileScreen() {
@@ -188,6 +266,21 @@ export default function WorkerOwnProfileScreen() {
 
   const [cargandoResumen, setCargandoResumen] =
     useState(true);
+
+  const [
+    idResenaRespondiendo,
+    setIdResenaRespondiendo,
+  ] = useState<number | null>(null);
+
+  const [
+    textoRespuesta,
+    setTextoRespuesta,
+  ] = useState('');
+
+  const [
+    enviandoRespuesta,
+    setEnviandoRespuesta,
+  ] = useState(false);
 
   const idEmpleado = Number(
     currentUser?.idEmpleado ??
@@ -263,6 +356,7 @@ export default function WorkerOwnProfileScreen() {
         `${API_URL}/empleados/${idEmpleado}/categorias`,
         {
           cache: 'no-store',
+          credentials: 'include',
         },
       );
 
@@ -320,6 +414,7 @@ export default function WorkerOwnProfileScreen() {
         `${API_URL}/empleados/${idEmpleado}/resumen-perfil`,
         {
           cache: 'no-store',
+          credentials: 'include',
         },
       );
 
@@ -375,6 +470,115 @@ export default function WorkerOwnProfileScreen() {
       );
     } finally {
       setCargandoResumen(false);
+    }
+  };
+
+  const publicarRespuesta = async (
+    idResena: number,
+  ) => {
+    const textoLimpio =
+      textoRespuesta.trim();
+
+    if (
+      !Number.isInteger(idResena) ||
+      idResena <= 0
+    ) {
+      mostrarError(
+        'El ID de la reseña es inválido',
+      );
+      return;
+    }
+
+    if (textoLimpio.length < 3) {
+      mostrarError(
+        'La respuesta debe tener al menos 3 caracteres',
+      );
+      return;
+    }
+
+    if (textoLimpio.length > 500) {
+      mostrarError(
+        'La respuesta no puede superar los 500 caracteres',
+      );
+      return;
+    }
+
+    try {
+      setEnviandoRespuesta(true);
+      setErrorMessage('');
+
+      const respuesta = await fetch(
+        `${API_URL}/resenas/${idResena}/respuesta`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            respuesta: textoLimpio,
+          }),
+        },
+      );
+
+      const datos =
+        await leerRespuestaJson<{
+          mensaje?: string;
+          respuesta?: {
+            id_resena: number;
+            respuesta_evaluado: string;
+            fecha_respuesta: string;
+          };
+          detalle?: string;
+        }>(respuesta);
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo publicar la respuesta',
+        );
+      }
+
+      setResenas((actuales) =>
+        actuales.map((resena) =>
+          resena.id_resena === idResena
+            ? {
+                ...resena,
+                respuesta_evaluado:
+                  datos.respuesta
+                    ?.respuesta_evaluado ??
+                  textoLimpio,
+                fecha_respuesta:
+                  datos.respuesta
+                    ?.fecha_respuesta ??
+                  new Date().toISOString(),
+              }
+            : resena,
+        ),
+      );
+
+      setIdResenaRespondiendo(null);
+      setTextoRespuesta('');
+
+      window.alert(
+        datos.mensaje ||
+          'Respuesta publicada correctamente',
+      );
+    } catch (error) {
+      console.error(
+        'Error al responder la reseña:',
+        error,
+      );
+
+      mostrarError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo publicar la respuesta',
+      );
+    } finally {
+      setEnviandoRespuesta(false);
     }
   };
 
@@ -1216,66 +1420,202 @@ export default function WorkerOwnProfileScreen() {
         ) : resenas.length > 0 ? (
           <div className="flex flex-col gap-3">
             {resenas.map(
-              (resena) => (
-                <ReviewCard
-                  key={
-                    resena.id_resena
-                  }
-                  review={{
-                    id: String(
-                      resena.id_resena,
-                    ),
-
-                    bookingId: String(
-                      resena.id_servicio,
-                    ),
-
-                    reviewerId: '',
-
-                    reviewerName:
-                      resena.nombre_cliente ||
-                      'Cliente',
-
-                    reviewerAvatarUrl:
-                      resena.foto_cliente ||
+              (resena) => {
+                const respuestaExistente =
+                  String(
+                    resena.respuesta_evaluado ??
                       '',
+                  ).trim();
 
-                    targetId:
-                      String(
-                        idEmpleado,
-                      ),
+                const formularioAbierto =
+                  idResenaRespondiendo ===
+                  resena.id_resena;
 
-                    rating:
-                      Number(
-                        resena.calificacion_general,
-                      ) || 0,
+                return (
+                  <div
+                    key={resena.id_resena}
+                    className="overflow-hidden rounded-2xl border border-border bg-card"
+                  >
+                    <ReviewCard
+                      review={{
+                        id: String(
+                          resena.id_resena,
+                        ),
 
-                    punctualityRating:
-                      Number(
-                        resena.puntualidad,
-                      ) || 0,
+                        bookingId: String(
+                          resena.id_servicio,
+                        ),
 
-                    qualityRating:
-                      Number(
-                        resena.calidad,
-                      ) || 0,
+                        reviewerId: '',
 
-                    communicationRating:
-                      Number(
-                        resena.comunicacion,
-                      ) || 0,
+                        reviewerName:
+                          resena.nombre_cliente ||
+                          'Cliente',
 
-                    comment:
-                      resena.comentario ||
-                      '',
+                        reviewerAvatarUrl:
+                          resena.foto_cliente ||
+                          '',
 
-                    date:
-                      formatearFecha(
-                        resena.fecha,
-                      ),
-                  }}
-                />
-              ),
+                        targetId:
+                          String(
+                            idEmpleado,
+                          ),
+
+                        rating:
+                          Number(
+                            resena.calificacion_general,
+                          ) || 0,
+
+                        punctualityRating:
+                          Number(
+                            resena.puntualidad,
+                          ) || 0,
+
+                        qualityRating:
+                          Number(
+                            resena.calidad,
+                          ) || 0,
+
+                        communicationRating:
+                          Number(
+                            resena.comunicacion,
+                          ) || 0,
+
+                        comment:
+                          resena.comentario ||
+                          '',
+
+                        date:
+                          fechaParaReviewCard(
+                            resena.fecha,
+                          ),
+                      }}
+                    />
+
+                    {respuestaExistente ? (
+                      <div className="mx-4 mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        <p className="text-xs font-bold text-[#1A56DB]">
+                          Tu respuesta
+                        </p>
+
+                        <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-foreground">
+                          {
+                            resena.respuesta_evaluado
+                          }
+                        </p>
+
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {formatearFecha(
+                            resena.fecha_respuesta,
+                          )}
+                        </p>
+                      </div>
+                    ) : formularioAbierto ? (
+                      <div className="mx-4 mb-4 rounded-xl border border-border bg-muted/30 p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-sm font-bold text-foreground">
+                            Responder reseña
+                          </p>
+
+                          <span
+                            className={`text-xs ${
+                              textoRespuesta.trim()
+                                .length >= 3
+                                ? 'text-green-600'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {
+                              textoRespuesta.length
+                            }
+                            /500
+                          </span>
+                        </div>
+
+                        <textarea
+                          value={
+                            textoRespuesta
+                          }
+                          onChange={(event) =>
+                            setTextoRespuesta(
+                              event.target.value.slice(
+                                0,
+                                500,
+                              ),
+                            )
+                          }
+                          rows={4}
+                          disabled={
+                            enviandoRespuesta
+                          }
+                          placeholder="Escribe una respuesta profesional para este cliente..."
+                          className="w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-[#1A56DB]/30 disabled:opacity-60"
+                        />
+
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Solo puedes publicar una respuesta y después no podrá modificarse.
+                        </p>
+
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={
+                              enviandoRespuesta
+                            }
+                            onClick={() => {
+                              setIdResenaRespondiendo(
+                                null,
+                              );
+                              setTextoRespuesta(
+                                '',
+                              );
+                            }}
+                            className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              enviandoRespuesta ||
+                              textoRespuesta.trim()
+                                .length < 3
+                            }
+                            onClick={() =>
+                              void publicarRespuesta(
+                                resena.id_resena,
+                              )
+                            }
+                            className="rounded-xl bg-[#1A56DB] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {enviandoRespuesta
+                              ? 'Publicando...'
+                              : 'Publicar respuesta'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-4 pb-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIdResenaRespondiendo(
+                              resena.id_resena,
+                            );
+                            setTextoRespuesta(
+                              '',
+                            );
+                          }}
+                          className="w-full rounded-xl border border-[#1A56DB]/30 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-[#1A56DB]"
+                        >
+                          Responder reseña
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              },
             )}
           </div>
         ) : (

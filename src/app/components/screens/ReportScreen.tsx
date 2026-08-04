@@ -65,7 +65,7 @@ const APP_CATEGORIES: Category[] = [
   },
 ];
 
-const USER_CATEGORIES: Category[] = [
+const WORKER_CATEGORIES: Category[] = [
   {
     id: 'inappropriate_behavior',
     label: 'Conducta inapropiada',
@@ -73,7 +73,7 @@ const USER_CATEGORIES: Category[] = [
     bg: '#FEF2F2',
   },
   {
-    id: 'no_show',
+    id: 'worker_no_show',
     label: 'No se presentó al servicio',
     color: '#D97706',
     bg: '#FFFBEB',
@@ -89,6 +89,69 @@ const USER_CATEGORIES: Category[] = [
     label: 'Mala calidad del servicio',
     color: '#7C3AED',
     bg: '#F5F3FF',
+  },
+  {
+    id: 'unfinished_work',
+    label: 'Trabajo incompleto o abandonado',
+    color: '#9333EA',
+    bg: '#FAF5FF',
+  },
+  {
+    id: 'property_damage',
+    label: 'Daños a la propiedad',
+    color: '#EA580C',
+    bg: '#FFF7ED',
+  },
+  {
+    id: 'harassment',
+    label: 'Acoso o amenazas',
+    color: '#BE123C',
+    bg: '#FFF1F2',
+  },
+  {
+    id: 'other',
+    label: 'Otro motivo',
+    color: '#475569',
+    bg: '#F1F5F9',
+  },
+];
+
+const CLIENT_CATEGORIES: Category[] = [
+  {
+    id: 'inappropriate_behavior',
+    label: 'Conducta inapropiada',
+    color: '#DC2626',
+    bg: '#FEF2F2',
+  },
+  {
+    id: 'client_unavailable',
+    label: 'No estaba disponible para recibir el servicio',
+    color: '#D97706',
+    bg: '#FFFBEB',
+  },
+  {
+    id: 'payment_refusal',
+    label: 'Problema o negativa con el pago',
+    color: '#1A56DB',
+    bg: '#EFF4FF',
+  },
+  {
+    id: 'incorrect_information',
+    label: 'Información incorrecta o incompleta del servicio',
+    color: '#7C3AED',
+    bg: '#F5F3FF',
+  },
+  {
+    id: 'unsafe_conditions',
+    label: 'Condiciones inseguras para trabajar',
+    color: '#EA580C',
+    bg: '#FFF7ED',
+  },
+  {
+    id: 'access_problem',
+    label: 'No permitió el acceso o impidió realizar el trabajo',
+    color: '#0891B2',
+    bg: '#ECFEFF',
   },
   {
     id: 'harassment',
@@ -120,10 +183,15 @@ export default function ReportScreen() {
       ? 'usuario'
       : 'aplicacion';
 
+  const tipoReportado =
+    locationState?.tipoReportado;
+
   const categories =
-    tipoReporte === 'usuario'
-      ? USER_CATEGORIES
-      : APP_CATEGORIES;
+    tipoReporte === 'aplicacion'
+      ? APP_CATEGORIES
+      : tipoReportado === 'client'
+        ? CLIENT_CATEGORIES
+        : WORKER_CATEGORIES;
 
   const [selectedCat, setSelectedCat] =
     useState<string | null>(null);
@@ -342,9 +410,10 @@ export default function ReportScreen() {
       setIsSubmitting(true);
 
       const respuesta = await fetch(
-        'http://localhost:3000/api/reportes',
+        '/api/reportes',
         {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type':
               'application/json',
@@ -462,7 +531,11 @@ export default function ReportScreen() {
           <h1 className="text-lg font-bold text-foreground">
             {tipoReporte === 'aplicacion'
               ? 'Reportar problema de la aplicación'
-              : 'Reportar usuario'}
+              : tipoReportado === 'client'
+                ? 'Reportar cliente'
+                : tipoReportado === 'worker'
+                  ? 'Reportar trabajador'
+                  : 'Reportar usuario'}
           </h1>
         </div>
       </div>
@@ -475,7 +548,9 @@ export default function ReportScreen() {
           <p className="text-xs text-amber-800 leading-relaxed">
             {tipoReporte === 'aplicacion'
               ? 'Describe el problema de la aplicación con información suficiente para que nuestro equipo pueda revisarlo.'
-              : 'Los reportes falsos pueden resultar en la suspensión de la cuenta. Describe únicamente hechos relacionados con este servicio.'}
+              : tipoReportado === 'client'
+                ? 'Describe únicamente hechos relacionados con el comportamiento del cliente durante este servicio. Los reportes falsos pueden resultar en la suspensión de la cuenta.'
+                : 'Describe únicamente hechos relacionados con el comportamiento o el trabajo del empleado durante este servicio. Los reportes falsos pueden resultar en la suspensión de la cuenta.'}
           </p>
         </div>
 
@@ -573,7 +648,9 @@ export default function ReportScreen() {
               tipoReporte ===
               'aplicacion'
                 ? 'Describe qué estabas haciendo, qué ocurrió y cuándo apareció el problema...'
-                : 'Describe lo ocurrido durante el servicio, incluyendo fecha, hora y cualquier información relevante...'
+                : tipoReportado === 'client'
+                  ? 'Describe lo ocurrido con el cliente durante el servicio, incluyendo fecha, hora y cualquier información relevante...'
+                  : 'Describe lo ocurrido con el trabajador durante el servicio, incluyendo fecha, hora y cualquier información relevante...'
             }
             rows={5}
             className="w-full bg-input-background rounded-xl px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#1A56DB]/30 resize-none"

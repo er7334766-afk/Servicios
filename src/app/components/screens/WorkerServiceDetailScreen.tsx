@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { MessageCircle } from 'lucide-react';
+import { Flag, MessageCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
   aceptarNuevoPresupuesto,
@@ -158,6 +158,7 @@ function convertirEstado(estado?: string | null): string {
 
     case 'completado':
     case 'completada':
+    case 'completed':
       return 'Completado';
 
     case 'cancelado':
@@ -182,6 +183,7 @@ function obtenerColorEstado(estado?: string | null): string {
     case 'aceptado':
     case 'completado':
     case 'completada':
+    case 'completed':
       return 'bg-green-100 text-green-700';
 
     case 'rechazada':
@@ -192,6 +194,7 @@ function obtenerColorEstado(estado?: string | null): string {
 
     case 'en_proceso':
     case 'en proceso':
+    case 'in progress':
       return 'bg-blue-100 text-blue-700';
 
     default:
@@ -421,6 +424,33 @@ export default function WorkerServiceDetailScreen() {
   });
 }
 
+
+  function abrirReporteCliente() {
+    const idCliente = Number(
+      servicio?.fk_cliente ??
+        servicio?.id_cliente
+    );
+
+    if (
+      !Number.isInteger(idCliente) ||
+      idCliente <= 0
+    ) {
+      setError(
+        'No se pudo identificar al cliente.'
+      );
+      return;
+    }
+
+    navigate('/home/report', {
+      state: {
+        tipoReporte: 'usuario',
+        idServicio: servicioId,
+        idReportado: idCliente,
+        tipoReportado: 'client',
+      },
+    });
+  }
+
   if (cargando) {
     return (
       <div className="flex min-h-full items-center justify-center bg-gray-50 px-6">
@@ -458,6 +488,33 @@ export default function WorkerServiceDetailScreen() {
     servicio.titulo?.trim() ||
     servicio.nombre_categoria?.trim() ||
     'Solicitud de servicio';
+
+  const estadoServicioNormalizado =
+    String(servicio.estado ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/_/g, ' ');
+
+  /*
+   * El trabajador puede reportar al cliente
+   * desde que el servicio fue asignado y
+   * también cuando ya quedó completado.
+   *
+   * No se muestra mientras la solicitud sigue
+   * pendiente, porque todavía no existe una
+   * relación de trabajo confirmada.
+   */
+  const puedeReportarCliente = [
+    'asignado',
+    'asignada',
+    'aceptado',
+    'aceptada',
+    'en proceso',
+    'in progress',
+    'completado',
+    'completada',
+    'completed',
+  ].includes(estadoServicioNormalizado);
 
   return (
     <div className="min-h-full bg-gray-50 pb-28">
@@ -560,6 +617,17 @@ export default function WorkerServiceDetailScreen() {
               </p>
             </div>
           </div>
+
+          {puedeReportarCliente && (
+            <button
+              type="button"
+              onClick={abrirReporteCliente}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+            >
+              <Flag className="h-4 w-4" />
+              Reportar cliente
+            </button>
+          )}
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm">
@@ -791,31 +859,29 @@ export default function WorkerServiceDetailScreen() {
 
 
       
-      <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white p-4">
-
-        <div className="mx-auto max-w-md">
-          <button
-            type="button"
-            onClick={manejarPostulacion}
-            disabled={
-              yaPostulado ||
-              postulando ||
-              String(servicio.estado ?? '')
-                .trim()
-                .toLowerCase() !== 'pendiente'
-            }
-            className="w-full rounded-2xl bg-[#1A56DB] px-5 py-4 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {postulando
-              ? 'Registrando...'
-              : yaPostulado
-                ? `Postulación: ${convertirEstado(
-                    estadoPostulacion
-                  )}`
-                : 'Me interesa'}
-          </button>
+      {estadoServicioNormalizado === 'pendiente' && (
+        <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white p-4">
+          <div className="mx-auto max-w-md">
+            <button
+              type="button"
+              onClick={manejarPostulacion}
+              disabled={
+                yaPostulado ||
+                postulando
+              }
+              className="w-full rounded-2xl bg-[#1A56DB] px-5 py-4 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {postulando
+                ? 'Registrando...'
+                : yaPostulado
+                  ? `Postulación: ${convertirEstado(
+                      estadoPostulacion
+                    )}`
+                  : 'Me interesa'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
