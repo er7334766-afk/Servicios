@@ -1388,11 +1388,19 @@ export default function HomeWorkerScreen() {
                       </div>
 
                       <span className="text-sm font-bold text-[#1A56DB] flex-shrink-0">
-                        $
-                        {Number(
-                          servicio.presupuesto
-                        ).toLocaleString(
-                          'es-HN'
+                        {new Intl.NumberFormat(
+                          'es-HN',
+                          {
+                            style: 'currency',
+                            currency: 'HNL',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          },
+                        ).format(
+                          Number(
+                            servicio.presupuesto ??
+                              0,
+                          ),
                         )}
                       </span>
                     </div>

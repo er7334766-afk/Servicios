@@ -483,23 +483,29 @@ export default function WorkerOwnProfileScreen() {
       !Number.isInteger(idResena) ||
       idResena <= 0
     ) {
-      mostrarError(
-        'El ID de la reseña es inválido',
-      );
+      const mensaje =
+        'El ID de la reseña es inválido';
+
+      mostrarError(mensaje);
+      window.alert(mensaje);
       return;
     }
 
     if (textoLimpio.length < 3) {
-      mostrarError(
-        'La respuesta debe tener al menos 3 caracteres',
-      );
+      const mensaje =
+        'La respuesta debe tener al menos 3 caracteres';
+
+      mostrarError(mensaje);
+      window.alert(mensaje);
       return;
     }
 
     if (textoLimpio.length > 500) {
-      mostrarError(
-        'La respuesta no puede superar los 500 caracteres',
-      );
+      const mensaje =
+        'La respuesta no puede superar los 500 caracteres';
+
+      mostrarError(mensaje);
+      window.alert(mensaje);
       return;
     }
 
@@ -507,8 +513,20 @@ export default function WorkerOwnProfileScreen() {
       setEnviandoRespuesta(true);
       setErrorMessage('');
 
+      const url =
+        `${API_URL}/resenas/${idResena}/respuesta`;
+
+      console.log(
+        'Publicando respuesta de reseña:',
+        {
+          idResena,
+          textoLimpio,
+          url,
+        },
+      );
+
       const respuesta = await fetch(
-        `${API_URL}/resenas/${idResena}/respuesta`,
+        url,
         {
           method: 'PUT',
           credentials: 'include',
@@ -533,11 +551,27 @@ export default function WorkerOwnProfileScreen() {
           detalle?: string;
         }>(respuesta);
 
+      console.log(
+        'Respuesta del servidor:',
+        {
+          status: respuesta.status,
+          ok: respuesta.ok,
+          datos,
+        },
+      );
+
       if (!respuesta.ok) {
-        throw new Error(
+        const mensajeError =
           datos.detalle ||
-            datos.mensaje ||
-            'No se pudo publicar la respuesta',
+          datos.mensaje ||
+          `Error ${respuesta.status}`;
+
+        window.alert(
+          `No se pudo publicar la respuesta.\n\nEstado: ${respuesta.status}\nMensaje: ${mensajeError}`,
+        );
+
+        throw new Error(
+          mensajeError,
         );
       }
 
@@ -572,11 +606,29 @@ export default function WorkerOwnProfileScreen() {
         error,
       );
 
-      mostrarError(
+      const mensajeError =
         error instanceof Error
           ? error.message
-          : 'No se pudo publicar la respuesta',
+          : 'No se pudo publicar la respuesta';
+
+      mostrarError(
+        mensajeError,
       );
+
+      /*
+       * Evita mostrar dos alertas cuando el error
+       * ya fue presentado con el estado HTTP.
+       */
+      if (
+        !mensajeError.startsWith(
+          'Error ',
+        )
+      ) {
+        console.log(
+          'Detalle final del error:',
+          mensajeError,
+        );
+      }
     } finally {
       setEnviandoRespuesta(false);
     }

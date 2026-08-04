@@ -7540,230 +7540,7 @@ app.post(
 // ==========================================
 // RESPONDER UNA RESEÑA
 // Solo puede responder el trabajador evaluado
-// ==========================================
-/*app.put(
-  '/api/resenas/:idResena/respuesta',
-  async (req, res) => {
-    try {
-      const idResena = Number(
-        req.params.idResena,
-      );
-
-      const respuestaTexto = String(
-        req.body?.respuesta ?? '',
-      ).trim();
-
-      if (
-        !Number.isInteger(idResena) ||
-        idResena <= 0
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'ID de reseña inválido',
-        });
-      }
-
-      if (
-        respuestaTexto.length < 3
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'La respuesta debe tener al menos 3 caracteres',
-        });
-      }
-
-      if (
-        respuestaTexto.length > 500
-      ) {
-        return res.status(400).json({
-          mensaje:
-            'La respuesta no puede superar los 500 caracteres',
-        });
-      }
-
-      const sid =
-        req.cookies?.[COOKIE_NAME];
-
-      if (
-        !sid ||
-        !sessions.has(sid)
-      ) {
-        return res.status(401).json({
-          mensaje:
-            'Debes iniciar sesión para responder',
-        });
-      }
-
-      const sesion =
-        sessions.get(sid);
-
-      const usuario =
-        sesion?.user;
-
-      if (!usuario) {
-        return res.status(401).json({
-          mensaje:
-            'La sesión no es válida',
-        });
-      }
-
-      const rol = String(
-        usuario.role ??
-          usuario.rol ??
-          '',
-      )
-        .trim()
-        .toLowerCase();
-
-      if (
-        rol !== 'worker' &&
-        rol !== 'empleado' &&
-        rol !== 'trabajador'
-      ) {
-        return res.status(403).json({
-          mensaje:
-            'Solo el trabajador evaluado puede responder',
-        });
-      }
-
-      const idEmpleadoSesion = Number(
-        usuario.id_empleado ??
-          usuario.idEmpleado ??
-          usuario.id,
-      );
-
-      if (
-        !Number.isInteger(
-          idEmpleadoSesion,
-        ) ||
-        idEmpleadoSesion <= 0
-      ) {
-        return res.status(401).json({
-          mensaje:
-            'No se pudo identificar al trabajador autenticado',
-        });
-      }
-
-      const [
-        resultadoResena,
-      ]: any =
-        await database.execute(
-          `
-          SELECT TOP 1
-            id_resena,
-            id_empleado,
-            respuesta_evaluado
-          FROM resenas
-          WHERE id_resena = ?;
-          `,
-          [idResena],
-        );
-
-      const resenas =
-        obtenerFilas(
-          resultadoResena,
-        );
-
-      if (
-        resenas.length === 0
-      ) {
-        return res.status(404).json({
-          mensaje:
-            'La reseña no existe',
-        });
-      }
-
-      const resena =
-        resenas[0];
-
-      if (
-        Number(
-          resena.id_empleado,
-        ) !==
-        idEmpleadoSesion
-      ) {
-        return res.status(403).json({
-          mensaje:
-            'No puedes responder una reseña dirigida a otro trabajador',
-        });
-      }
-
-      if (
-        String(
-          resena.respuesta_evaluado ??
-            '',
-        ).trim()
-      ) {
-        return res.status(409).json({
-          mensaje:
-            'Esta reseña ya tiene una respuesta',
-        });
-      }
-
-      const [
-        resultadoActualizacion,
-      ]: any =
-        await database.execute(
-          `
-          UPDATE resenas
-          SET
-            respuesta_evaluado = ?,
-            fecha_respuesta = SYSDATETIME()
-
-          OUTPUT
-            INSERTED.id_resena,
-            INSERTED.respuesta_evaluado,
-            INSERTED.fecha_respuesta
-
-          WHERE id_resena = ?;
-          `,
-          [
-            respuestaTexto,
-            idResena,
-          ],
-        );
-
-      const actualizadas =
-        obtenerFilas(
-          resultadoActualizacion,
-        );
-
-      if (
-        actualizadas.length === 0
-      ) {
-        return res.status(404).json({
-          mensaje:
-            'No se pudo actualizar la reseña',
-        });
-      }
-
-      return res.status(200).json({
-        mensaje:
-          'Respuesta publicada correctamente',
-        respuesta:
-          actualizadas[0],
-      });
-    } catch (error: any) {
-      console.error(
-        'Error al responder reseña:',
-        error,
-      );
-
-      return res.status(500).json({
-        mensaje:
-          'Error al publicar la respuesta',
-        detalle:
-          error?.message ??
-          String(error),
-      });
-    }
-  },
-);*/
-
-// ==========================================
-// RESPONDER UNA RESEÑA
-// Solo puede responder el trabajador evaluado
-// No depende del campo role del login
+// Identifica al trabajador por el correo de sesión
 // ==========================================
 app.put(
   '/api/resenas/:idResena/respuesta',
@@ -7831,16 +7608,58 @@ app.put(
       const usuarioSesion =
         sesion.user;
 
-      /*
-       * No revisamos role ni rol.
-       *
-       * Tomamos cualquiera de los identificadores
-       * que ya guarda la sesión del empleado.
-       */
+      const correoSesion = String(
+        usuarioSesion.correo ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      if (!correoSesion) {
+        return res.status(401).json({
+          mensaje:
+            'La sesión no contiene un correo válido',
+        });
+      }
+
+      // ======================================
+      // IDENTIFICAR EMPLEADO POR CORREO
+      // ======================================
+      const [
+        resultadoEmpleadoSesion,
+      ]: any =
+        await database.execute(
+          `
+          SELECT TOP 1
+            id_empleado,
+            nombre,
+            correo
+          FROM empleados
+          WHERE LOWER(
+            LTRIM(RTRIM(correo))
+          ) = LOWER(
+            LTRIM(RTRIM(?))
+          );
+          `,
+          [correoSesion],
+        );
+
+      const empleadosSesion =
+        obtenerFilas(
+          resultadoEmpleadoSesion,
+        );
+
+      if (empleadosSesion.length === 0) {
+        return res.status(403).json({
+          mensaje:
+            'La sesión actual no pertenece a un trabajador registrado',
+        });
+      }
+
+      const empleadoSesion =
+        empleadosSesion[0];
+
       const idEmpleadoSesion = Number(
-        usuarioSesion.id_empleado ??
-          usuarioSesion.idEmpleado ??
-          usuarioSesion.id,
+        empleadoSesion.id_empleado,
       );
 
       if (
@@ -7864,12 +7683,17 @@ app.put(
         await database.execute(
           `
           SELECT TOP 1
-            id_resena,
-            id_empleado,
-            respuesta_evaluado,
-            fecha_respuesta
-          FROM resenas
-          WHERE id_resena = ?;
+            r.id_resena,
+            r.id_reserva,
+            r.id_empleado,
+            r.respuesta_evaluado,
+            r.fecha_respuesta,
+            e.nombre AS nombre_empleado
+          FROM resenas AS r
+          LEFT JOIN empleados AS e
+            ON e.id_empleado =
+              r.id_empleado
+          WHERE r.id_resena = ?;
           `,
           [idResena],
         );
@@ -7893,25 +7717,68 @@ app.put(
         resena.id_empleado,
       );
 
-      /*
-       * Esta es la validación importante:
-       * el ID de la sesión debe ser igual al
-       * empleado evaluado en la reseña.
-       */
+      // ======================================
+      // VALIDAR PROPIETARIO DE LA RESEÑA
+      // ======================================
       if (
         !Number.isInteger(
           idEmpleadoResena,
         ) ||
-        idEmpleadoResena !==
-          idEmpleadoSesion
+        idEmpleadoResena <= 0
       ) {
-        return res.status(403).json({
+        return res.status(400).json({
           mensaje:
-            'No puedes responder una reseña dirigida a otro trabajador',
+            'La reseña no tiene un trabajador válido asociado',
         });
       }
 
-      // Solo permitir una respuesta.
+      if (
+        idEmpleadoResena !==
+        idEmpleadoSesion
+      ) {
+        console.error(
+          'IDs de trabajador no coinciden:',
+          {
+            idResena,
+            correoSesion,
+            idEmpleadoSesion,
+            idEmpleadoResena,
+            empleadoSesion:
+              empleadoSesion.nombre,
+            empleadoResena:
+              resena.nombre_empleado,
+          },
+        );
+
+        return res.status(403).json({
+          mensaje:
+            `La reseña pertenece al trabajador ${idEmpleadoResena}, pero la sesión actual pertenece al trabajador ${idEmpleadoSesion}`,
+
+          diagnostico: {
+            id_resena:
+              idResena,
+
+            correo_sesion:
+              correoSesion,
+
+            id_empleado_sesion:
+              idEmpleadoSesion,
+
+            nombre_empleado_sesion:
+              empleadoSesion.nombre,
+
+            id_empleado_resena:
+              idEmpleadoResena,
+
+            nombre_empleado_resena:
+              resena.nombre_empleado,
+          },
+        });
+      }
+
+      // ======================================
+      // IMPEDIR RESPUESTAS DUPLICADAS
+      // ======================================
       const respuestaExistente = String(
         resena.respuesta_evaluado ?? '',
       ).trim();
@@ -7934,7 +7801,8 @@ app.put(
           UPDATE resenas
           SET
             respuesta_evaluado = ?,
-            fecha_respuesta = SYSDATETIME()
+            fecha_respuesta =
+              SYSDATETIME()
 
           OUTPUT
             INSERTED.id_resena,
@@ -7968,10 +7836,6 @@ app.put(
         );
 
       if (actualizadas.length === 0) {
-        /*
-         * Puede ocurrir si otra petición respondió
-         * la reseña unos instantes antes.
-         */
         return res.status(409).json({
           mensaje:
             'La reseña ya fue respondida o no pudo actualizarse',
@@ -7987,6 +7851,8 @@ app.put(
           idResena,
           idEmpleado:
             idEmpleadoSesion,
+          correo:
+            correoSesion,
         },
       );
 
@@ -7998,6 +7864,16 @@ app.put(
           id_resena:
             Number(
               respuestaGuardada.id_resena,
+            ),
+
+          id_reserva:
+            Number(
+              respuestaGuardada.id_reserva,
+            ),
+
+          id_empleado:
+            Number(
+              respuestaGuardada.id_empleado,
             ),
 
           respuesta_evaluado:
