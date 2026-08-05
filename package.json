@@ -5,6 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "cd backend && npm install && npm run build",
+    "build:web": "vite build",
+    "android:copy": "npm run build:web && npx cap copy android",
+    "android:sync": "npm run build:web && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android": "npm run android:sync && npx cap open android",
     "dev": "vite"
   },
   "dependencies": {

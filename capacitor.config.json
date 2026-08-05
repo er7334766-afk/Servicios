@@ -1,5 +1,6 @@
 {
-  "appId": "com.example.app",
-  "appName": "@figma/my-make-file",
-  "webDir": "dist"
+  "appId": "com.servicios.app",
+  "appName": "Servicios",
+  "webDir": "dist",
+  "bundledWebRuntime": false
 }
