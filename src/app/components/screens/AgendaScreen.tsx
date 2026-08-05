@@ -411,7 +411,7 @@ export default function AgendaScreen() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="border-b border-border bg-card px-4 pb-4 pt-10">
+      <div className="border-b border-border bg-card px-3 pb-4 pt-10 sm:px-4">
         <div className="mb-4 flex items-center justify-between">
 
            <div className="flex items-center gap-3">
@@ -430,7 +430,7 @@ export default function AgendaScreen() {
           </div>
 
 
-          <div className="flex rounded-xl bg-muted p-1">
+          <div className="flex flex-wrap rounded-xl bg-muted p-1">
             {(['week', 'month'] as const).map((vista) => (
               <button
                 type="button"
@@ -549,7 +549,7 @@ export default function AgendaScreen() {
                       key={isAgendaReserva(servicio) ? servicio.id_reserva : servicio.id_servicio}
                       className="rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-4"
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">
                             {obtenerDescripcion(servicio)}
@@ -680,7 +680,7 @@ export default function AgendaScreen() {
                       }}
                       className="cursor-pointer rounded-xl border border-[#1A56DB]/20 bg-[#EFF4FF] p-4 transition-all hover:border-[#1A56DB]/40"
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-foreground">
                             {obtenerDescripcion(servicio)}
@@ -811,13 +811,13 @@ export default function AgendaScreen() {
                       {!isAgendaReserva(servicio) && (
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 text-[#64748B]" />
-                          <span>{servicio.direccion}</span>
+                          <span className="break-words">{servicio.direccion}</span>
                         </div>
                       )}
                     </div>
 
                     {!isAgendaReserva(servicio) && (
-                      <div className="mt-3 flex items-center justify-between rounded-2xl bg-[#EFF4FF] p-3 text-sm font-semibold text-[#1A56DB]">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#EFF4FF] p-3 text-sm font-semibold text-[#1A56DB]">
                         <span>Presupuesto</span>
                         <span>{formatearPrecio(servicio.presupuesto)}</span>
                       </div>

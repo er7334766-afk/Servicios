@@ -107,6 +107,19 @@ interface RespuestaEvidencia {
   detalle?: string;
 }
 
+interface ImagenGaleria {
+  id_evidencia?: number;
+  url_archivo?: string;
+  fecha_subida?: string | null;
+}
+
+interface RespuestaGaleria {
+  galeria?: ImagenGaleria[];
+  imagen?: ImagenGaleria | null;
+  mensaje?: string;
+  detalle?: string;
+}
+
 async function leerRespuestaJson<T>(
   respuesta: Response,
 ): Promise<T> {
@@ -394,6 +407,58 @@ export default function WorkerOwnProfileScreen() {
     }
   };
 
+  const cargarGaleriaEmpleado = async () => {
+    if (
+      !Number.isInteger(idEmpleado) ||
+      idEmpleado <= 0
+    ) {
+      setGalleryUrls([]);
+      return;
+    }
+
+    try {
+      const respuesta = await fetch(
+        `${API_URL}/empleados/${idEmpleado}/galeria`,
+        {
+          cache: 'no-store',
+          credentials: 'include',
+        },
+      );
+
+      const datos =
+        await leerRespuestaJson<RespuestaGaleria>(
+          respuesta,
+        );
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.detalle ||
+            datos.mensaje ||
+            'No se pudo cargar la galería',
+        );
+      }
+
+      const urls = Array.isArray(datos.galeria)
+        ? datos.galeria
+            .map((imagen) =>
+              normalizarUrlArchivo(
+                imagen.url_archivo,
+              ),
+            )
+            .filter(Boolean)
+        : [];
+
+      setGalleryUrls(urls);
+    } catch (error) {
+      console.error(
+        'Error al cargar galería:',
+        error,
+      );
+
+      setGalleryUrls([]);
+    }
+  };
+
   const cargarResumenEmpleado = async () => {
     if (
       !Number.isInteger(idEmpleado) ||
@@ -643,23 +708,8 @@ export default function WorkerOwnProfileScreen() {
   }, [idEmpleado]);
 
   useEffect(() => {
-    const urls = Array.isArray(
-      (currentUser as any)?.galleryUrls,
-    )
-      ? (
-          (currentUser as any)
-            .galleryUrls as string[]
-        )
-      : [];
-
-    setGalleryUrls(
-      urls
-        .map((url) =>
-          normalizarUrlArchivo(url),
-        )
-        .filter(Boolean),
-    );
-  }, [currentUser]);
+    void cargarGaleriaEmpleado();
+  }, [idEmpleado]);
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -1045,12 +1095,53 @@ export default function WorkerOwnProfileScreen() {
         );
       }
 
-      setGalleryUrls(
-        (actuales) => [
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        throw new Error(
+          'No se encontró el ID del trabajador',
+        );
+      }
+
+      const respuestaGaleria = await fetch(
+        `${API_URL}/empleados/${idEmpleado}/galeria`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            url: nuevaUrlGuardada,
+          }),
+        },
+      );
+
+      const datosGaleria =
+        await leerRespuestaJson<RespuestaGaleria>(
+          respuestaGaleria,
+        );
+
+      if (!respuestaGaleria.ok) {
+        throw new Error(
+          datosGaleria.detalle ||
+            datosGaleria.mensaje ||
+            'La imagen se subió, pero no pudo guardarse en la galería',
+        );
+      }
+
+      setGalleryUrls((actuales) => {
+        if (actuales.includes(nuevaUrl)) {
+          return actuales;
+        }
+
+        return [
           ...actuales,
           nuevaUrl,
-        ],
-      );
+        ];
+      });
 
       if (currentUser) {
         const galeriaActual =
@@ -1062,6 +1153,10 @@ export default function WorkerOwnProfileScreen() {
                 (currentUser as any)
                   .galleryUrls as string[]
               )
+                .map((url) =>
+                  normalizarUrlArchivo(url),
+                )
+                .filter(Boolean)
             : [];
 
         setCurrentUser({
@@ -1071,10 +1166,15 @@ export default function WorkerOwnProfileScreen() {
             currentUser.role ??
             'worker',
 
-          galleryUrls: [
-            ...galeriaActual,
-            nuevaUrl,
-          ],
+          galleryUrls:
+            galeriaActual.includes(
+              nuevaUrl,
+            )
+              ? galeriaActual
+              : [
+                  ...galeriaActual,
+                  nuevaUrl,
+                ],
         } as any);
       }
     } catch (error) {

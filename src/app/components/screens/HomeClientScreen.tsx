@@ -1102,7 +1102,7 @@ export default function HomeClientScreen() {
                       <ImageWithFallback
                         src={worker.foto_url ?? ''}
                         alt={worker.nombre}
-                        className="h-14 w-14 rounded-xl object-cover"
+                        className="w-14 h-14 rounded-xl object-cover object-center flex-shrink-0"
                       />
 
                       {String(worker.estado ?? '').trim().toLowerCase() === 'disponible' && (

@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Send,
   Image,
+  X,
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -125,6 +126,11 @@ export default function ChatScreen() {
 
   const usuarioLocal = leerUsuarioLocal();
   const [mostrarMenu, setMostrarMenu] = useState(false);
+
+  const [
+    imagenAmpliada,
+    setImagenAmpliada,
+  ] = useState<string | null>(null);
 
   const [mostrarModalPresupuesto, setMostrarModalPresupuesto] =
     useState(false);
@@ -1068,19 +1074,21 @@ if (texto) {
                 }`}
               >
                 {esImagen ? (
-                  <a
-                    href={urlImagen}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block overflow-hidden rounded-2xl border border-border bg-card p-1"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImagenAmpliada(urlImagen)
+                    }
+                    className="block max-w-full overflow-hidden rounded-2xl border border-border bg-card p-1 text-left"
+                    aria-label="Abrir imagen en pantalla completa"
                   >
                     <img
                       src={urlImagen}
                       alt="Imagen enviada"
                       loading="lazy"
-                      className="block max-h-72 w-full max-w-[260px] rounded-xl object-contain"
+                      className="block h-auto max-h-72 w-full max-w-full rounded-xl object-contain sm:max-w-[260px]"
                     />
-                  </a>
+                  </button>
                 ) : (
                   <div
                     className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
@@ -1187,6 +1195,38 @@ if (texto) {
           />
         </motion.button>
       </div>
+
+      {imagenAmpliada && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+          onClick={() =>
+            setImagenAmpliada(null)
+          }
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vista ampliada de la imagen"
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setImagenAmpliada(null)
+            }
+            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25"
+            aria-label="Cerrar imagen"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          <img
+            src={imagenAmpliada}
+            alt="Imagen ampliada del chat"
+            onClick={(evento) =>
+              evento.stopPropagation()
+            }
+            className="max-h-[90dvh] max-w-[96vw] rounded-xl object-contain shadow-2xl sm:max-w-[90vw]"
+          />
+        </div>
+      )}
 
       {mostrarModalPresupuesto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5">

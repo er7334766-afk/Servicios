@@ -514,7 +514,7 @@ export default function HomeWorkerScreen() {
       () => {
         void cargarProximosTrabajos();
       },
-      15000
+      60000
     );
 
     const actualizarAlVolver = () => {
@@ -627,7 +627,7 @@ export default function HomeWorkerScreen() {
       () => {
         cargarServicios(false);
       },
-      10000
+      60000
     );
 
     return () => {
@@ -711,7 +711,7 @@ export default function HomeWorkerScreen() {
 
     const intervalo = window.setInterval(() => {
       void cargarNotificacionesSinLeer();
-    }, 15000);
+    }, 60000);
 
     const actualizarAlVolver = () => {
       void cargarNotificacionesSinLeer();
@@ -1464,4 +1464,4 @@ export default function HomeWorkerScreen() {
       </div>
     </div>
   );
-}
+}   

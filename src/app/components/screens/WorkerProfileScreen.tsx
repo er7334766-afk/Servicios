@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Share2,
   Star,
+  X,
 } from 'lucide-react';
 
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -19,6 +20,32 @@ import { StarRating } from '../shared/StarRating';
 import { ReviewCard } from '../shared/ReviewCard';
 
 const API_URL = 'http://localhost:3000/api';
+const API_ORIGIN = 'http://localhost:3000';
+
+function normalizarUrlArchivo(
+  valor?: string | null,
+): string {
+  const url = String(valor ?? '').trim();
+
+  if (!url) {
+    return '';
+  }
+
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+
+  if (url.startsWith('/')) {
+    return `${API_ORIGIN}${url}`;
+  }
+
+  return `${API_ORIGIN}/${url}`;
+}
 
 interface CategoriaEmpleado {
   id_categoria: number;
@@ -89,6 +116,18 @@ interface RespuestaCategorias {
 
 interface RespuestaSubcategorias {
   subcategorias?: SubcategoriaEmpleado[];
+  mensaje?: string;
+  detalle?: string;
+}
+
+interface ImagenGaleria {
+  id_evidencia?: number;
+  url_archivo?: string;
+  fecha_subida?: string | null;
+}
+
+interface RespuestaGaleria {
+  galeria?: ImagenGaleria[];
   mensaje?: string;
   detalle?: string;
 }
@@ -169,6 +208,11 @@ export default function WorkerProfileScreen() {
   const [resenas, setResenas] =
     useState<ResenaEmpleado[]>([]);
 
+  const [
+    galeriaEmpleado,
+    setGaleriaEmpleado,
+  ] = useState<string[]>([]);
+
   const [totalTrabajos, setTotalTrabajos] =
     useState(0);
 
@@ -185,6 +229,11 @@ export default function WorkerProfileScreen() {
 
   const [error, setError] =
     useState('');
+
+  const [
+    selectedImageUrl,
+    setSelectedImageUrl,
+  ] = useState<string | null>(null);
 
   useEffect(() => {
     async function obtenerPerfilCompleto() {
@@ -211,6 +260,7 @@ export default function WorkerProfileScreen() {
           respuestaCategorias,
           respuestaSubcategorias,
           respuestaResumen,
+          respuestaGaleria,
         ] = await Promise.all([
           fetch(
             `${API_URL}/empleados/${idEmpleado}`,
@@ -237,6 +287,14 @@ export default function WorkerProfileScreen() {
             `${API_URL}/empleados/${idEmpleado}/resumen-perfil`,
             {
               cache: 'no-store',
+            },
+          ),
+
+          fetch(
+            `${API_URL}/empleados/${idEmpleado}/galeria`,
+            {
+              cache: 'no-store',
+              credentials: 'include',
             },
           ),
         ]);
@@ -385,6 +443,40 @@ export default function WorkerProfileScreen() {
           setPromedioCalificacion(0);
           setResenas([]);
         }
+
+        if (respuestaGaleria.ok) {
+          const datosGaleria =
+            await leerRespuestaJson<RespuestaGaleria>(
+              respuestaGaleria,
+            );
+
+          const urls = Array.isArray(
+            datosGaleria.galeria,
+          )
+            ? datosGaleria.galeria
+                .map((imagen) =>
+                  normalizarUrlArchivo(
+                    imagen.url_archivo,
+                  ),
+                )
+                .filter(Boolean)
+            : [];
+
+          setGaleriaEmpleado(urls);
+        } else {
+          const datosErrorGaleria =
+            await leerRespuestaJson<RespuestaGaleria>(
+              respuestaGaleria,
+            );
+
+          console.error(
+            'No se pudo cargar la galería:',
+            datosErrorGaleria.detalle ||
+              datosErrorGaleria.mensaje,
+          );
+
+          setGaleriaEmpleado([]);
+        }
       } catch (errorDesconocido) {
         console.error(
           'Error al cargar el empleado:',
@@ -395,6 +487,7 @@ export default function WorkerProfileScreen() {
         setCategorias([]);
         setSubcategorias([]);
         setResenas([]);
+        setGaleriaEmpleado([]);
         setTotalTrabajos(0);
         setTotalResenas(0);
         setPromedioCalificacion(0);
@@ -453,28 +546,25 @@ export default function WorkerProfileScreen() {
       'disponible' ||
     estadoNormalizado === 'activo';
 
-  const galeria = Array.isArray(
-    worker.galeria,
-  )
-    ? worker.galeria.filter(Boolean)
-    : [];
+  const galeria =
+    galeriaEmpleado.filter(Boolean);
 
-  const imagenPrincipal =
-    galeria[0] ||
-    worker.foto ||
-    '';
 
   return (
     <div className="flex min-h-full flex-col">
       {/* Imagen principal */}
       <div className="relative">
-        <ImageWithFallback
-          src={imagenPrincipal}
-          alt={worker.nombre_E}
-          className="h-52 w-full object-cover"
-        />
+        <div className="h-52 w-full overflow-hidden bg-slate-100">
+          <ImageWithFallback
+            src={normalizarUrlArchivo(
+              worker.foto,
+            )}
+            alt={`Foto de ${worker.nombre_E}`}
+            className="h-full w-full object-contain object-center"
+          />
+        </div>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-black/10" />
 
         <button
           type="button"
@@ -510,10 +600,9 @@ export default function WorkerProfileScreen() {
         <div className="absolute -bottom-10 left-5">
           <div className="relative">
             <ImageWithFallback
-              src={
-                worker.foto ||
-                imagenPrincipal
-              }
+              src={normalizarUrlArchivo(
+                worker.foto,
+              )}
               alt={worker.nombre_E}
               className="h-20 w-20 rounded-2xl border-4 border-background object-cover shadow-lg"
             />
@@ -669,21 +758,28 @@ export default function WorkerProfileScreen() {
         </div>
 
         {/* Galería */}
-        {galeria.length > 0 && (
-          <div className="mt-5">
-            <h3 className="mb-2 text-sm font-bold text-foreground">
-              Galería de trabajos
-            </h3>
+        <div className="mt-5">
+          <h3 className="mb-2 text-sm font-bold text-foreground">
+            Galería de trabajos
+          </h3>
 
+          {galeria.length > 0 ? (
             <div className="grid grid-cols-3 gap-2">
               {galeria.map(
                 (url, index) => (
-                  <motion.div
+                  <motion.button
                     key={`${url}-${index}`}
+                    type="button"
                     whileTap={{
                       scale: 0.96,
                     }}
-                    className="aspect-square overflow-hidden rounded-xl"
+                    onClick={() =>
+                      setSelectedImageUrl(url)
+                    }
+                    className="aspect-square overflow-hidden rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+                    aria-label={`Ver trabajo ${
+                      index + 1
+                    } en pantalla completa`}
                   >
                     <ImageWithFallback
                       src={url}
@@ -692,10 +788,52 @@ export default function WorkerProfileScreen() {
                       }`}
                       className="h-full w-full object-cover"
                     />
-                  </motion.div>
+                  </motion.button>
                 ),
               )}
             </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-card px-5 py-6 text-center">
+              <p className="text-sm font-semibold text-foreground">
+                Aún no ha publicado fotos
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Las fotografías de sus trabajos aparecerán aquí.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {selectedImageUrl && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+            onClick={() =>
+              setSelectedImageUrl(null)
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label="Vista ampliada del trabajo"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedImageUrl(null)
+              }
+              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25"
+              aria-label="Cerrar imagen"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <img
+              src={selectedImageUrl}
+              alt="Trabajo ampliado"
+              onClick={(event) =>
+                event.stopPropagation()
+              }
+              className="max-h-[90dvh] max-w-[96vw] rounded-xl object-contain shadow-2xl sm:max-w-[90vw]"
+            />
           </div>
         )}
 

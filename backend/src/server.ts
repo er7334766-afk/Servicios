@@ -15,18 +15,7 @@ const app = express();
 const port = Number(process.env.PORT ?? 3000);
 
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-//console.log("Cadena existe:", !!AZURE_STORAGE_CONNECTION_STRING);
 
-/*console.log(
-    "Primeros 80 caracteres:",
-    AZURE_STORAGE_CONNECTION_STRING?.substring(0,80)
-);*/
-
-/*console.log(
-    "Using Placeholder:",
-    String(AZURE_STORAGE_CONNECTION_STRING ?? "")
-        .includes("your_account")
-);*/
 if (!AZURE_STORAGE_CONNECTION_STRING) {
   console.warn("AZURE_STORAGE_CONNECTION_STRING no definida. Subidas a Azure fallarán si no se configura.");
 }
@@ -125,7 +114,6 @@ async function subirArchivoAzure(base64: string, fileName: string, contentType: 
 
 
 
-//app.use(cors());
 app.use(
   cors({
     origin: true,
@@ -326,64 +314,6 @@ app.post(
 );
 
 
-// ==========================================
-// RUTAS DE EMPLEADOS
-// ==========================================
-/*app.post('/api/empleados', async (req, res) => {
-  try {
-    const { nombre_E, password_E, correo, celular } = req.body;
-
-    if (!nombre_E || !password_E || !correo || !celular) {
-      return res.status(400).json({
-        mensaje: 'Nombre, correo, teléfono y contraseña son obligatorios',
-      });
-    }
-
-    const passwordHash = await bcrypt.hash(password_E, SALT_ROUNDS);
-
-    const [resultado] = await database.execute(
-      `
-      INSERT INTO empleados
-      (
-        nombre,
-        password_hash,
-        correo,
-        telefono,
-        titulo,
-        dni,
-        antecedentes,
-        direccion,
-        estado,
-        numero_trabajos,
-        sobre_mi,
-        foto_url
-      )
-      VALUES
-      (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, NULL);
-      SELECT SCOPE_IDENTITY() AS insertId;
-      `,
-      [
-        nombre_E,
-        passwordHash,
-        correo,
-        celular,
-        'Pendiente',
-        0,
-      ],
-    );
-
-    res.status(201).json({
-      mensaje: 'Empleado registrado correctamente',
-      resultado,
-    });
-  } catch (error) {
-    console.error('Error al registrar empleado:', error);
-
-    res.status(500).json({
-      mensaje: 'Error al registrar el empleado',
-    });
-  }
-});*/
 
 app.post('/api/empleados', async (req, res) => {
   try {
@@ -424,7 +354,7 @@ app.post('/api/empleados', async (req, res) => {
       });
     }
 
-    // Comprobar que el correo no esté registrado.
+    
     const [
       resultadoCorreo,
     ]: any =
@@ -462,13 +392,7 @@ app.post('/api/empleados', async (req, res) => {
         SALT_ROUNDS
       );
 
-    /*
-     * OUTPUT INSERTED obtiene directamente
-     * el empleado registrado.
-     *
-     * fecha_creacion debe generarse mediante
-     * el valor DEFAULT definido en SQL Server.
-     */
+    
     const [
       resultadoRegistro,
     ]: any =
@@ -551,7 +475,7 @@ app.post('/api/empleados', async (req, res) => {
       });
     }
 
-    // Crear sesión inmediatamente después del registro.
+    
     const sid = randomUUID();
 
     const usuarioSesion = {
@@ -583,11 +507,7 @@ app.post('/api/empleados', async (req, res) => {
       lastActivity: ahora,
     });
 
-    /*
-     * En localhost:
-     * secure será false porque NODE_ENV
-     * normalmente no será production.
-     */
+    
     res.cookie(
       COOKIE_NAME,
       sid,
@@ -651,27 +571,53 @@ app.post('/api/empleados', async (req, res) => {
   }
 });
 
+
+
 app.get('/api/empleados', async (_req, res) => {
   try {
-    const [
-      empleados,
-    ] = await database.query(
-      `
-      SELECT
-        id_empleado,
-        nombre AS nombre_E,
-        correo,
-        telefono AS celular,
-        titulo,
-        dni,
-        direccion,
-        estado,
-        numero_trabajos AS N_trabajos,
-        foto_url,
-        fecha_creacion AS fechaCreacion
-      FROM empleados
-      `
-    );
+    const [resultado]: any =
+      await database.execute(
+        `
+        SELECT
+          id_empleado,
+          nombre AS nombre_E,
+          correo,
+          telefono AS celular,
+          titulo,
+          dni,
+          direccion,
+          estado,
+          numero_trabajos AS N_trabajos,
+          foto_url,
+          fecha_creacion AS fechaCreacion
+        FROM empleados
+        WHERE
+          LOWER(
+            LTRIM(
+              RTRIM(
+                COALESCE(nombre, '')
+              )
+            )
+          ) <> 'cuenta eliminada'
+          AND LOWER(
+            LTRIM(
+              RTRIM(
+                COALESCE(estado, '')
+              )
+            )
+          ) NOT IN (
+            'eliminado',
+            'eliminada',
+            'deleted',
+            'inactivo',
+            'inactiva'
+          )
+        ORDER BY nombre ASC;
+        `
+      );
+
+    const empleados =
+      obtenerFilas(resultado);
 
     return res.status(200).json(
       empleados
@@ -751,57 +697,123 @@ app.get(
   }
 );
 
-//empleados destacados
-app.get('/api/empleados/destacados', async (_req, res) => {
-  try {
-    const [empleados]: any = await database.query(
-      `
-      SELECT TOP 5
-        e.id_empleado,
-        e.nombre_E,
-        e.correo,
-        e.celular,
-        e.titulo,
-        e.direccion,
-        e.fk_categoria,
-        e.estado,
-        e.numero_trabajos AS N_trabajos,
-        COALESCE(AVG(r.calificacion_general), 0) AS promedio_calificacion,
-        e.sobre_mi,
-        e.fechaCreacion
-      FROM empleados AS e
-      LEFT JOIN servicios AS s
-        ON s.fk_empleado = e.id_empleado
-      LEFT JOIN reservas AS re
-        ON re.id_servicio = s.id_servicio
-      LEFT JOIN resenas AS r
-        ON r.id_reserva = re.id_reserva
-        AND r.id_empleado = e.id_empleado
-      GROUP BY
-        e.id_empleado,
-        e.nombre_E,
-        e.correo,
-        e.celular,
-        e.titulo,
-        e.direccion,
-        e.fk_categoria,
-        e.estado,
-        e.numero_trabajos,
-        e.sobre_mi,
-        e.fechaCreacion
-      ORDER BY promedio_calificacion DESC, N_trabajos DESC, nombre_E ASC
-      `
-    );
 
-    res.json(Array.isArray(empleados) ? empleados : []);
-  } catch (error) {
-    console.error('Error al consultar empleados destacados:', error);
 
-    res.status(500).json({
-      mensaje: 'Error al consultar los empleados destacados',
-    });
+// ==========================================
+// EMPLEADOS DESTACADOS
+// ==========================================
+app.get(
+  '/api/empleados/destacados',
+  async (_req, res) => {
+    try {
+      const resultado: any =
+        await database.execute(
+          `
+          SELECT TOP 5
+            e.id_empleado,
+            e.nombre AS nombre_E,
+            e.correo,
+            e.telefono AS celular,
+            e.titulo,
+            e.direccion,
+            e.estado,
+            e.numero_trabajos AS N_trabajos,
+
+            COALESCE(
+              AVG(
+                CAST(
+                  r.calificacion_general
+                  AS DECIMAL(10, 2)
+                )
+              ),
+              0
+            ) AS promedio_calificacion,
+
+            e.sobre_mi,
+            e.foto_url,
+            e.fecha_creacion AS fechaCreacion
+
+          FROM empleados AS e
+
+          LEFT JOIN servicios AS s
+            ON s.fk_empleado =
+              e.id_empleado
+
+          LEFT JOIN reservas AS re
+            ON re.id_servicio =
+              s.id_servicio
+
+          LEFT JOIN resenas AS r
+            ON r.id_reserva =
+              re.id_reserva
+            AND r.id_empleado =
+              e.id_empleado
+
+          WHERE
+            LOWER(
+              LTRIM(
+                RTRIM(
+                  COALESCE(e.nombre, '')
+                )
+              )
+            ) <> 'cuenta eliminada'
+
+            AND LOWER(
+              LTRIM(
+                RTRIM(
+                  COALESCE(e.estado, '')
+                )
+              )
+            ) NOT IN (
+              'eliminado',
+              'eliminada',
+              'deleted',
+              'inactivo',
+              'inactiva'
+            )
+
+          GROUP BY
+            e.id_empleado,
+            e.nombre,
+            e.correo,
+            e.telefono,
+            e.titulo,
+            e.direccion,
+            e.estado,
+            e.numero_trabajos,
+            e.sobre_mi,
+            e.foto_url,
+            e.fecha_creacion
+
+          ORDER BY
+            promedio_calificacion DESC,
+            N_trabajos DESC,
+            e.nombre ASC;
+          `
+        );
+
+      const empleados =
+        obtenerFilas(resultado);
+
+      return res.status(200).json(
+        empleados
+      );
+    } catch (error: any) {
+      console.error(
+        'Error al consultar empleados destacados:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'Error al consultar los empleados destacados',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
   }
-});
+);
 
 
 
@@ -943,53 +955,7 @@ app.put("/api/empleados/:id", async (req, res) => {
   }
 });
 
-// ==========================================
-// RUTAS DE CLIENTES
-// ==========================================
-/*app.post("/api/clientes", async (req, res) => {
-  try {
-    const {
-      nombre_C,
-      password_C,
-      correo,
-      celular
-    } = req.body;
 
-    if (!nombre_C || !password_C || !correo || !celular) {
-      return res.status(400).json({
-        mensaje: "Nombre, correo, teléfono y contraseña son obligatorios"
-      });
-    }
-
-    const passwordHash = await bcrypt.hash(password_C, SALT_ROUNDS);
-
-    const [resultado] = await database.execute(
-      `
-      INSERT INTO clientes
-      (nombre, password_hash, correo, telefono, dni, foto_url)
-      VALUES (?, ?, ?, ?, NULL, NULL);
-      SELECT SCOPE_IDENTITY() AS insertId;
-      `,
-      [
-        nombre_C,
-        passwordHash,
-        correo,
-        celular
-      ]
-    );
-
-    res.status(201).json({
-      mensaje: "Cliente registrado correctamente",
-      resultado
-    });
-  } catch (error) {
-    console.error("Error al registrar cliente:", error);
-
-    res.status(500).json({
-      mensaje: "Error al registrar el cliente"
-    });
-  }
-});*/
 
 app.post('/api/clientes', async (req, res) => {
   try {
@@ -1030,7 +996,7 @@ app.post('/api/clientes', async (req, res) => {
       });
     }
 
-    // Comprobar que el correo no esté registrado.
+    
     const [
       resultadoCorreo,
     ]: any =
@@ -1068,13 +1034,7 @@ app.post('/api/clientes', async (req, res) => {
         SALT_ROUNDS
       );
 
-    /*
-     * OUTPUT INSERTED obtiene directamente
-     * los datos del cliente registrado.
-     *
-     * fecha_creacion debe generarse mediante
-     * el valor DEFAULT definido en SQL Server.
-     */
+    
     const [
       resultadoRegistro,
     ]: any =
@@ -1142,7 +1102,7 @@ app.post('/api/clientes', async (req, res) => {
       });
     }
 
-    // Crear sesión inmediatamente después del registro.
+    
     const sid = randomUUID();
 
     const usuarioSesion = {
@@ -1171,11 +1131,7 @@ app.post('/api/clientes', async (req, res) => {
       lastActivity: ahora,
     });
 
-    /*
-     * En localhost:
-     * secure será false porque NODE_ENV
-     * normalmente no será production.
-     */
+    
     res.cookie(
       COOKIE_NAME,
       sid,
@@ -1239,21 +1195,7 @@ app.post('/api/clientes', async (req, res) => {
   }
 });
 
-/*app.get("/api/clientes", async (_req, res) => {
-  try {
-    const [clientes] = await database.query(
-      `SELECT id_cliente, nombre AS nombre_C, correo, telefono AS celular, dni, fecha_creacion AS fechaCreacion FROM clientes`
-    );
 
-    res.json(clientes);
-  } catch (error) {
-    console.error("Error al consultar clientes:", error);
-
-    res.status(500).json({
-      mensaje: "Error al consultar los clientes",
-    });
-  }
-});*/
 
 // ==========================================
 // OBTENER CLIENTE POR ID
@@ -1338,78 +1280,6 @@ app.get(
   }
 );
 
-// ==========================================
-// ACTUALIZAR CLIENTE
-// ==========================================
-/*app.put("/api/clientes/:id", async (req, res) => {
-  try {
-    const idCliente = Number(req.params.id);
-
-    const {
-      nombre_C,
-      correo,
-      celular,
-      dni,
-      password_C,
-      foto,
-    } = req.body;
-
-    if (!Number.isInteger(idCliente) || idCliente <= 0) {
-      return res.status(400).json({
-        mensaje: "ID de cliente inválido",
-      });
-    }
-
-    if (!nombre_C || !correo) {
-      return res.status(400).json({
-        mensaje: "Nombre y correo son obligatorios",
-      });
-    }
-
-    const passwordHash = password_C
-      ? await bcrypt.hash(password_C, SALT_ROUNDS)
-      : null;
-
-    const [resultado]: any = await database.execute(
-      `
-      UPDATE clientes
-      SET
-        nombre = ?,
-        correo = ?,
-        telefono = ?,
-        dni = ?,
-        password_hash = COALESCE(?, password_hash),
-        foto_url = ?
-      WHERE id_cliente = ?
-      `,
-      [
-        nombre_C,
-        correo,
-        celular || null,
-        dni || null,
-        passwordHash,
-        foto || null,
-        idCliente,
-      ]
-    );
-
-    if (resultado.affectedRows === 0) {
-      return res.status(404).json({
-        mensaje: "Cliente no encontrado",
-      });
-    }
-
-    return res.status(200).json({
-      mensaje: "Perfil del cliente actualizado correctamente",
-    });
-  } catch (error) {
-    console.error("Error al actualizar cliente:", error);
-
-    return res.status(500).json({
-      mensaje: "Error al actualizar el cliente",
-    });
-  }
-});*/
 
 
 // ==========================================
@@ -1609,12 +1479,11 @@ app.get("/api/clientes/:id", async (req, res) => {
   }
 });
 
-// ==========================================
-// OBTENER EMPLEADOS POR CATEGORÍA
-// ==========================================
+
 
 // ==========================================
 // OBTENER EMPLEADOS POR CATEGORÍA
+// Sin mostrar cuentas eliminadas
 // ==========================================
 app.get(
   '/api/categorias/:id/empleados',
@@ -1634,7 +1503,9 @@ app.get(
         });
       }
 
-      const resultado: any =
+      const [
+        resultado,
+      ]: any =
         await database.execute(
           `
           SELECT DISTINCT
@@ -1649,29 +1520,55 @@ app.get(
             e.foto_url,
             c.id_categoria,
             c.nombre AS categoria
+
           FROM empleados AS e
+
           INNER JOIN empleado_categorias AS ec
             ON ec.id_empleado =
               e.id_empleado
+
           INNER JOIN categorias AS c
             ON c.id_categoria =
               ec.id_categoria
-          WHERE ec.id_categoria = ?
-          ORDER BY e.nombre ASC
+
+          WHERE
+            ec.id_categoria = ?
+
+            AND LOWER(
+              LTRIM(
+                RTRIM(
+                  COALESCE(e.nombre, '')
+                )
+              )
+            ) <> 'cuenta eliminada'
+
+            AND LOWER(
+              LTRIM(
+                RTRIM(
+                  COALESCE(e.estado, '')
+                )
+              )
+            ) NOT IN (
+              'eliminado',
+              'eliminada',
+              'deleted',
+              'inactivo',
+              'inactiva'
+            )
+
+          ORDER BY
+            e.nombre ASC;
           `,
           [idCategoria]
         );
 
-      const empleados = obtenerFilas(
-        Array.isArray(resultado)
-          ? resultado[0]
-          : resultado
-      );
+      const empleados =
+        obtenerFilas(resultado);
 
       console.log(
         `Categoría ${idCategoria}:`,
         empleados.length,
-        'trabajadores encontrados'
+        'trabajadores visibles encontrados'
       );
 
       return res.status(200).json(
@@ -1687,7 +1584,7 @@ app.get(
         mensaje:
           'Error al consultar los trabajadores',
         detalle:
-          error?.message ||
+          error?.message ??
           String(error),
       });
     }
@@ -1696,81 +1593,6 @@ app.get(
 
 
 
-// ==========================================
-// RUTA DE LOGIN (NUEVA)
-// ==========================================
-/*app.post("/api/login", async (req, res) => {
-  try {
-    const { correo, password, rol } = req.body;
-
-    if (!correo || !password || !rol) {
-      return res.status(400).json({
-        mensaje: "Correo, contraseña y rol son obligatorios",
-      });
-    }
-
-    let usuario = null;
-
-    // Usamos alias (AS id, AS nombre) para estandarizar la respuesta sin importar si es cliente o empleado
-    if (rol === 'client') {
-      /*const [rows]: any = await database.execute(
-        "SELECT id_cliente AS id, nombre AS nombre, correo, telefono AS celular, NULL AS estado, foto_url AS foto, password_hash FROM clientes WHERE correo = ?",
-        [correo]
-      );
-      if (rows.length > 0) {
-        const cliente = rows[0];
-        //const valid = await bcrypt.compare(password, cliente.password_hash);
-        
-        if (valid) {
-          const { password_hash, ...usuarioSinPassword } = cliente;
-          usuario = usuarioSinPassword;
-        }
-      }
-    } else if (rol === 'worker') {
-      const [rows]: any = await database.execute(
-        `
-        SELECT
-          id_empleado AS id,
-          id_empleado AS idEmpleado,
-          id_empleado AS id_empleado,
-          nombre AS nombre,
-          correo,
-          telefono AS celular,
-          estado,
-          foto_url AS foto,
-          password_hash
-        FROM empleados
-        WHERE correo = ?
-        `,
-        [correo]
-      );
-      if (rows.length > 0) {
-        const empleado = rows[0];
-        //const valid = await bcrypt.compare(password, empleado.password_hash);
-        if (valid) {
-          const { password_hash, ...usuarioSinPassword } = empleado;
-          usuario = usuarioSinPassword;
-        }
-      }
-    } else {
-      return res.status(400).json({ mensaje: "Rol no válido" });
-    }*/
-
-    /*if (!usuario) {
-      return res.status(401).json({ mensaje: "Correo o contraseña incorrectos" });
-    }
-
-    res.json({
-      mensaje: "Inicio de sesión exitoso",
-      usuario
-    });
-  } catch (error) {
-    console.error("Error al iniciar sesión:", error);
-    res.status(500).json({
-      mensaje: "Error interno del servidor al iniciar sesión",
-    });
-  }
-});*/
 
 app.post("/api/login", async (req, res) => {
   try {
@@ -2780,9 +2602,6 @@ app.put(
 
 
 
-
-
-
 // ==========================================
 // OBTENER SERVICIOS / SOLICITUDES DISPONIBLES
 // ==========================================
@@ -2856,9 +2675,7 @@ app.get('/api/servicios', async (_req, res) => {
   }
 });
 
-// ==========================================
-// RUTAS DE SERVICIOS / SOLICITUDES lectura id 
-// ==========================================
+
 // ==========================================
 // OBTENER SERVICIO POR ID
 // ==========================================
@@ -2875,12 +2692,7 @@ app.get('/api/servicios/:id', async (req, res) => {
       });
     }
 
-    /*
-      Usamos database.query en lugar de database.execute.
-
-      El ID ya fue convertido y validado como número entero,
-      por lo que se puede colocar directamente en la consulta.
-    */
+    
     const respuesta: any = await database.query(
       `
         SELECT
@@ -3194,85 +3006,6 @@ app.get('/api/categorias/:id/subcategorias', async (req, res) => {
   }
 });
 
-// ==========================================
-// SUBCATEGORÍAS ASIGNADAS A UN EMPLEADO
-// ==========================================
-
-// Obtener las subcategorías seleccionadas por un empleado
-/*app.get(
-  "/api/empleados/:idEmpleado/subcategorias",
-  async (req, res) => {
-    try {
-      const idEmpleado = Number(
-        req.params.idEmpleado
-      );
-
-      if (
-        !Number.isInteger(idEmpleado) ||
-        idEmpleado <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: "ID de empleado inválido",
-        });
-      }
-
-      const [empleados]: any =
-        await database.execute(
-          `
-          SELECT id_empleado
-          FROM empleados
-          WHERE id_empleado = ?
-          `,
-          [idEmpleado]
-        );
-
-      if (
-        !Array.isArray(empleados) ||
-        empleados.length === 0
-      ) {
-        return res.status(404).json({
-          mensaje: "Empleado no encontrado",
-        });
-      }
-
-      const [subcategorias]: any =
-        await database.execute(
-          `
-          SELECT
-            s.id_subcategoria,
-            s.fk_categoria AS id_categoria,
-            s.nombre,
-            s.descripcion
-          FROM empleado_subcategorias es
-          INNER JOIN subcategorias s
-            ON s.id_subcategoria =
-              es.id_subcategoria
-          WHERE es.id_empleado = ?
-          ORDER BY
-            s.fk_categoria ASC,
-            s.nombre ASC
-          `,
-          [idEmpleado]
-        );
-
-      return res.status(200).json({
-        idEmpleado,
-        subcategorias,
-      });
-    } catch (error: any) {
-      console.error(
-        "Error al consultar subcategorías del empleado:",
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          "Error al consultar las subcategorías del empleado",
-        detalle: error.message,
-      });
-    }
-  }
-);*/
 
 
 // ==========================================
@@ -3413,7 +3146,7 @@ app.put(
         });
       }
 
-      // Confirmar que el empleado existe.
+      
       const respuestaEmpleado: any = await database.query(
         `
         SELECT TOP 1 id_empleado
@@ -3438,7 +3171,7 @@ app.put(
         });
       }
 
-      // Validar categorías.
+      
       for (const idCategoria of categorias) {
         const respuestaCategoria: any = await database.query(
           `
@@ -3464,7 +3197,7 @@ app.put(
         }
       }
 
-      // Validar subcategorías y comprobar que pertenecen a las categorías seleccionadas.
+      
       for (const idSubcategoria of subcategorias) {
         const respuestaSubcategoria: any = await database.query(
           `
@@ -3503,7 +3236,7 @@ app.put(
         }
       }
 
-      // Guardar todo en una única transacción de Azure SQL.
+      
       const valoresCategorias = categorias
         .map((idCategoria) => `(${idEmpleado}, ${idCategoria})`)
         .join(", ");
@@ -3689,60 +3422,7 @@ app.post('/api/reportes', async (req, res) => {
   }
 });
 
-// ==========================================
-// CATEGORÍAS Y ASOCIACION CON EMPLEADO
-// ==========================================
-/*app.get("/api/empleados/:id/categorias", async (req, res) => {
-  try {
-    const idEmpleado = Number(req.params.id);
 
-    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
-      return res.status(400).json({
-        mensaje: "ID de empleado inválido",
-      });
-    }
-
-    const [empleados]: any = await database.execute(
-      `
-      SELECT id_empleado
-      FROM empleados
-      WHERE id_empleado = ?
-      `,
-      [idEmpleado]
-    );
-
-    if (empleados.length === 0) {
-      return res.status(404).json({
-        mensaje: "Empleado no encontrado",
-      });
-    }
-
-    const [categorias]: any = await database.execute(
-      `
-      SELECT
-        c.id_categoria,
-        c.nombre
-      FROM empleado_categorias ec
-      INNER JOIN categorias c
-        ON c.id_categoria = ec.id_categoria
-      WHERE ec.id_empleado = ?
-      ORDER BY c.nombre ASC
-      `,
-      [idEmpleado]
-    );
-
-    return res.status(200).json({
-      idEmpleado,
-      categorias,
-    });
-  } catch (error) {
-    console.error("Error al consultar categorías del empleado:", error);
-
-    return res.status(500).json({
-      mensaje: "Error interno del servidor",
-    });
-  }
-});*/
 
 // ==========================================
 // OBTENER CATEGORÍAS DE UN EMPLEADO
@@ -4001,105 +3681,6 @@ app.patch('/api/workers/:id/disponibilidad', async (req, res) => {
 });   
 
 
-// ==========================================
-// ENVIAR MENSAJE
-// ==========================================
-/*app.post("/api/chat", async (req, res) => {
-  try {
-    const {
-      fk_cliente,
-      fk_empleado,
-      remitente,
-      mensaje,
-    } = req.body;
-
-    const idCliente = Number(fk_cliente);
-    const idEmpleado = Number(fk_empleado);
-    const textoMensaje = String(mensaje ?? "").trim();
-
-    if (!Number.isInteger(idCliente) || idCliente <= 0) {
-      return res.status(400).json({
-        mensaje: "ID de cliente inválido",
-      });
-    }
-
-    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
-      return res.status(400).json({
-        mensaje: "ID de empleado inválido",
-      });
-    }
-
-    if (
-      remitente !== "cliente" &&
-      remitente !== "empleado"
-    ) {
-      return res.status(400).json({
-        mensaje: "Remitente inválido",
-      });
-    }
-
-    if (!textoMensaje) {
-      return res.status(400).json({
-        mensaje: "El mensaje no puede estar vacío",
-      });
-    }
-
-    const [conversaciones]: any = await database.execute(
-      `
-      SELECT id_conversacion
-      FROM chat_conversaciones
-      WHERE id_cliente = ? AND id_empleado = ?
-      `,
-      [idCliente, idEmpleado]
-    );
-
-    let idConversacion = conversaciones[0]?.id_conversacion;
-
-    if (!idConversacion) {
-      const [resultadoConversacion]: any = await database.execute(
-        `
-        INSERT INTO chat_conversaciones
-        (id_cliente, id_empleado, fecha_creacion)
-        VALUES (?, ?, GETDATE())
-        `,
-        [idCliente, idEmpleado]
-      );
-      idConversacion = resultadoConversacion.insertId;
-    }
-
-    const [resultadoMensaje]: any = await database.execute(
-      `
-      INSERT INTO chat_mensajes
-      (id_conversacion, remitente, mensaje, fecha)
-      VALUES (?, ?, ?, GETDATE())
-      `,
-      [
-        idConversacion,
-        remitente === "empleado" ? "EMPLEADO" : "CLIENTE",
-        textoMensaje,
-      ]
-    );
-
-    return res.status(201).json({
-      mensaje: "Mensaje enviado correctamente",
-      chat: {
-        id_chat: resultadoMensaje.insertId,
-        fk_cliente: idCliente,
-        fk_empleado: idEmpleado,
-        remitente,
-        mensaje: textoMensaje,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error al enviar mensaje:", error);
-
-    return res.status(500).json({
-      mensaje: "Error al enviar el mensaje",
-      detalle: error.message,
-      codigo: error.code,
-    });
-  }
-});*/
 
 app.post("/api/chat", async (req, res) => {
   try {
@@ -4509,60 +4090,7 @@ app.delete(
 
 
 
-// ==========================================
-// OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
-// ==========================================
-/*app.get(
-  '/api/chat/cliente/:idCliente/empleado/:idEmpleado',
-  async (req, res) => {
-    try {
-      const idCliente = Number(req.params.idCliente);
-      const idEmpleado = Number(req.params.idEmpleado);
 
-      const [conversacion]: any = await database.execute(
-        `
-        SELECT id_conversacion
-        FROM chat_conversaciones
-        WHERE id_cliente = ? AND id_empleado = ?
-        `,
-        [idCliente, idEmpleado]
-      );
-
-      if (conversacion.length === 0) {
-        return res.status(200).json([]);
-      }
-
-      const idConversacion = conversacion[0].id_conversacion;
-
-      const [mensajes]: any = await database.execute(
-        `
-        SELECT
-          id_mensaje AS id_chat,
-          ? AS fk_cliente,
-          ? AS fk_empleado,
-          CASE remitente
-            WHEN 'EMPLEADO' THEN 'empleado'
-            ELSE 'cliente'
-          END AS remitente,
-          mensaje,
-          0 AS leido,
-          fecha
-        FROM chat_mensajes
-        WHERE id_conversacion = ?
-        ORDER BY fecha ASC, id_mensaje ASC
-        `,
-        [idCliente, idEmpleado, idConversacion]
-      );
-
-      return res.status(200).json(mensajes);
-    } catch (error: any) {
-      return res.status(500).json({
-        mensaje: 'Error al consultar los mensajes',
-        detalle: error.message,
-      });
-    }
-  }
-);*/
 
 // ==========================================
 // OBTENER MENSAJES ENTRE CLIENTE Y EMPLEADO
@@ -4745,9 +4273,6 @@ app.get(
 // ==========================================
 // CONVERSACIONES DE UN EMPLEADO
 // ==========================================
-// ==========================================
-// CONVERSACIONES DE UN EMPLEADO
-// ==========================================
 app.get(
   "/api/chat/empleado/:idEmpleado/conversaciones",
   async (req, res) => {
@@ -4860,9 +4385,7 @@ app.get(
   }
 );
 
-// ==========================================
-// CONVERSACIONES DE UN CLIENTE
-// ==========================================
+
 // ==========================================
 // CONVERSACIONES DE UN CLIENTE
 // ==========================================
@@ -4982,56 +4505,7 @@ app.get(
   }
 );
 
-// ==========================================
-// MARCAR MENSAJES COMO LEÍDOS
-// ==========================================
-/*app.put("/api/chat/leidos", async (req, res) => {
-  try {
-    const {
-      fk_cliente,
-      fk_empleado,
-      lector,
-    } = req.body;
 
-    const idCliente = Number(fk_cliente);
-    const idEmpleado = Number(fk_empleado);
-
-    if (
-      !Number.isInteger(idCliente) ||
-      idCliente <= 0 ||
-      !Number.isInteger(idEmpleado) ||
-      idEmpleado <= 0
-    ) {
-      return res.status(400).json({
-        mensaje: "Datos inválidos",
-      });
-    }
-
-    if (
-      lector !== "cliente" &&
-      lector !== "empleado"
-    ) {
-      return res.status(400).json({
-        mensaje: "Lector inválido",
-      });
-    }
-
-    return res.status(200).json({
-      mensaje: "Mensajes marcados como leídos",
-      actualizados: 0,
-    });
-  } catch (error: any) {
-    console.error(
-      "Error al marcar mensajes como leídos:",
-      error
-    );
-
-    return res.status(500).json({
-      mensaje: "Error al actualizar mensajes",
-      detalle: error.message,
-    });
-  }
-});*/
 
 // ==========================================
 // MARCAR MENSAJES COMO LEÍDOS
@@ -5179,76 +4653,7 @@ app.put(
   }
 );
 
-// ==========================================
-// POSTULACIONES DE UN EMPLEADO
-// ==========================================
-/*app.get(
-  '/api/empleados/:idEmpleado/postulaciones',
-  async (req, res) => {
-    try {
-      const idEmpleado = Number(
-        req.params.idEmpleado
-      );
 
-      if (
-        !Number.isInteger(idEmpleado) ||
-        idEmpleado <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de empleado inválido',
-        });
-      }
-
-      const [empleados]: any =
-        await database.execute(
-          `
-          SELECT id_empleado
-          FROM empleados
-          WHERE id_empleado = ?
-          LIMIT 1
-          `,
-          [idEmpleado]
-        );
-
-      if (empleados.length === 0) {
-        return res.status(404).json({
-          mensaje: 'El empleado no existe',
-        });
-      }
-
-      const [postulaciones]: any =
-        await database.execute(
-          `
-          SELECT
-            id_postulacion,
-            fk_servicio,
-            fk_empleado,
-            estado,
-            fecha
-          FROM postulaciones
-          WHERE fk_empleado = ?
-          ORDER BY fecha DESC
-          `,
-          [idEmpleado]
-        );
-
-      return res.status(200).json(
-        postulaciones
-      );
-    } catch (error: any) {
-      console.error(
-        'Error al obtener postulaciones del empleado:',
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          'Error al obtener las postulaciones del empleado',
-        detalle: error.message,
-      });
-    }
-  }
-);*/
 // ==========================================
 // POSTULACIONES DE UN EMPLEADO
 // ==========================================
@@ -5396,224 +4801,7 @@ app.get(
   }
 );
 
-// ==========================================
-// SERVICIOS POSTULACIONES DE EMPLEADOS RECIBIDAS
-// ==========================================
-/*app.get(
-  '/api/servicios/:idServicio/postulaciones',
-  async (req, res) => {
-    try {
-      const idServicio = Number(
-        req.params.idServicio
-      );
 
-      if (
-        !Number.isInteger(idServicio) ||
-        idServicio <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de servicio inválido',
-        });
-      }
-
-      const [servicios]: any =
-        await database.execute(
-          `
-          SELECT
-            s.id_servicio,
-            s.fk_cliente,
-            s.fk_categoria,
-            s.fk_empleado,
-            s.fk_evidencia,
-            s.titulo,
-            s.descripcion,
-            s.direccion,
-            s.presupuesto,
-            s.fecha,
-            s.hora_inicio,
-            s.hora_fin,
-            s.estado,
-            c.nombre_C AS nombre_cliente,
-            c.foto AS foto_cliente,
-            cat.nombre AS nombre_categoria
-          FROM servicios s
-          LEFT JOIN clientes c
-            ON c.id_cliente = s.fk_cliente
-          LEFT JOIN categorias cat
-            ON cat.id_categoria = s.fk_categoria
-          WHERE s.id_servicio = ?
-          LIMIT 1
-          `,
-          [idServicio]
-        );
-
-      if (servicios.length === 0) {
-        return res.status(404).json({
-          mensaje: 'El servicio no existe',
-        });
-      }
-
-      const [postulaciones]: any =
-        await database.execute(
-          `
-          SELECT
-            p.id_postulacion,
-            p.fk_servicio,
-            p.fk_empleado,
-            p.estado AS estado_postulacion,
-            p.fecha AS fecha_postulacion,
-
-            e.id_empleado,
-            e.nombre_E,
-            e.correo,
-            NULL AS celular,
-            e.titulo,
-            e.direccion,
-            e.estado AS estado_empleado,
-            0 AS N_trabajos
-
-          FROM postulaciones p
-
-          INNER JOIN empleados e
-            ON e.id_empleado = p.fk_empleado
-
-          WHERE p.fk_servicio = ?
-
-          ORDER BY p.fecha DESC
-          `,
-          [idServicio]
-        );
-
-      return res.status(200).json({
-        servicio: servicios[0],
-        postulaciones,
-      });
-    } catch (error: any) {
-      console.error(
-        'Error al obtener postulaciones:',
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          'Error al obtener las postulaciones',
-        detalle: error.message,
-      });
-    }
-  }
-);*/
-
-// ==========================================
-// SERVICIOS POSTULACIONES DE EMPLEADOS RECIBIDAS
-// ==========================================
-/*app.get(
-  '/api/servicios/:idServicio/postulaciones',
-  async (req, res) => {
-    try {
-      const idServicio = Number(
-        req.params.idServicio
-      );
-
-      if (
-        !Number.isInteger(idServicio) ||
-        idServicio <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de servicio inválido',
-        });
-      }
-
-      const [servicios]: any =
-        await database.execute(
-          `
-          SELECT
-            s.id_servicio,
-            s.fk_cliente,
-            s.fk_categoria,
-            s.fk_empleado,
-            s.fk_evidencia,
-            s.titulo,
-            s.descripcion,
-            s.direccion,
-            s.presupuesto,
-            s.fecha,
-            s.hora_inicio,
-            s.hora_fin,
-            s.estado,
-            c.nombre_C AS nombre_cliente,
-            c.foto AS foto_cliente,
-            cat.nombre AS nombre_categoria
-          FROM servicios s
-          LEFT JOIN clientes c
-            ON c.id_cliente = s.fk_cliente
-          LEFT JOIN categorias cat
-            ON cat.id_categoria = s.fk_categoria
-          WHERE s.id_servicio = ?
-          LIMIT 1
-          `,
-          [idServicio]
-        );
-
-        console.log('ID recibido:', idServicio);
-        console.log('Servicio encontrado:', servicios);
-        
-      if (
-        !Array.isArray(servicios) ||
-        servicios.length === 0
-      ) {
-        return res.status(404).json({
-          mensaje: 'El servicio no existe',
-        });
-      }
-
-      const [postulaciones]: any =
-        await database.execute(
-          `
-          SELECT
-            p.id_postulacion,
-            p.fk_servicio,
-            p.fk_empleado,
-            p.estado AS estado_postulacion,
-            p.fecha AS fecha_postulacion,
-            e.id_empleado,
-            e.nombre_E,
-            e.correo,
-            e.titulo,
-            e.direccion,
-            e.estado AS estado_empleado
-          FROM postulaciones p
-          INNER JOIN empleados e
-            ON e.id_empleado = p.fk_empleado
-          WHERE p.fk_servicio = ?
-          ORDER BY p.fecha DESC
-          `,
-          [idServicio]
-        );
-
-      return res.status(200).json({
-        servicio: servicios[0],
-        postulaciones: Array.isArray(
-          postulaciones
-        )
-          ? postulaciones
-          : [],
-      });
-    } catch (error: any) {
-      console.error(
-        'Error al obtener postulaciones:',
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          'Error al obtener las postulaciones',
-        detalle:
-          error?.message ||
-          'Error desconocido',
-      });
-    }
-  }
-);*/
 
 // ==========================================
 // SERVICIOS POSTULACIONES DE EMPLEADOS RECIBIDAS
@@ -5852,169 +5040,7 @@ app.get(
   }
 );
 
-// ==========================================
-//  SERVICIOS ACEPTADOS 
-// ==========================================
 
-/*app.put(
-  '/api/servicios/:idServicio/aceptar',
-  async (req, res) => {
-    const conexion =
-      await database.getConnection();
-
-    try {
-      const idServicio = Number(
-        req.params.idServicio
-      );
-
-      const idEmpleado = Number(
-        req.body.fk_empleado
-      );
-
-      if (
-        !Number.isInteger(idServicio) ||
-        idServicio <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de servicio inválido',
-        });
-      }
-
-      if (
-        !Number.isInteger(idEmpleado) ||
-        idEmpleado <= 0
-      ) {
-        return res.status(400).json({
-          mensaje: 'ID de empleado inválido',
-        });
-      }
-
-      await conexion.beginTransaction();
-
-      const [servicios]: any =
-        await conexion.execute(
-          `
-          SELECT
-            id_servicio,
-            estado
-          FROM servicios
-          WHERE id_servicio = ?
-          FOR UPDATE
-          `,
-          [idServicio]
-        );
-
-      if (servicios.length === 0) {
-        await conexion.rollback();
-
-        return res.status(404).json({
-          mensaje: 'El servicio no existe',
-        });
-      }
-
-      if (
-        servicios[0].estado !== 'Pendiente'
-      ) {
-        await conexion.rollback();
-
-        return res.status(400).json({
-          mensaje:
-            'Este servicio ya fue asignado',
-        });
-      }
-
-      const [postulaciones]: any =
-        await conexion.execute(
-          `
-          SELECT id_postulacion
-          FROM postulaciones
-          WHERE fk_servicio = ?
-            AND fk_empleado = ?
-          LIMIT 1
-          `,
-          [
-            idServicio,
-            idEmpleado,
-          ]
-        );
-
-      if (postulaciones.length === 0) {
-        await conexion.rollback();
-
-        return res.status(404).json({
-          mensaje:
-            'El empleado no está postulado a este servicio',
-        });
-      }
-
-      const [resultado]: any =
-        await conexion.execute(
-          `
-          UPDATE servicios
-          SET
-            fk_empleado = ?,
-            estado = 'Asignado'
-          WHERE id_servicio = ?
-            AND estado = 'Pendiente'
-          `,
-          [
-            idEmpleado,
-            idServicio,
-          ]
-        );
-
-      if (resultado.affectedRows === 0) {
-        await conexion.rollback();
-
-        return res.status(409).json({
-          mensaje:
-            'El servicio ya fue asignado',
-        });
-      }
-
-      await conexion.execute(
-        `
-        UPDATE postulaciones
-        SET estado =
-          CASE
-            WHEN fk_empleado = ?
-              THEN 'aceptada'
-            ELSE 'rechazada'
-          END
-        WHERE fk_servicio = ?
-        `,
-        [
-          idEmpleado,
-          idServicio,
-        ]
-      );
-
-      await conexion.commit();
-
-      return res.status(200).json({
-        mensaje:
-          'Empleado seleccionado correctamente',
-        id_servicio: idServicio,
-        fk_empleado: idEmpleado,
-      });
-    } catch (error: any) {
-      await conexion.rollback();
-
-      console.error(
-        'Error al seleccionar empleado:',
-        error
-      );
-
-      return res.status(500).json({
-        mensaje:
-          'Error al seleccionar al empleado',
-        detalle: error.message,
-      });
-    } finally {
-      conexion.release();
-    }
-  }
-);*/
 
 // ==========================================
 // ACEPTAR EMPLEADO PARA UN SERVICIO
@@ -6338,36 +5364,7 @@ app.put(
   }
 );
 
-// ==========================================
-// RECHAZAR POSTULACION (individual)
-// ==========================================
-/*app.put('/api/postulaciones/:idPostulacion/rechazar', async (req, res) => {
-  try {
-    const idPostulacion = Number(req.params.idPostulacion);
 
-    if (!Number.isInteger(idPostulacion) || idPostulacion <= 0) {
-      return res.status(400).json({ mensaje: 'ID de postulación inválido' });
-    }
-
-    const [resultado]: any = await database.execute(
-      `
-      UPDATE postulaciones
-      SET estado = 'rechazada'
-      WHERE id_postulacion = ?
-      `,
-      [idPostulacion]
-    );
-
-    if (resultado.affectedRows === 0) {
-      return res.status(404).json({ mensaje: 'Postulación no encontrada' });
-    }
-
-    return res.status(200).json({ mensaje: 'Postulación rechazada' });
-  } catch (error: any) {
-    console.error('Error al rechazar postulación:', error);
-    return res.status(500).json({ mensaje: 'Error al rechazar la postulación', detalle: error.message });
-  }
-});*/
 
 // ==========================================
 // RECHAZAR UNA POSTULACIÓN
@@ -6444,7 +5441,7 @@ app.put(
 
 // ==========================================
 // CAMBIAR ESTADO DEL SERVICIO Y NOTIFICAR
-// A LA OTRA PERSONA NO OG
+// A LA OTRA PERSONA 
 // ==========================================
 
 app.put(
@@ -6606,8 +5603,7 @@ app.put(
         });
       }
 
-      // Si la acción requiere un trabajador,
-      // comprobamos que esté asignado.
+      
       if (
         estadoNormalizado !== 'Pendiente' &&
         (
@@ -6730,13 +5726,7 @@ app.put(
         tituloNotificacion &&
         tipoNotificacion
       ) {
-        /*
-         * Si actúa el empleado:
-         * la notificación pertenece al cliente.
-         *
-         * Si actúa el cliente:
-         * la notificación pertenece al empleado.
-         */
+        
         const idClienteDestino =
           responsable === 'empleado'
             ? idCliente
@@ -6747,7 +5737,7 @@ app.put(
             ? idEmpleado
             : null;
 
-        // Evitar notificaciones duplicadas.
+        
         const [
           resultadoExistente,
         ]: any =
@@ -6854,16 +5844,7 @@ app.put(
       // ======================================
       // ACTUALIZAR TRABAJOS COMPLETADOS
       // ======================================
-      /*
-       * La disponibilidad ya no se cambia automáticamente aquí.
-       *
-       * El switch del trabajador es quien controla:
-       * - Disponible  -> aparece para los clientes.
-       * - Ocupado     -> está descansando y no aparece.
-       *
-       * Al completar un trabajo solo se recalcula
-       * la cantidad real de trabajos realizados.
-       */
+      
       if (
         Number.isInteger(idEmpleado) &&
         idEmpleado > 0 &&
@@ -7172,77 +6153,7 @@ app.get('/api/reservas/servicio/:idServicio', async (req, res) => {
   }
 });
 
-/*app.post('/api/resenas', async (req, res) => {
-  try {
-    const {
-      id_reserva,
-      id_empleado,
-      calificacion_general,
-      puntualidad,
-      calidad,
-      comunicacion,
-      comentario,
-    } = req.body;
 
-    const idReserva = Number(id_reserva);
-    const idEmpleado = Number(id_empleado);
-    const calificacionGeneral = Number(calificacion_general);
-
-    if (!Number.isInteger(idReserva) || idReserva <= 0) {
-      return res.status(400).json({ mensaje: 'Falta un id_reserva válido' });
-    }
-
-    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
-      return res.status(400).json({ mensaje: 'Falta un id_empleado válido' });
-    }
-
-    if (!Number.isInteger(calificacionGeneral) || calificacionGeneral < 1 || calificacionGeneral > 5) {
-      return res.status(400).json({ mensaje: 'La calificación general debe estar entre 1 y 5' });
-    }
-
-    const parseOpcional = (valor: unknown) => {
-      if (valor === undefined || valor === null || valor === '') return null;
-
-      const numero = Number(valor);
-      return Number.isInteger(numero) && numero >= 1 && numero <= 5 ? numero : null;
-    };
-
-    const puntualidadValue = parseOpcional(puntualidad);
-    const calidadValue = parseOpcional(calidad);
-    const comunicacionValue = parseOpcional(comunicacion);
-    const comentarioValue = typeof comentario === 'string' ? comentario.trim() || null : null;
-
-    const [resultado]: any = await database.execute(
-      `
-      INSERT INTO resenas (
-        id_reserva,
-        id_empleado,
-        calificacion_general,
-        puntualidad,
-        calidad,
-        comunicacion,
-        comentario,
-        fecha
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
-      `,
-      [
-        idReserva,
-        idEmpleado,
-        calificacionGeneral,
-        puntualidadValue,
-        calidadValue,
-        comunicacionValue,
-        comentarioValue,
-      ]
-    );
-
-    return res.status(201).json({ mensaje: 'Reseña registrada correctamente', resultado });
-  } catch (error: any) {
-    console.error('Error al registrar reseña:', error);
-    return res.status(500).json({ mensaje: 'Error al registrar la reseña', detalle: error.message });
-  }
-});*/
 
 app.post(
   '/api/resenas',
@@ -7357,10 +6268,7 @@ app.post(
         });
       }
 
-      /*
-       * Verificar que la reserva exista y que
-       * corresponda al empleado recibido.
-       */
+      
       const [
         resultadoReserva,
       ]: any =
@@ -7400,10 +6308,7 @@ app.post(
         });
       }
 
-      /*
-       * Evitar más de una reseña para
-       * la misma reserva.
-       */
+      
       const [
         resultadoExistente,
       ]: any =
@@ -8133,57 +7038,7 @@ app.get(
     }
   }
 );
-// ==========================================
-// MÉTODOS DE PAGO (simple storage)
-// ==========================================
-/*app.post('/api/payment-methods', async (req, res) => {
-  try {
-    const { fk_usuario, tipo, titular, numero_enmascarado, expiracion } = req.body;
 
-    if (!fk_usuario || !tipo || !titular || !numero_enmascarado) {
-      return res.status(400).json({ mensaje: 'Faltan datos del método de pago' });
-    }
-
-    const [resultado]: any = await database.execute(
-      `
-      INSERT INTO payment_methods (
-        fk_usuario,
-        tipo,
-        titular,
-        numero_enmascarado,
-        expiracion,
-        fecha_creacion
-      ) VALUES (?, ?, ?, ?, ?, GETDATE())
-      `,
-      [fk_usuario, tipo, titular, numero_enmascarado, expiracion || null]
-    );
-
-    return res.status(201).json({ mensaje: 'Método de pago agregado', resultado });
-  } catch (error: any) {
-    console.error('Error al agregar método de pago:', error);
-    return res.status(500).json({ mensaje: 'Error al guardar el método de pago', detalle: error.message });
-  }
-});*/
-
-/*app.get('/api/payment-methods/:fk_usuario', async (req, res) => {
-  try {
-    const fk_usuario = Number(req.params.fk_usuario);
-
-    if (!Number.isInteger(fk_usuario) || fk_usuario <= 0) {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido' });
-    }
-
-    const [methods] = await database.query(
-      `SELECT id_payment_method, fk_usuario, tipo, titular, numero_enmascarado, expiracion, fecha_creacion FROM payment_methods WHERE fk_usuario = ? ORDER BY fecha_creacion DESC`,
-      [fk_usuario]
-    );
-
-    return res.status(200).json(methods);
-  } catch (error: any) {
-    console.error('Error al consultar métodos de pago:', error);
-    return res.status(500).json({ mensaje: 'Error al consultar métodos de pago', detalle: error.message });
-  }
-});*/
 
 
 // ==========================================
@@ -8235,13 +7090,7 @@ app.post(
         });
       }
 
-      /*
-       * Solo se debe recibir un número
-       * enmascarado que termine en 4 dígitos.
-       *
-       * Nunca se guarda el número completo
-       * ni el CVV.
-       */
+      
       if (
         !/\d{4}$/.test(
           numeroEnmascarado,
@@ -9125,8 +7974,9 @@ app.delete(
     }
   },
 );
-
-//presupuesto
+/****************** */
+//PRESUPUESTO 
+/***************** */
 app.put(
   '/api/servicios/:idServicio/presupuesto',
   async (req, res) => {
@@ -9157,7 +8007,7 @@ app.put(
         });
       }
 
-      // 1. Obtener datos actuales del servicio
+      
       const [resultadoServicio]: any =
         await database.execute(
           `
@@ -9207,7 +8057,7 @@ app.put(
           'Solicitud de servicio'
       ).trim();
 
-      // 2. Actualizar presupuesto
+      
       await database.execute(
         `
         UPDATE servicios
@@ -9238,7 +8088,7 @@ app.put(
           ]
         );
 
-      // 3. Notificar al trabajador si ya está asignado - Crear notificación para el trabajador
+      
       if (
         Number.isInteger(idEmpleado) &&
         idEmpleado > 0
@@ -9458,72 +8308,7 @@ app.put(
   }
 );
 
-// ==========================================
-// ELIMINAR CUENTA (requiere sesión)
-// ==========================================
-/*app.delete('/api/account', async (req, res) => {
-  try {
-    const sid = req.cookies?.[COOKIE_NAME];
-    if (!sid || !sessions.has(sid)) {
-      return res.status(401).json({ mensaje: 'No autenticado' });
-    }
 
-    const sess = sessions.get(sid)!;
-    const user = sess.user;
-    if (!user) {
-      sessions.delete(sid);
-      res.clearCookie(COOKIE_NAME);
-      return res.status(401).json({ mensaje: 'Sesión inválida' });
-    }
-
-    // Determinar rol y obtener ID del usuario
-    let role = (req.body && req.body.role) || req.query?.role;
-    let userId: number;
-
-    if (!role) {
-      if (user.id_empleado || user.idEmpleado) {
-        role = 'worker';
-        userId = Number(user.id_empleado || user.idEmpleado);
-      } else if (user.id_cliente || user.idCliente) {
-        role = 'client';
-        userId = Number(user.id_cliente || user.idCliente);
-      } else {
-        // Fallback: intentar usar id general
-        userId = Number(user.id);
-      }
-    } else {
-      // Si se proporciona el rol, obtener el ID correspondiente
-      if (role === 'worker') {
-        userId = Number(user.id_empleado || user.idEmpleado || user.id);
-      } else {
-        userId = Number(user.id_cliente || user.idCliente || user.id);
-      }
-    }
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(400).json({ mensaje: 'ID de usuario inválido' });
-    }
-
-    if (role === 'client') {
-      await database.execute('DELETE FROM clientes WHERE id_cliente = ?', [userId]);
-    } else if (role === 'worker') {
-      await database.execute('DELETE FROM empleados WHERE id_empleado = ?', [userId]);
-    } else {
-      return res.status(400).json({ mensaje: 'Rol no válido' });
-    }
-
-    // limpiar sesión y cookie
-    sessions.delete(sid);
-    res.clearCookie(COOKIE_NAME);
-
-    logSecurity('account_deleted', { userId, role });
-
-    return res.status(200).json({ mensaje: 'Cuenta eliminada correctamente' });
-  } catch (error: any) {
-    console.error('Error al eliminar cuenta:', error);
-    return res.status(500).json({ mensaje: 'Error interno al eliminar cuenta', detalle: error?.message ?? String(error) });
-  }
-});*/
 
 // ==========================================
 // ELIMINAR CUENTA DE FORMA LÓGICA
@@ -9605,8 +8390,7 @@ app.delete(
         return '';
       };
 
-      // Primero revisar el rol enviado por
-      // el frontend.
+      
       let role = normalizarRol(
         req.body?.role ??
           req.body?.rol ??
@@ -9617,8 +8401,7 @@ app.delete(
           req.query?.tipo
       );
 
-      // Después revisar el rol almacenado
-      // dentro de la sesión.
+      
       if (!role) {
         role = normalizarRol(
           user.role ??
@@ -9641,8 +8424,7 @@ app.delete(
           0
       );
 
-      // Si la sesión tiene un ID específico,
-      // ese ID tiene prioridad.
+      
       if (
         !role &&
         Number.isInteger(
@@ -9663,11 +8445,7 @@ app.delete(
         role = 'client';
       }
 
-      /*
-       * Si solo existe un ID genérico y
-       * todavía no conocemos el rol,
-       * verificamos en qué tabla existe.
-       */
+      
       const idGenerico = Number(
         user.id ?? 0
       );
@@ -9726,11 +8504,7 @@ app.delete(
         }
       }
 
-      /*
-       * Último intento: buscar por correo.
-       * Esto ayuda cuando la sesión solo
-       * conserva id y correo sin indicar rol.
-       */
+      
       const correoSesion = String(
         user.correo ??
           user.email ??
@@ -9821,11 +8595,8 @@ app.delete(
         );
       }
 
-      /*
-       * Si el rol se detectó por correo pero
-       * el ID genérico no corresponde, obtener
-       * nuevamente el ID desde la base.
-       */
+  
+       
       if (
         role === 'worker' &&
         (
@@ -10264,6 +9035,188 @@ app.delete(
       });
     }
   }
+);
+
+
+app.post(
+  '/api/empleados/:idEmpleado/galeria',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      const urlArchivo = String(
+        req.body?.url ?? '',
+      ).trim();
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      if (!urlArchivo) {
+        return res.status(400).json({
+          mensaje:
+            'La URL de la imagen es obligatoria',
+        });
+      }
+
+      const [
+        resultadoEmpleado,
+      ]: any = await database.execute(
+        `
+        SELECT TOP 1
+          id_empleado
+        FROM empleados
+        WHERE id_empleado = ?;
+        `,
+        [idEmpleado],
+      );
+
+      const empleados =
+        obtenerFilas(resultadoEmpleado);
+
+      if (empleados.length === 0) {
+        return res.status(404).json({
+          mensaje: 'Empleado no encontrado',
+        });
+      }
+
+      const [
+        resultadoInsercion,
+      ]: any = await database.execute(
+        `
+        INSERT INTO evidencias (
+          id_servicio,
+          id_empleado,
+          url_archivo,
+          tipo,
+          fecha_subida
+        )
+
+        OUTPUT
+          INSERTED.id_evidencia,
+          INSERTED.id_empleado,
+          INSERTED.url_archivo,
+          INSERTED.tipo,
+          INSERTED.fecha_subida
+
+        VALUES (
+          NULL,
+          ?,
+          ?,
+          'galeria_empleado',
+          SYSDATETIME()
+        );
+        `,
+        [
+          idEmpleado,
+          urlArchivo,
+        ],
+      );
+
+      const evidencias =
+        obtenerFilas(resultadoInsercion);
+
+      return res.status(201).json({
+        mensaje:
+          'Imagen agregada a la galería',
+        imagen:
+          evidencias[0] ?? null,
+      });
+    } catch (error: any) {
+      console.error(
+        'Error guardando imagen en galería:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo guardar la imagen',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
+);
+
+
+app.get(
+  '/api/empleados/:idEmpleado/galeria',
+  async (req, res) => {
+    try {
+      const idEmpleado = Number(
+        req.params.idEmpleado,
+      );
+
+      if (
+        !Number.isInteger(idEmpleado) ||
+        idEmpleado <= 0
+      ) {
+        return res.status(400).json({
+          mensaje: 'ID de empleado inválido',
+        });
+      }
+
+      const [
+        resultado,
+      ]: any = await database.execute(
+        `
+        SELECT
+          id_evidencia,
+          url_archivo,
+          fecha_subida
+        FROM evidencias
+        WHERE
+          id_empleado = ?
+          AND LOWER(
+            LTRIM(RTRIM(tipo))
+          ) = 'galeria_empleado'
+        ORDER BY
+          fecha_subida DESC,
+          id_evidencia DESC;
+        `,
+        [idEmpleado],
+      );
+
+      const filas =
+        obtenerFilas(resultado);
+
+      return res.status(200).json({
+        galeria: filas.map(
+          (fila: any) => ({
+            id_evidencia:
+              Number(fila.id_evidencia),
+            url_archivo:
+              String(
+                fila.url_archivo ?? '',
+              ),
+            fecha_subida:
+              fila.fecha_subida,
+          }),
+        ),
+      });
+    } catch (error: any) {
+      console.error(
+        'Error consultando galería:',
+        error,
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo consultar la galería',
+        detalle:
+          error?.message ??
+          String(error),
+      });
+    }
+  },
 );
 
 // ==========================================

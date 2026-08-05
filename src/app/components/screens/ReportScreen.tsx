@@ -202,6 +202,11 @@ export default function ReportScreen() {
   const [photos, setPhotos] =
     useState<string[]>([]);
 
+  const [
+    imagenAmpliada,
+    setImagenAmpliada,
+  ] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] =
     useState(false);
 
@@ -720,29 +725,39 @@ export default function ReportScreen() {
                       0,
                       20
                     )}`}
-                    className="relative aspect-square rounded-xl overflow-hidden"
+                    className="relative aspect-square overflow-hidden rounded-xl"
                   >
-                    <img
-                      src={source}
-                      alt={`Evidencia ${
-                        index + 1
-                      }`}
-                      className="w-full h-full object-cover"
-                    />
-
                     <button
                       type="button"
                       onClick={() =>
-                        removePhoto(
-                          index
-                        )
+                        setImagenAmpliada(source)
                       }
-                      className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center"
+                      className="h-full w-full"
+                      aria-label={`Ver evidencia ${
+                        index + 1
+                      } en pantalla completa`}
+                    >
+                      <img
+                        src={source}
+                        alt={`Evidencia ${
+                          index + 1
+                        }`}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removePhoto(index);
+                      }}
+                      className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/65"
                       aria-label={`Eliminar evidencia ${
                         index + 1
                       }`}
                     >
-                      <X className="w-3 h-3 text-white" />
+                      <X className="h-3.5 w-3.5 text-white" />
                     </button>
                   </div>
                 )
@@ -756,6 +771,38 @@ export default function ReportScreen() {
             seleccionadas
           </p>
         </div>
+
+        {imagenAmpliada && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+            onClick={() =>
+              setImagenAmpliada(null)
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label="Vista ampliada de evidencia"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setImagenAmpliada(null)
+              }
+              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25"
+              aria-label="Cerrar imagen"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <img
+              src={imagenAmpliada}
+              alt="Evidencia ampliada"
+              onClick={(event) =>
+                event.stopPropagation()
+              }
+              className="max-h-[90dvh] max-w-[96vw] rounded-xl object-contain shadow-2xl sm:max-w-[90vw]"
+            />
+          </div>
+        )}
 
         {/* Botón enviar */}
         <motion.button
