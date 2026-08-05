@@ -35,8 +35,10 @@ const SESSION_INACTIVITY_MS = 10 * 60 * 1000; // 10 minutos
 const LOCKOUT_MS = 5 * 60 * 1000; // 5 minutos
 const MAX_LOGIN_ATTEMPTS = 3;
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? 'sid';
-const COOKIE_SECURE = (process.env.NODE_ENV === 'production');
-const COOKIE_SAME_SITE: 'lax' | 'strict' | 'none' = 'lax';
+// Allow overriding cookie security flags via env for Capacitor / mobile testing.
+const COOKIE_SECURE = (process.env.SESSION_COOKIE_SECURE === 'true') || (process.env.NODE_ENV === 'production');
+const rawSameSite = String(process.env.SESSION_COOKIE_SAME_SITE ?? 'lax').toLowerCase();
+const COOKIE_SAME_SITE: 'lax' | 'strict' | 'none' = rawSameSite === 'none' ? 'none' : rawSameSite === 'strict' ? 'strict' : 'lax';
 
 type SessionData = {
   id: string;
@@ -508,24 +510,13 @@ app.post('/api/empleados', async (req, res) => {
     });
 
     
-    res.cookie(
-      COOKIE_NAME,
-      sid,
-      {
-        httpOnly: true,
-        secure:
-          process.env.NODE_ENV ===
-          'production',
-        sameSite: 'lax',
-        maxAge:
-          1000 *
-          60 *
-          60 *
-          24 *
-          7,
-        path: '/',
-      }
-    );
+    res.cookie(COOKIE_NAME, sid, {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: COOKIE_SAME_SITE,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+      path: '/',
+    });
 
     logSecurity(
       'worker_registered',
@@ -1132,24 +1123,13 @@ app.post('/api/clientes', async (req, res) => {
     });
 
     
-    res.cookie(
-      COOKIE_NAME,
-      sid,
-      {
-        httpOnly: true,
-        secure:
-          process.env.NODE_ENV ===
-          'production',
-        sameSite: 'lax',
-        maxAge:
-          1000 *
-          60 *
-          60 *
-          24 *
-          7,
-        path: '/',
-      }
-    );
+    res.cookie(COOKIE_NAME, sid, {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: COOKIE_SAME_SITE,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+      path: '/',
+    });
 
     logSecurity(
       'client_registered',
@@ -9235,6 +9215,7 @@ console.log(
   'NOTIFICACIONES CORREGIDAS: cliente y empleado separados'
 );
 
-app.listen(port, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${port}`);
+const listenHost = process.env.HOST ?? '0.0.0.0';
+app.listen(port, listenHost, () => {
+  console.log(`Servidor ejecutándose en http://${listenHost}:${port}`);
 });
