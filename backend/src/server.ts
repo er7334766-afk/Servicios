@@ -126,15 +126,6 @@ app.use(cookieParser());
 // Aumentar límite para permitir subir imágenes/documentos en base64 grandes
 app.use(express.json({ limit: "50mb" }));
 
-// Capturar errores de parseo JSON y devolver siempre JSON
-app.use((err: any, req: any, res: any, next: any) => {
-  if (err instanceof SyntaxError && 'body' in err) {
-    console.error('Error de parseo JSON en request:', err.message);
-    return res.status(400).json({ mensaje: 'JSON inválido en la petición' });
-  }
-  next(err);
-});
-
 // Middleware para refrescar sesión por actividad
 app.use((req, res, next) => {
   try {
