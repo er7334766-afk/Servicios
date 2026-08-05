@@ -61,7 +61,7 @@ function normalizeQuery(query: string) {
   return normalized;
 }
 
-function bindParameters(request: sql.Request, params: any[]) {
+function bindParameters(request: any, params: any[]) {
   params.forEach((value, idx) => {
     const name = `p${idx}`;
 
@@ -75,7 +75,7 @@ function bindParameters(request: sql.Request, params: any[]) {
   return request;
 }
 
-function createResult(result: sql.IResult<any>) {
+function createResult(result: any) {
   const insertId = result.recordset?.[0]?.insertId ?? null;
 
   return {
