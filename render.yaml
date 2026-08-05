@@ -1,0 +1,17 @@
+# Render blueprint for Servicios backend
+# Update `repo` and `branch` values if you want Render to auto-deploy from this repository.
+# This file serves as a starting point. Render automatically detects Node services, but
+# using a render.yaml lets you configure build/start commands and environment.
+
+services:
+  - type: web
+    name: servicios-backend
+    env: node
+    plan: free
+    branch: render-backend
+    root: backend
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,58 @@
+Cambios realizados en esta sesión
+
+1) Migración y compatibilidad con Azure SQL
+- Se ajustó la aplicación para operar contra la base de datos Azure SQL en lugar del esquema previo de MySQL/phpMyAdmin.
+- Se alinearon los endpoints del backend con el esquema real recibido del usuario.
+- Se corrigieron consultas y escrituras para soportar compatibilidad entre columnas legacy y columnas nuevas en tablas como `servicios`, `clientes`, `empleados` y `categorias`.
+
+2) Backend
+- Archivo modificado: backend/src/server.ts
+- Se actualizó la lógica de inserción en `servicios` para escribir en ambas variantes de columnas cuando aplica:
+  - `id_cliente` / `id_categoria` (legacy)
+  - `fk_cliente` / `fk_categoria` (nuevas)
+- Se ajustaron endpoints para trabajar con datos reales del esquema Azure.
+- Se corrigieron rutas relacionadas con:
+  - servicios
+  - categorías
+  - empleados
+  - reportes
+  - chat
+  - solicitudes / aplicaciones
+  - reservas
+  - reseñas
+  - perfiles de cliente y trabajador
+- Se implementó manejo más robusto de respuestas vacías o no JSON en varias rutas.
+
+3) Frontend
+- Se conectaron pantallas principales a endpoints reales del backend en lugar de depender de alertas o comportamiento mock.
+- Archivos modificados:
+  - src/app/components/screens/ReportScreen.tsx
+  - src/app/components/screens/ChatScreen.tsx
+  - src/app/components/screens/ChatListScreen.tsx
+  - src/app/components/screens/SearchScreen.tsx
+  - src/app/components/screens/WorkerProfileScreen.tsx
+  - src/app/components/screens/WorkerOwnProfileScreen.tsx
+- Se reemplazaron varias alertas por estados de error inline y mensajes más claros para el usuario.
+- Se mejoró la tolerancia del frontend ante respuestas vacías o no válidas del backend.
+
+4) Chat y reportes
+- Se corrigió el flujo de chat para usar las tablas reales del esquema Azure:
+  - `chat_conversaciones`
+  - `chat_mensajes`
+- Se ajustó el envío/lectura de mensajes para que funcione con datos reales y no rompa la UI.
+- Se corrigió el envío de reportes para que use correctamente el payload al backend.
+
+5) Validaciones realizadas
+- Compilación del backend: exitosa con `npm run build`.
+- Compilación del frontend: exitosa con `npm run build`.
+- Pruebas smoke ejecutadas con éxito para:
+  - `GET /api/servicios`
+  - `POST /api/servicios`
+  - `GET /api/categorias`
+  - `GET /api/empleados`
+  - `POST /api/reportes`
+  - `GET /api/chat/cliente/:id/conversaciones`
+
+6) Observaciones
+- El esquema Azure sigue presentando diferencias con el modelo original, por lo que algunas columnas pueden seguir siendo legacy o duplicadas.
+- Se recomienda revisar y normalizar el esquema en una siguiente fase para eliminar columnas obsoletas y dejar una estructura más consistente.
