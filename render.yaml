@@ -1,0 +1,13 @@
+# Repository-level Render blueprint to deploy only the backend folder
+services:
+  - type: web
+    name: servicios-backend
+    env: node
+    plan: free
+    branch: render-backend
+    root: backend
+    buildCommand: "cd backend && npm install && npm run build"
+    startCommand: "cd backend && npm run start"
+    envVars:
+      - key: NODE_ENV
+        value: production
