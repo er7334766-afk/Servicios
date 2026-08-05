@@ -415,7 +415,7 @@ export default function ReportScreen() {
       setIsSubmitting(true);
 
       const respuesta = await fetch(
-        '/api/reportes',
+        'https://servicios-59g4.onrender.com/api/reportes',
         {
           method: 'POST',
           credentials: 'include',

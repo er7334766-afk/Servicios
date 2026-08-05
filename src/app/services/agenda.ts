@@ -1,4 +1,4 @@
-const API_URL = '/api';
+const API_URL = 'https://servicios-59g4.onrender.com/api';
 
 export interface AgendaReserva {
   id_reserva: number;

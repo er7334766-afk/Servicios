@@ -199,7 +199,7 @@ async function obtenerTrabajosEmpleado(
 
   try {
     const respuesta = await fetch(
-      `/api/empleados/${idEmpleado}`,
+      `${API_URL}/empleados/${idEmpleado}`,
       {
         cache: 'no-store',
       }

@@ -220,7 +220,7 @@ export default function ClientProfileScreen() {
 
     try {
       setDeletingAccount(true);
-      const resp = await fetch('/api/account', {
+      const resp = await fetch('https://servicios-59g4.onrender.com/api/account', {
         method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
