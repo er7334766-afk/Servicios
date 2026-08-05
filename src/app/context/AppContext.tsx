@@ -393,7 +393,7 @@ export function AppProvider({
       try {
         const respuesta =
           await fetch(
-            'http://localhost:3000/api/usuarios/actividad',
+            'https://servicios-59g4.onrender.com/api/usuarios/actividad',
             {
               method: 'PUT',
 

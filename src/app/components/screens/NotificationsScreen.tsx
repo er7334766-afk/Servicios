@@ -34,7 +34,7 @@ import type {
 import { useApp } from '../../context/AppContext';
 
 const API_URL =
-  'http://localhost:3000/api';
+  'https://servicios-59g4.onrender.com/api';
 
 interface NotificacionDB {
   id_notificacion: number;

@@ -54,7 +54,7 @@ export default function AuthScreen() {
   const { role, setCurrentUser } = useApp();
 
   const termsUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3000/public/terminos.html'
+    ? 'https://servicios-59g4.onrender.com/public/terminos.html'
     : '/public/terminos.html';
 
   const loginForm = useForm<LoginForm>();

@@ -252,7 +252,7 @@ export default function ServiceManagementScreen() {
         setError('');
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/servicios/${servicioId}`
+          `https://servicios-59g4.onrender.com/api/servicios/${servicioId}`
         );
 
         const datos = (await leerRespuestaApi(
@@ -339,7 +339,7 @@ export default function ServiceManagementScreen() {
       setError('');
 
       const respuesta = await fetch(
-        `http://localhost:3000/api/servicios/${servicio.id_servicio}/estado`,
+        `https://servicios-59g4.onrender.com/api/servicios/${servicio.id_servicio}/estado`,
         {
           method: 'PUT',
           headers: {
@@ -408,7 +408,7 @@ export default function ServiceManagementScreen() {
       setError('');
 
       const respuesta = await fetch(
-        `http://localhost:3000/api/servicios/${servicio.id_servicio}/estado`,
+        `https://servicios-59g4.onrender.com/api/servicios/${servicio.id_servicio}/estado`,
         {
           method: 'PUT',
           headers: {

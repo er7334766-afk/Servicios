@@ -23,7 +23,7 @@ import {
 } from '../../services/SolicitudesClienteApi';
 
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://servicios-59g4.onrender.com/api';
 
 interface ResenaServicio {
   id_resena: number;

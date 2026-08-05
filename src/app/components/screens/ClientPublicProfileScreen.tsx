@@ -158,7 +158,7 @@ export default function ClientPublicProfileScreen() {
         setError('');
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/clientes/${idCliente}/perfil-publico`,
+          `https://servicios-59g4.onrender.com/api/clientes/${idCliente}/perfil-publico`,
           {
             cache: 'no-store',
           }

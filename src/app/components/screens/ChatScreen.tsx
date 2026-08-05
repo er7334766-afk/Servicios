@@ -231,8 +231,8 @@ export default function ChatScreen() {
     }
 
     const url = esEmpleado
-      ? `http://localhost:3000/api/clientes/${idCliente}`
-      : `http://localhost:3000/api/empleados/${idEmpleado}`;
+      ? `https://servicios-59g4.onrender.com/api/clientes/${idCliente}`
+      : `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}`;
 
     
       const respuesta = await fetch(url, {
@@ -287,7 +287,7 @@ if (texto) {
     async () => {
       try {
         const respuesta = await fetch(
-          'http://localhost:3000/api/chat/leidos',
+          'https://servicios-59g4.onrender.com/api/chat/leidos',
           {
             method: 'PUT',
             headers: {
@@ -340,7 +340,7 @@ if (texto) {
     }
 
     const respuesta = await fetch(
-      `http://localhost:3000/api/chat/cliente/${idCliente}/empleado/${idEmpleado}`
+      `https://servicios-59g4.onrender.com/api/chat/cliente/${idCliente}/empleado/${idEmpleado}`
     );
 
     const texto = await respuesta.text();
@@ -377,7 +377,7 @@ if (texto) {
       setError('');
 
       const respuesta = await fetch(
-        `http://localhost:3000/api/servicios/${idServicio}`,
+        `https://servicios-59g4.onrender.com/api/servicios/${idServicio}`,
         {
           cache: 'no-store',
         }
@@ -596,7 +596,7 @@ if (texto) {
       setEnviando(true);
 
       const respuesta = await fetch(
-        'http://localhost:3000/api/chat',
+        'https://servicios-59g4.onrender.com/api/chat',
         {
           method: 'POST',
           headers: {
@@ -696,7 +696,7 @@ if (texto) {
     contenido: string
   ) => {
     const respuesta = await fetch(
-      'http://localhost:3000/api/chat',
+      'https://servicios-59g4.onrender.com/api/chat',
       {
         method: 'POST',
         headers: {
@@ -782,7 +782,7 @@ if (texto) {
 
       const respuestaSubida =
         await fetch(
-          'http://localhost:3000/api/upload-chat',
+          'https://servicios-59g4.onrender.com/api/upload-chat',
           {
             method: 'POST',
             headers: {
@@ -1314,7 +1314,7 @@ if (texto) {
 
                   try {
                     const respuesta = await fetch(
-                      `http://localhost:3000/api/servicios/${idServicio}/presupuesto`,
+                      `https://servicios-59g4.onrender.com/api/servicios/${idServicio}/presupuesto`,
                       {
                         method: 'PUT',
                         headers: {

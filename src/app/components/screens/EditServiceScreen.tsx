@@ -57,17 +57,17 @@ export default function EditServicesScreen({
         respuestaSubcategoriasEmpleado,
       ] = await Promise.all([
         fetch(
-          'http://localhost:3000/api/categorias',
+          'https://servicios-59g4.onrender.com/api/categorias',
           { cache: 'no-store' }
         ),
 
         fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+          `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/categorias`,
           { cache: 'no-store' }
         ),
 
         fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}/subcategorias`,
+          `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/subcategorias`,
           { cache: 'no-store' }
         ),
       ]);
@@ -178,7 +178,7 @@ export default function EditServicesScreen({
             async (idCategoria) => {
               try {
                 const respuesta = await fetch(
-                  `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`,
+                  `https://servicios-59g4.onrender.com/api/categorias/${idCategoria}/subcategorias`,
                   { cache: 'no-store' }
                 );
 
@@ -308,7 +308,7 @@ export default function EditServicesScreen({
 
     console.log('ID EMPLEADO ENVIADO:', idEmpleado);
     const respuesta = await fetch(
-      `http://localhost:3000/api/categorias/${idCategoria}/subcategorias`
+      `https://servicios-59g4.onrender.com/api/categorias/${idCategoria}/subcategorias`
     );
 
     const datos = await respuesta.json();
@@ -377,7 +377,7 @@ const toggleSubcategoria = (idSubcategoria: number) => {
 
     for (const idCategoria of categoriasAgregar) {
       const respuesta = await fetch(
-        `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+        `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/categorias`,
         {
           method: 'POST',
           headers: {
@@ -395,7 +395,7 @@ const toggleSubcategoria = (idSubcategoria: number) => {
 
     for (const idCategoria of categoriasEliminar) {
       const respuesta = await fetch(
-        `http://localhost:3000/api/empleados/${idEmpleado}/categorias/${idCategoria}`,
+        `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/categorias/${idCategoria}`,
         {
           method: 'DELETE',
         }
@@ -445,7 +445,7 @@ const guardar = async () => {
     );
 
     const respuesta = await fetch(
-  `http://localhost:3000/api/empleados/${idEmpleado}/categorias`,
+  `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/categorias`,
   {
     method: 'PUT',
     headers: {

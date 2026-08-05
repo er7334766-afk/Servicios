@@ -110,7 +110,7 @@ export default function ClientProfileScreen() {
       }
 
       const respuesta = await fetch(
-        `http://localhost:3000/api/clientes/${idCliente}/historial`,
+        `https://servicios-59g4.onrender.com/api/clientes/${idCliente}/historial`,
         {
           cache: 'no-store',
         },
@@ -525,4 +525,5 @@ export default function ClientProfileScreen() {
     </div>
   );
 }
+
 

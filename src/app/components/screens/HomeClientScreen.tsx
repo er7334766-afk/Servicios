@@ -313,7 +313,7 @@ export default function HomeClientScreen() {
       try {
         setCargandoDestacados(true);
 
-        const respuesta = await fetch('http://localhost:3000/api/empleados', {
+        const respuesta = await fetch('https://servicios-59g4.onrender.com/api/empleados', {
           cache: 'no-store',
         });
 
@@ -357,7 +357,7 @@ export default function HomeClientScreen() {
 
             try {
               const respuestaResumen = await fetch(
-                `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+                `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/resumen-perfil`,
                 { cache: 'no-store' }
               );
 
@@ -545,7 +545,7 @@ export default function HomeClientScreen() {
           setCargandoEmpleados(true);
 
           const respuesta = await fetch(
-            'http://localhost:3000/api/empleados',
+            'https://servicios-59g4.onrender.com/api/empleados',
             {
               cache: 'no-store',
             }
@@ -614,7 +614,7 @@ export default function HomeClientScreen() {
                   try {
                     const respuestaResumen =
                       await fetch(
-                        `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+                        `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/resumen-perfil`,
                         {
                           cache: 'no-store',
                         }
@@ -854,7 +854,7 @@ export default function HomeClientScreen() {
 
     try {
       const respuesta = await fetch(
-        `http://localhost:3000/api/clientes/${idCliente}/notificaciones`,
+        `https://servicios-59g4.onrender.com/api/clientes/${idCliente}/notificaciones`,
         {
           cache: 'no-store',
         }

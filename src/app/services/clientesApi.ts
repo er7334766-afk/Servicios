@@ -9,7 +9,7 @@ export async function registrarCliente(
   cliente: NuevoCliente,
 ) {
   const respuesta = await fetch(
-    'http://localhost:3000/api/clientes',
+    'https://servicios-59g4.onrender.com/api/clientes',
     {
       method: 'POST',
       credentials: 'include',
@@ -35,7 +35,7 @@ export async function registrarCliente(
 // Obtener lista de clientes
 export async function obtenerClientes(): Promise<any[]> {
   const resp = await fetch(
-    'http://localhost:3000/api/clientes',
+    'https://servicios-59g4.onrender.com/api/clientes',
     {
       credentials: 'include',
     },

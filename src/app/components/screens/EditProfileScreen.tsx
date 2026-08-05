@@ -97,8 +97,8 @@ export default function EditProfileScreen({
         setErrorMessage('');
 
         const endpoint = esEmpleado
-          ? `http://localhost:3000/api/empleados/${idUsuario}`
-          : `http://localhost:3000/api/clientes/${idUsuario}`;
+          ? `https://servicios-59g4.onrender.com/api/empleados/${idUsuario}`
+          : `https://servicios-59g4.onrender.com/api/clientes/${idUsuario}`;
 
         const respuesta = await fetch(endpoint);
         const datos = await leerRespuestaJson(respuesta);
@@ -169,7 +169,7 @@ export default function EditProfileScreen({
 
     const base64 = contenido.split(',')[1];
 
-    const respuesta = await fetch(`http://localhost:3000${endpoint}`, {
+    const respuesta = await fetch(`https://servicios-59g4.onrender.com${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -298,8 +298,8 @@ if (dni && !/^\d+$/.test(dni.trim())) {
       setCargando(true);
 
       const url = esEmpleado
-        ? `http://localhost:3000/api/empleados/${idUsuario}`
-        : `http://localhost:3000/api/clientes/${idUsuario}`;
+        ? `https://servicios-59g4.onrender.com/api/empleados/${idUsuario}`
+        : `https://servicios-59g4.onrender.com/api/clientes/${idUsuario}`;
 
       const body = esEmpleado
         ? {

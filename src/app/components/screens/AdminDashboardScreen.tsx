@@ -232,7 +232,7 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
                   </div>
                 </div>
                 <button 
-                  onClick={() => downloadCsv('http://localhost:3000/api/admin/export/services', 'services.csv')}
+                  onClick={() => downloadCsv('https://servicios-59g4.onrender.com/api/admin/export/services', 'services.csv')}
                   className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors"
                 >
                   <Download className="w-4 h-4" />
@@ -250,7 +250,7 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
                   </div>
                 </div>
                 <button 
-                  onClick={() => downloadCsv('http://localhost:3000/api/admin/export/clients', 'clients.csv')}
+                  onClick={() => downloadCsv('https://servicios-59g4.onrender.com/api/admin/export/clients', 'clients.csv')}
                   className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors"
                 >
                   <Download className="w-4 h-4" />
@@ -263,6 +263,7 @@ export default function AdminDashboardScreen({ onBack }: { onBack: () => void })
     </div>
   );
 }
+
 
 
 

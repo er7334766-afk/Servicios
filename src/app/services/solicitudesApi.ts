@@ -22,7 +22,7 @@ interface RespuestaRegistroSolicitud {
 // ==========================================
 export const obtenerCategoriasDB = async () => {
   const response = await fetch(
-    'http://localhost:3000/api/categorias'
+    'https://servicios-59g4.onrender.com/api/categorias'
   );
 
   const datos = await response.json();
@@ -81,7 +81,7 @@ export async function crearSolicitud(
   };
 
   const respuesta = await fetch(
-    'http://localhost:3000/api/servicios',
+    'https://servicios-59g4.onrender.com/api/servicios',
     {
       method: 'POST',
       headers: {

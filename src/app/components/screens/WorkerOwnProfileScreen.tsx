@@ -25,8 +25,8 @@ import { useApp } from '../../context/AppContext';
 import EditProfileScreen from './EditProfileScreen';
 import EditServiceScreen from './EditServiceScreen';
 
-const API_URL = 'http://localhost:3000/api';
-const API_ORIGIN = 'http://localhost:3000';
+const API_URL = 'https://servicios-59g4.onrender.com/api';
+const API_ORIGIN = 'https://servicios-59g4.onrender.com';
 
 function normalizarUrlArchivo(
   valor?: string | null,

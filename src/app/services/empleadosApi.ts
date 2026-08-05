@@ -16,7 +16,7 @@ export async function registrarEmpleado(
   empleado: NuevoEmpleado,
 ): Promise<RespuestaRegistroEmpleado> {
   const respuesta = await fetch(
-    'http://localhost:3000/api/empleados',
+    'https://servicios-59g4.onrender.com/api/empleados',
     {
       method: 'POST',
       credentials: 'include',
@@ -41,7 +41,7 @@ export async function registrarEmpleado(
 // Obtener lista de empleados
 export async function obtenerEmpleados(): Promise<any[]> {
   const resp = await fetch(
-    'http://localhost:3000/api/empleados',
+    'https://servicios-59g4.onrender.com/api/empleados',
     {
       credentials: 'include',
     },

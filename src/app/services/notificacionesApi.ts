@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://servicios-59g4.onrender.com/api';
 
 export interface NotificacionBackend {
   id_notificacion: number;

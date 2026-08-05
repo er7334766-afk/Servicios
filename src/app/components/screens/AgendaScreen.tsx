@@ -216,7 +216,7 @@ export default function AgendaScreen() {
           }
 
           const respuesta = await fetch(
-            `http://localhost:3000/api/empleados/${idEmpleado}/servicios`
+            `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/servicios`
           );
           const datos = await respuesta.json();
 
@@ -237,7 +237,7 @@ export default function AgendaScreen() {
         }
 
         const respuesta = await fetch(
-          'http://localhost:3000/api/servicios'
+          'https://servicios-59g4.onrender.com/api/servicios'
         );
         const datos = await respuesta.json();
 

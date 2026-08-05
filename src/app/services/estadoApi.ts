@@ -1,6 +1,6 @@
 // services/workerApi.ts
 export const actualizarDisponibilidad = async (workerId: string, status: boolean, idEmpleado?: string | number) => {
-  const response = await fetch(`http://localhost:3000/api/workers/${workerId}/disponibilidad`, {
+  const response = await fetch(`https://servicios-59g4.onrender.com/api/workers/${workerId}/disponibilidad`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

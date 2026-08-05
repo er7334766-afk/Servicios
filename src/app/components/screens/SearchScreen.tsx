@@ -377,8 +377,8 @@ export default function SearchScreen() {
       setCargandoEmpleados(true);
 
       const url = idCategoria
-        ? `http://localhost:3000/api/categorias/${idCategoria}/empleados`
-        : 'http://localhost:3000/api/empleados';
+        ? `https://servicios-59g4.onrender.com/api/categorias/${idCategoria}/empleados`
+        : 'https://servicios-59g4.onrender.com/api/empleados';
 
       const respuesta = await fetch(url, {
         cache: 'no-store',
@@ -430,7 +430,7 @@ export default function SearchScreen() {
 
           try {
             const respuestaResumen = await fetch(
-              `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+              `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/resumen-perfil`,
               {
                 cache: 'no-store',
               }
@@ -521,7 +521,7 @@ export default function SearchScreen() {
     setCargandoServicios(true);
 
     const respuesta = await fetch(
-      'http://localhost:3000/api/servicios'
+      'https://servicios-59g4.onrender.com/api/servicios'
     );
 
     const datos = await respuesta.json();

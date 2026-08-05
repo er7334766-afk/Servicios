@@ -161,8 +161,8 @@ export default function ChatListScreen() {
         }
 
        const url = esEmpleado
-        ? `http://localhost:3000/api/chat/empleado/${idUsuario}/conversaciones`
-        : `http://localhost:3000/api/chat/cliente/${idUsuario}/conversaciones`;
+        ? `https://servicios-59g4.onrender.com/api/chat/empleado/${idUsuario}/conversaciones`
+        : `https://servicios-59g4.onrender.com/api/chat/cliente/${idUsuario}/conversaciones`;
 
         const respuesta = await fetch(url, {
           cache: 'no-store',
@@ -394,7 +394,7 @@ export default function ChatListScreen() {
         }
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/chat/contactos/${rolActual}/${idUsuario}?t=${Date.now()}`,
+          `https://servicios-59g4.onrender.com/api/chat/contactos/${rolActual}/${idUsuario}?t=${Date.now()}`,
           {
             method: 'GET',
             cache: 'no-store',
@@ -542,7 +542,7 @@ export default function ChatListScreen() {
       setError('');
 
       const respuesta = await fetch(
-        'http://localhost:3000/api/chat/conversaciones',
+        'https://servicios-59g4.onrender.com/api/chat/conversaciones',
         {
           method: 'DELETE',
           headers: {
@@ -1036,4 +1036,5 @@ export default function ChatListScreen() {
     </div>
   );
 }
+
 

@@ -316,7 +316,7 @@ export default function HomeWorkerScreen() {
 
       try {
         const respuesta = await fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}`
+          `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}`
         );
 
         if (!respuesta.ok) {
@@ -374,7 +374,7 @@ export default function HomeWorkerScreen() {
         setErrorProximos('');
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}/servicios`,
+          `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/servicios`,
           {
             cache: 'no-store',
           }
@@ -563,7 +563,7 @@ export default function HomeWorkerScreen() {
         setCargandoResumen(true);
 
         const respuesta = await fetch(
-          `http://localhost:3000/api/empleados/${idEmpleado}/resumen-perfil`,
+          `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/resumen-perfil`,
           {
             cache: 'no-store',
           }
@@ -646,7 +646,7 @@ export default function HomeWorkerScreen() {
 
     try {
       const respuesta = await fetch(
-        `http://localhost:3000/api/empleados/${idEmpleado}/notificaciones`,
+        `https://servicios-59g4.onrender.com/api/empleados/${idEmpleado}/notificaciones`,
         {
           cache: 'no-store',
         }
