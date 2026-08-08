@@ -31,123 +31,175 @@
         <main class="container py-5">
 
             <div class="row justify-content-center">
-            <div class="col-lg-8">
+                <div class="col-lg-8">
+                    <div class="card support-card">
+                        <div class="card-body p-4 p-md-5">
+                            <div class="text-center mb-4">
 
-                <div class="card support-card">
-                <div class="card-body p-4 p-md-5">
+                                <div class="support-icon mx-auto">
+                                    🗑️
+                                </div>
 
-                    <div class="text-center mb-4">
-                    <div class="support-icon mx-auto">
-                        🗑️
+                                <h1 class="fw-bold mt-3">
+                                    Solicitar eliminación de cuenta
+                                </h1>
+
+                                <p class="text-secondary">
+                                    Si deseas eliminar tu cuenta de ServiHN,
+                                    puedes enviar una solicitud mediante nuestro
+                                    formulario oficial.
+                                </p>
+                                </div>
+
+                                <hr>
+
+                                <h2 class="h5 fw-bold mt-4">
+                                ¿Cómo solicitar la eliminación?
+                                </h2>
+
+                                <ol class="text-secondary">
+                                <li class="mb-2">
+                                    Abre el formulario de solicitud.
+                                </li>
+
+                                <li class="mb-2">
+                                    Ingresa el correo electrónico asociado a tu
+                                    cuenta de ServiHN.
+                                </li>
+
+                                <li class="mb-2">
+                                    Confirma que deseas solicitar la eliminación.
+                                </li>
+
+                                <li>
+                                    Envía el formulario para que nuestro equipo
+                                    pueda revisar tu solicitud.
+                                </li>
+                                </ol>
+
+                                
+
+                                <hr>
+
+                                <h2 class="h5 fw-bold mt-4">¿Qué datos se eliminarán?</h2>
+
+                                <p class="text-secondary">
+                                Cuando la solicitud sea validada, ServiHN
+                                eliminará o desvinculará los datos personales
+                                asociados a la cuenta, de acuerdo con nuestras
+                                políticas y obligaciones aplicables.
+                                </p>
+
+                                <ul class="text-secondary">
+                                    <li>Información del perfil.</li>
+                                    <li>Datos personales asociados a la cuenta.</li>
+                                    <li>Información de acceso y autenticación.</li>
+                                    <li>
+                                        Otros datos que puedan eliminarse conforme
+                                        a nuestra Política de Privacidad.
+                                    </li>
+                                </ul>
+
+                                <hr class="my-4">
+                                <div class="my-4">
+                                    
+
+                                    <form id="formEliminarCuenta">
+
+                                        <div class="mb-3">
+                                            <label for="correo" class="form-label">
+                                                Correo asociado a tu cuenta de ServiHN
+                                            </label>
+
+                                            <input
+                                                type="email"
+                                                class="form-control"
+                                                id="correo"
+                                                required
+                                            >
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="tipoUsuario" class="form-label">
+                                                Tipo de usuario
+                                            </label>
+
+                                            <select id="tipoUsuario" class="form-select" required>
+                                                <option value="">Selecciona una opción</option>
+                                                <option value="cliente">Cliente</option>
+                                                <option value="empleado">Empleado</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="password" class="form-label"> Contraseña de tu cuenta</label>
+
+                                            <input type="password" class="form-control" id="password" autocomplete="current-password" required>
+
+                                            <div class="form-text">
+                                                Utilizamos tu contraseña únicamente para verificar
+                                                que eres el propietario de la cuenta.
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="motivo" class="form-label">Motivo de eliminación</label>
+
+                                            <textarea class="form-control" id="motivo" rows="4" maxlength="300" placeholder="Opcional"></textarea>
+                                        </div>
+
+                                        <div class="form-check mb-4">
+                                            <input class="form-check-input" type="checkbox" id="confirmacion" required >
+
+                                            <label class="form-check-label" for="confirmacion" >
+                                                Confirmo que deseo solicitar la eliminación
+                                                de mi cuenta de ServiHN.
+                                            </label>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-danger w-100" >
+                                            Solicitar eliminación de cuenta
+                                        </button>
+
+                                    </form>
+
+                                    <div id="mensajeSolicitud" class="mt-3"></div>
+
+                                </div>
+
+                                <div class="alert alert-warning mt-4">
+                                    <strong>Importante:</strong>
+                                    algunos registros podrían conservarse durante
+                                    el tiempo estrictamente necesario cuando exista
+                                    una obligación legal, de seguridad o de
+                                    prevención de fraude.
+                                </div>
+
+                                <h2 class="h5 fw-bold mt-4"> Tiempo de procesamiento</h2>
+
+                                <p class="text-secondary">
+                                Nuestro equipo revisará la solicitud y realizará
+                                el proceso correspondiente en un plazo razonable.
+                                Si necesitamos verificar información adicional,
+                                podremos comunicarnos mediante el correo
+                                proporcionado en el formulario.
+                                </p>
+
+                                <hr class="my-4">
+
+                                <div class="text-center">
+                                <p class="text-secondary mb-3">
+                                    ¿Tienes alguna duda sobre este proceso?
+                                </p>
+
+                                <a href="index.html" class="btn btn-outline-primary">
+                                    Volver al Centro de Ayuda
+                                </a>
+                            </div>
+
+                        </div>
                     </div>
-
-                    <h1 class="fw-bold mt-3">
-                        Solicitar eliminación de cuenta
-                    </h1>
-
-                    <p class="text-secondary">
-                        Si deseas eliminar tu cuenta de ServiHN,
-                        puedes enviar una solicitud mediante nuestro
-                        formulario oficial.
-                    </p>
-                    </div>
-
-                    <hr>
-
-                    <h2 class="h5 fw-bold mt-4">
-                    ¿Cómo solicitar la eliminación?
-                    </h2>
-
-                    <ol class="text-secondary">
-                    <li class="mb-2">
-                        Abre el formulario de solicitud.
-                    </li>
-
-                    <li class="mb-2">
-                        Ingresa el correo electrónico asociado a tu
-                        cuenta de ServiHN.
-                    </li>
-
-                    <li class="mb-2">
-                        Confirma que deseas solicitar la eliminación.
-                    </li>
-
-                    <li>
-                        Envía el formulario para que nuestro equipo
-                        pueda revisar tu solicitud.
-                    </li>
-                    </ol>
-
-                    <div class="text-center my-4">
-                    <a
-                        href="https://forms.gle/zcuyoGFwShFj9rFr9"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="btn btn-danger btn-lg px-4"
-                    >
-                        Solicitar eliminación de cuenta
-                    </a>
-                    </div>
-
-                    <hr>
-
-                    <h2 class="h5 fw-bold mt-4">
-                    ¿Qué datos se eliminarán?
-                    </h2>
-
-                    <p class="text-secondary">
-                    Cuando la solicitud sea validada, ServiHN
-                    eliminará o desvinculará los datos personales
-                    asociados a la cuenta, de acuerdo con nuestras
-                    políticas y obligaciones aplicables.
-                    </p>
-
-                    <ul class="text-secondary">
-                    <li>Información del perfil.</li>
-                    <li>Datos personales asociados a la cuenta.</li>
-                    <li>Información de acceso y autenticación.</li>
-                    <li>
-                        Otros datos que puedan eliminarse conforme
-                        a nuestra Política de Privacidad.
-                    </li>
-                    </ul>
-
-                    <div class="alert alert-warning mt-4">
-                    <strong>Importante:</strong>
-                    algunos registros podrían conservarse durante
-                    el tiempo estrictamente necesario cuando exista
-                    una obligación legal, de seguridad o de
-                    prevención de fraude.
-                    </div>
-
-                    <h2 class="h5 fw-bold mt-4">
-                    Tiempo de procesamiento
-                    </h2>
-
-                    <p class="text-secondary">
-                    Nuestro equipo revisará la solicitud y realizará
-                    el proceso correspondiente en un plazo razonable.
-                    Si necesitamos verificar información adicional,
-                    podremos comunicarnos mediante el correo
-                    proporcionado en el formulario.
-                    </p>
-
-                    <hr class="my-4">
-
-                    <div class="text-center">
-                    <p class="text-secondary mb-3">
-                        ¿Tienes alguna duda sobre este proceso?
-                    </p>
-
-                    <a href="index.html" class="btn btn-outline-primary">
-                        Volver al Centro de Ayuda
-                    </a>
-                    </div>
-
                 </div>
-                </div>
-
-            </div>
             </div>
 
         </main>
@@ -171,6 +223,94 @@
 
             </div>
         </footer>
+
+        <script>
+            const formulario =
+                document.getElementById('formEliminarCuenta');
+
+            const mensajeSolicitud =
+                document.getElementById('mensajeSolicitud');
+
+            formulario.addEventListener('submit', async (event) => {
+
+                event.preventDefault();
+
+                const correo =
+                    document.getElementById('correo').value.trim();
+
+                const tipoUsuario =
+                    document.getElementById('tipoUsuario').value;
+
+                const password =
+                    document.getElementById('password').value;
+
+                const motivo =
+                    document.getElementById('motivo').value.trim();
+
+                const confirmacion =
+                    document.getElementById('confirmacion').checked;
+
+                if (!confirmacion) {
+                    mensajeSolicitud.innerHTML = `
+                        <div class="alert alert-warning">
+                            Debes confirmar que deseas solicitar
+                            la eliminación de tu cuenta.
+                        </div>
+                    `;
+                    return;
+                }
+
+                try {
+
+                    const respuesta = await fetch(
+                        'http://localhost:3000/api/solicitudes-eliminacion',
+                        {
+                            method: 'POST',
+
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+
+                            body: JSON.stringify({
+                                correo,
+                                tipoUsuario,
+                                password,
+                                motivo
+                            })
+                        }
+                    );
+
+                    const datos = await respuesta.json();
+
+                    if (!respuesta.ok) {
+                        throw new Error(
+                            datos.mensaje ||
+                            'No se pudo enviar la solicitud'
+                        );
+                    }
+
+                    mensajeSolicitud.innerHTML = `
+                        <div class="alert alert-success">
+                            Tu solicitud de eliminación fue enviada
+                            correctamente.
+                        </div>
+                    `;
+
+                    formulario.reset();
+
+                } catch (error) {
+
+                    mensajeSolicitud.innerHTML = `
+                        <div class="alert alert-danger">
+                            ${error.message}
+                        </div>
+                    `;
+
+                }
+
+            });
+        </script>
+
 
     </body>
 </html>

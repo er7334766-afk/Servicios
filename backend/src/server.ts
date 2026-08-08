@@ -9220,6 +9220,216 @@ app.get(
 );
 
 // ==========================================
+// SOLICITUD DE ELIMINACIÓN DE CUENTA
+// ==========================================
+app.post(
+  '/api/solicitudes-eliminacion',
+  async (req, res) => {
+    try {
+
+      const correo = String(
+        req.body?.correo ?? ''
+      )
+        .trim()
+        .toLowerCase();
+
+      const tipoUsuario = String(
+        req.body?.tipoUsuario ?? ''
+      )
+        .trim()
+        .toLowerCase();
+
+      const password = String(
+        req.body?.password ?? ''
+      );
+
+      const motivo = String(
+        req.body?.motivo ?? ''
+      ).trim();
+
+      // ============================
+      // VALIDACIONES BÁSICAS
+      // ============================
+
+
+      if (!correo) {
+        return res.status(400).json({
+          mensaje: 'El correo es obligatorio',
+        });
+      }
+
+      if (
+        !['cliente', 'empleado'].includes(tipoUsuario)
+      ) {
+        return res.status(400).json({
+          mensaje: 'El tipo de usuario es inválido',
+        });
+      }
+
+      if (!password) {
+        return res.status(400).json({
+          mensaje: 'La contraseña es obligatoria',
+        });
+      }
+
+      // ============================
+      // BUSCAR CUENTA
+      // ============================
+
+      let usuarioEncontrado: any = null;
+
+      if (tipoUsuario === 'cliente') {
+        const [respuestaUsuario]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              nombre,
+              correo,
+              password_hash
+            FROM clientes
+            WHERE correo = ?
+            `,
+            [correo]
+          );
+
+        const filas =
+          obtenerFilas(respuestaUsuario);
+
+        if (filas.length > 0) {
+          usuarioEncontrado = filas[0];
+        }
+      }
+
+      if (tipoUsuario === 'empleado') {
+        const [respuestaUsuario]: any =
+          await database.execute(
+            `
+            SELECT TOP 1
+              nombre,
+              correo,
+              password_hash
+            FROM empleados
+            WHERE correo = ?
+            `,
+            [correo]
+          );
+
+        const filas =
+          obtenerFilas(respuestaUsuario);
+
+        if (filas.length > 0) {
+          usuarioEncontrado = filas[0];
+        }
+      }
+
+      // ============================
+      // VALIDAR QUE EXISTA
+      // ============================
+
+      if (!usuarioEncontrado) {
+        return res.status(401).json({
+          mensaje:
+            'Correo, contraseña o tipo de usuario incorrectos',
+        });
+      }
+
+      // ============================
+      // VALIDAR CONTRASEÑA
+      // ============================
+
+      const hashGuardado = String(
+        usuarioEncontrado.password_hash ?? ''
+      ).trim();
+
+      const passwordValida =
+        await bcrypt.compare(
+          password,
+          hashGuardado
+        );
+
+      if (!passwordValida) {
+        return res.status(401).json({
+          mensaje:
+            'Correo, contraseña o tipo de usuario incorrectos',
+        });
+      }
+
+      const nombreVerificado = String(
+        usuarioEncontrado.nombre ?? ''
+      ).trim();
+
+      // ============================
+      // GUARDAR SOLICITUD
+      // ============================
+
+      const [resultadoSolicitud]: any =
+        await database.execute(
+          `
+          INSERT INTO solicitudes_eliminacion
+          (
+            nombre,
+            correo,
+            tipo_usuario,
+            motivo,
+            fecha,
+            estado
+          )
+
+          OUTPUT
+            INSERTED.id_solicitudEliminar,
+            INSERTED.nombre,
+            INSERTED.correo,
+            INSERTED.tipo_usuario,
+            INSERTED.motivo,
+            INSERTED.fecha,
+            INSERTED.estado
+
+          VALUES
+          (
+            ?,
+            ?,
+            ?,
+            ?,
+            SYSDATETIME(),
+            'Pendiente'
+          );
+          `,
+          [
+            nombreVerificado,
+            correo,
+            tipoUsuario,
+            motivo || null,
+          ]
+        );
+
+      const solicitudes =
+        obtenerFilas(resultadoSolicitud);
+
+      return res.status(201).json({
+        mensaje:
+          'Solicitud de eliminación enviada correctamente',
+        solicitud:
+          solicitudes[0] ?? null,
+      });
+
+    } catch (error: any) {
+      console.error(
+        'Error al registrar solicitud de eliminación:',
+        error
+      );
+
+      return res.status(500).json({
+        mensaje:
+          'No se pudo registrar la solicitud de eliminación',
+        detalle:
+          error?.message ?? String(error),
+      });
+    }
+  }
+);
+
+
+// ==========================================
 // RESPUESTA JSON PARA RUTAS NO ENCONTRADAS
 // ==========================================
 app.use((req, res) => {
