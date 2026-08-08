@@ -1,6 +1,10 @@
 services:
-  - type: static
+  - type: web
     name: servihn-soporte
-    env: static
-    rootDir: soporte_web
-    publishPath: .
+    env: node
+    plan: free
+    root: "backend"
+    # Ensure devDependencies (tsc) are installed during build and run the TypeScript build
+    buildCommand: "cd backend && npm install --include=dev && npm run build"
+    startCommand: "cd backend && npm start"
+    autoDeploy: true
