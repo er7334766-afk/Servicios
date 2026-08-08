@@ -176,6 +176,31 @@ app.get("/", (_req, res) => {
     mensaje: "Backend funcionando",
   });
 });
+  
+// Serve frontend static files from the `soporte_web` folder so backend and frontend
+// run together as a single service. This will allow client-side navigation to work
+// while keeping API routes under `/api`.
+const frontendPath = path.join(process.cwd(), '..', 'soporte_web');
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+
+  // For SPA routes (anything not starting with /api or /public or /uploads), return index.html
+  app.get('*', (req, res, next) => {
+    const url = req.url || '';
+    if (url.startsWith('/api') || url.startsWith('/public') || url.startsWith('/uploads')) {
+      return next();
+    }
+
+    const indexFile = path.join(frontendPath, 'index.html');
+    if (fs.existsSync(indexFile)) {
+      return res.sendFile(indexFile);
+    }
+
+    return next();
+  });
+} else {
+  console.warn('Frontend folder soporte_web not found; static assets will not be served.');
+}
 
 app.get("/api/test", async (_req, res) => {
   try {
