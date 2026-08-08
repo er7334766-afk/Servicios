@@ -1,0 +1,6 @@
+services:
+  - type: static
+    name: servihn-soporte
+    env: static
+    rootDir: soporte_web
+    publishPath: .
