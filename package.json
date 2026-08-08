@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "echo \"skip root build (handled in backend)\"",
+    "client:build": "vite build",
     "dev": "vite"
   },
   "dependencies": {
