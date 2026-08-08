@@ -1,0 +1,33 @@
+# Environment variables for ServiHN backend
+# Copy into Render (Environment > Environment Variables) or into a .env file
+
+# Option A: Full DB connection string (preferred for Azure SQL / MSSQL)
+# Replace placeholders with your real values
+DB_CONNECTION_STRING=Server=tcp:serviapp1.database.windows.net,1433;Initial Catalog=servihn_db;User ID=servi_user;Password=StrongP@ssw0rd!;Encrypt=true;TrustServerCertificate=false
+
+# Option B: Or provide individual DB fields (used if DB_CONNECTION_STRING is not set)
+DB_HOST=serviapp1.database.windows.net
+DB_PORT=1433
+DB_USER=servi_user
+DB_PASSWORD=StrongP@ssw0rd!
+DB_NAME=servihn_db
+
+# Azure Blob Storage (optional). If not provided, uploads fall back to local 'uploads/' folder.
+# Format example (replace AccountName and AccountKey):
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=your_account_name;AccountKey=YOUR_BASE64_ACCOUNT_KEY;EndpointSuffix=core.windows.net
+AZURE_BLOB_CONTAINER=fotosclientesyempleados
+AZURE_ANTECEDENTES_CONTAINER=antecedentes
+AZURE_EVIDENCIAS_CONTAINER=evidencias
+
+# Server / session config
+PORT=10000
+NODE_ENV=production
+SESSION_COOKIE_NAME=sid
+
+# Optional: change session cookie secure policy in production (true/false)
+# COOKIE_SECURE=true
+
+# Notes:
+# - Do NOT commit real secrets to the repo. Use Render's Environment settings to set
+#   these variables securely for your service.
+# - Replace example passwords and keys with strong, unique secrets.
