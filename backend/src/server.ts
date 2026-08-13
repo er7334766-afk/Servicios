@@ -57,7 +57,57 @@ function ensureLogsDir() {
   return dir;
 }
 
-async function logSecurity(event: string, details: Record<string, any> = {}) {
+function getClientIp(req: any) {
+  const forwarded = req?.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  if (Array.isArray(forwarded) && forwarded.length > 0) return String(forwarded[0]).trim();
+
+  const ip = req?.ip ?? req?.socket?.remoteAddress ?? req?.connection?.remoteAddress ?? '0.0.0.0';
+  return String(ip).replace(/^::ffff:/, '').trim() || '0.0.0.0';
+}
+
+async function ensureAuditoriaTable() {
+  try {
+    await database.execute(`
+      IF OBJECT_ID('auditoria', 'U') IS NULL
+      BEGIN
+        CREATE TABLE auditoria (
+          id_auditoria INT IDENTITY(1,1) PRIMARY KEY,
+          tabla_afectada NVARCHAR(255) NOT NULL,
+          accion NVARCHAR(255) NOT NULL,
+          usuario NVARCHAR(255) NULL,
+          fecha DATETIME2 NOT NULL DEFAULT GETDATE(),
+          ip NVARCHAR(64) NULL
+        );
+      END
+    `);
+  } catch (error) {
+    console.warn('No se pudo asegurar la tabla auditoria:', error);
+  }
+}
+
+async function registrarAuditoria(event: string, details: Record<string, any> = {}, req?: any) {
+  try {
+    await ensureAuditoriaTable();
+
+    const tablaAfectada = String(details.tabla_afectada ?? details.table ?? 'seguridad');
+    const usuario = details.usuario ?? details.userId ?? details.correo ?? details.email ?? 'anonimo';
+    const fecha = new Date();
+    const ip = getClientIp(req);
+
+    await database.execute(
+      `
+        INSERT INTO auditoria (tabla_afectada, accion, usuario, fecha, ip)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [tablaAfectada, event, String(usuario), fecha, ip]
+    );
+  } catch (error) {
+    console.warn('No se pudo guardar auditoria en base de datos:', error);
+  }
+}
+
+async function logSecurity(event: string, details: Record<string, any> = {}, req?: any) {
   try {
     ensureLogsDir();
     const ts = new Date().toISOString();
@@ -66,6 +116,12 @@ async function logSecurity(event: string, details: Record<string, any> = {}) {
     fs.appendFileSync(destino, JSON.stringify(entry) + "\n");
   } catch (e) {
     console.error('No se pudo escribir security log:', e);
+  }
+
+  try {
+    await registrarAuditoria(event, details, req);
+  } catch (error) {
+    console.warn('No se pudo registrar auditoria:', error);
   }
 
   try {
@@ -144,7 +200,7 @@ app.use((req, res, next) => {
       if (now - sess.lastActivity > SESSION_INACTIVITY_MS) {
         sessions.delete(sid);
         res.clearCookie(COOKIE_NAME);
-        void logSecurity('session_expired', { sid, userId: sess.user?.id });
+        void logSecurity('session_expired', { sid, userId: sess.user?.id, tabla_afectada: 'sesiones' }, req);
       } else {
         // refrescar
         sess.lastActivity = now;
@@ -525,12 +581,15 @@ app.post('/api/empleados', async (req, res) => {
       path: '/',
     });
 
-    logSecurity(
+    void logSecurity(
       'worker_registered',
       {
         userId: idEmpleado,
         role: 'worker',
-      }
+        tabla_afectada: 'empleados',
+        usuario: correoNormalizado,
+      },
+      req
     );
 
     return res.status(201).json({
@@ -1596,7 +1655,7 @@ app.post("/api/login", async (req, res) => {
     const attempt = loginAttempts.get(correoLimpio) ?? { count: 0 };
     if (attempt.lockedUntil && attempt.lockedUntil > now) {
       const waitSec = Math.ceil((attempt.lockedUntil - now) / 1000);
-      void logSecurity('login_blocked', { correo: correoLimpio, waitSec });
+      void logSecurity('login_blocked', { correo: correoLimpio, waitSec, tabla_afectada: 'usuarios' }, req);
       return res.status(429).json({ mensaje: `Cuenta bloqueada temporalmente. Intente en ${waitSec} segundos.` });
     }
 
@@ -1677,10 +1736,10 @@ app.post("/api/login", async (req, res) => {
       const updated = { count: prev.count + 1 } as any;
       if (updated.count >= MAX_LOGIN_ATTEMPTS) {
         updated.lockedUntil = Date.now() + LOCKOUT_MS;
-        void logSecurity('login_locked', { correo: correoLimpio, attempts: updated.count });
+        void logSecurity('login_locked', { correo: correoLimpio, attempts: updated.count, tabla_afectada: 'usuarios' }, req);
       }
       loginAttempts.set(correoLimpio, updated);
-      void logSecurity('login_failed', { correo: correoLimpio, attempts: updated.count });
+      void logSecurity('login_failed', { correo: correoLimpio, attempts: updated.count, tabla_afectada: 'usuarios' }, req);
       return res.status(401).json({ mensaje: 'Correo o contraseña incorrectos', attempts: updated.count });
     }
 
@@ -1702,7 +1761,7 @@ app.post("/api/login", async (req, res) => {
       maxAge: SESSION_INACTIVITY_MS,
     });
 
-    void logSecurity('login_success', { correo: correoLimpio, userId: usuario?.id, sid });
+    void logSecurity('login_success', { correo: correoLimpio, userId: usuario?.id, sid, tabla_afectada: 'usuarios' }, req);
 
     return res.status(200).json({ mensaje: 'Inicio de sesión exitoso', usuario });
   } catch (error: any) {
