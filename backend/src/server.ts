@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomUUID } from 'node:crypto';
 
 import { database } from "./config/database.js";
+import { sendToLogAnalytics } from "./config/logAnalytics.js";
 import fs from 'fs';
 import path from 'path';
 
@@ -56,7 +57,7 @@ function ensureLogsDir() {
   return dir;
 }
 
-function logSecurity(event: string, details: Record<string, any> = {}) {
+async function logSecurity(event: string, details: Record<string, any> = {}) {
   try {
     ensureLogsDir();
     const ts = new Date().toISOString();
@@ -65,6 +66,12 @@ function logSecurity(event: string, details: Record<string, any> = {}) {
     fs.appendFileSync(destino, JSON.stringify(entry) + "\n");
   } catch (e) {
     console.error('No se pudo escribir security log:', e);
+  }
+
+  try {
+    await sendToLogAnalytics(event, details);
+  } catch (error) {
+    console.warn('No se pudo enviar el evento a Log Analytics:', error);
   }
 }
 
@@ -137,7 +144,7 @@ app.use((req, res, next) => {
       if (now - sess.lastActivity > SESSION_INACTIVITY_MS) {
         sessions.delete(sid);
         res.clearCookie(COOKIE_NAME);
-        logSecurity('session_expired', { sid, userId: sess.user?.id });
+        void logSecurity('session_expired', { sid, userId: sess.user?.id });
       } else {
         // refrescar
         sess.lastActivity = now;
@@ -1589,7 +1596,7 @@ app.post("/api/login", async (req, res) => {
     const attempt = loginAttempts.get(correoLimpio) ?? { count: 0 };
     if (attempt.lockedUntil && attempt.lockedUntil > now) {
       const waitSec = Math.ceil((attempt.lockedUntil - now) / 1000);
-      logSecurity('login_blocked', { correo: correoLimpio, waitSec });
+      void logSecurity('login_blocked', { correo: correoLimpio, waitSec });
       return res.status(429).json({ mensaje: `Cuenta bloqueada temporalmente. Intente en ${waitSec} segundos.` });
     }
 
@@ -1670,10 +1677,10 @@ app.post("/api/login", async (req, res) => {
       const updated = { count: prev.count + 1 } as any;
       if (updated.count >= MAX_LOGIN_ATTEMPTS) {
         updated.lockedUntil = Date.now() + LOCKOUT_MS;
-        logSecurity('login_locked', { correo: correoLimpio, attempts: updated.count });
+        void logSecurity('login_locked', { correo: correoLimpio, attempts: updated.count });
       }
       loginAttempts.set(correoLimpio, updated);
-      logSecurity('login_failed', { correo: correoLimpio, attempts: updated.count });
+      void logSecurity('login_failed', { correo: correoLimpio, attempts: updated.count });
       return res.status(401).json({ mensaje: 'Correo o contraseña incorrectos', attempts: updated.count });
     }
 
@@ -1695,7 +1702,7 @@ app.post("/api/login", async (req, res) => {
       maxAge: SESSION_INACTIVITY_MS,
     });
 
-    logSecurity('login_success', { correo: correoLimpio, userId: usuario?.id, sid });
+    void logSecurity('login_success', { correo: correoLimpio, userId: usuario?.id, sid });
 
     return res.status(200).json({ mensaje: 'Inicio de sesión exitoso', usuario });
   } catch (error: any) {
